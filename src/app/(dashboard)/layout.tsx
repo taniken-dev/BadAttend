@@ -10,17 +10,13 @@ export default async function DashboardLayout({
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
 
-  console.log('[layout] user:', user?.id, user?.email)
-
   if (!user) redirect('/login')
 
-  const { data: profile, error: profileErr } = await supabase
+  const { data: profile } = await supabase
     .from('profiles')
     .select('is_approved')
     .eq('id', user.id)
     .single()
-
-  console.log('[layout] profile:', profile, 'error:', profileErr)
 
   if (!profile?.is_approved) redirect('/pending')
 

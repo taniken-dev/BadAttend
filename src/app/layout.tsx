@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from 'next'
 import { Noto_Sans_JP } from 'next/font/google'
 import './globals.css'
+import { ThemeProvider } from '@/components/ThemeProvider'
 
 const notoSansJP = Noto_Sans_JP({
   weight: ['400', '500', '700', '900'],
@@ -30,8 +31,12 @@ export const viewport: Viewport = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="ja" className={`${notoSansJP.variable} h-full`}>
+      <head>
+        {/* フラッシュなしでテーマを適用 */}
+        <script dangerouslySetInnerHTML={{ __html: `(function(){var t=localStorage.getItem('theme'),p=window.matchMedia('(prefers-color-scheme: dark)').matches;if(t==='dark'||(t!=='light'&&p))document.documentElement.classList.add('dark');})();` }} />
+      </head>
       <body className="min-h-full" style={{ fontFamily: 'var(--font-noto), sans-serif' }}>
-        {children}
+        <ThemeProvider>{children}</ThemeProvider>
       </body>
     </html>
   )

@@ -14,7 +14,7 @@ export default async function AdminMembersPage() {
     .eq('id', user.id)
     .single()
 
-  if (!myProfile || !['admin', 'captain'].includes(myProfile.role)) {
+  if (!myProfile || myProfile.role !== 'admin') {
     redirect('/dashboard')
   }
 
