@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "Read(//c/Users/kenta/projects/mos-shift-app/**)",
+      "Bash(npx create-next-app@latest . --typescript --tailwind --eslint --app --src-dir --import-alias \"@/*\" --yes)",
+      "Bash(npx create-next-app@latest . --typescript --tailwind --eslint --app --src-dir --import-alias \"@/*\" --yes --name attend-app)",
+      "Bash(cp -r \"c:/Users/kenta/projects/attend-app-temp/.\" \"c:/Users/kenta/projects/Attend-app/\")",
+      "Bash(rm -rf \"c:/Users/kenta/projects/attend-app-temp\")"
+    ]
+  }
+}
