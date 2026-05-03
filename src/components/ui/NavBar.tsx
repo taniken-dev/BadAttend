@@ -111,10 +111,16 @@ export default function NavBar() {
                   className="relative flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-sm font-medium transition-all duration-150 hover:opacity-90"
                   style={desktopLinkStyle(active)}
                   onMouseEnter={e => {
-                    if (!active) (e.currentTarget as HTMLElement).style.background = 'var(--gray-100)'
+                    if (!active) {
+                      (e.currentTarget as HTMLElement).style.background = 'var(--club-blue-muted)'
+                      ;(e.currentTarget as HTMLElement).style.color = 'var(--club-blue)'
+                    }
                   }}
                   onMouseLeave={e => {
-                    if (!active) (e.currentTarget as HTMLElement).style.background = 'transparent'
+                    if (!active) {
+                      (e.currentTarget as HTMLElement).style.background = 'transparent'
+                      ;(e.currentTarget as HTMLElement).style.color = 'var(--gray-500)'
+                    }
                   }}
                 >
                   <Icon size={14} strokeWidth={active ? 2.5 : 2} />
