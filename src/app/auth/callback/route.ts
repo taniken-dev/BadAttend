@@ -100,9 +100,27 @@ async function handleLineCallback(code: string, origin: string, next: string) {
       await admin.auth.admin.updateUserById(existing.id, {
         user_metadata: { full_name: displayName, avatar_url: pictureUrl ?? null },
       })
-      await admin.from('profiles')
-        .update({ full_name: displayName, avatar_url: pictureUrl ?? null })
+      // profiles 行が存在しない場合（削除後の再登録など）は INSERT、存在する場合は名前/アイコンのみ UPDATE
+      const { data: existingProfile } = await admin
+        .from('profiles')
+        .select('id')
         .eq('id', existing.id)
+        .single()
+      if (existingProfile) {
+        await admin.from('profiles')
+          .update({ full_name: displayName, avatar_url: pictureUrl ?? null })
+          .eq('id', existing.id)
+      } else {
+        await admin.from('profiles').insert({
+          id:          existing.id,
+          full_name:   displayName,
+          avatar_url:  pictureUrl ?? null,
+          grade:       1,
+          role:        'member',
+          skill_rank:  3,
+          is_approved: false,
+        })
+      }
     }
   }
 
