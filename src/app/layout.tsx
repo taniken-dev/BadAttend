@@ -33,7 +33,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     <html lang="ja" className={`${notoSansJP.variable} h-full`}>
       <head>
         {/* フラッシュなしでテーマを適用 */}
-        <script dangerouslySetInnerHTML={{ __html: `(function(){var t=localStorage.getItem('theme'),p=window.matchMedia('(prefers-color-scheme: dark)').matches;if(t==='dark'||(t!=='light'&&p))document.documentElement.classList.add('dark');})();` }} />
+        <script dangerouslySetInnerHTML={{ __html: `(function(){if(localStorage.getItem('theme')==='dark')document.documentElement.classList.add('dark');})();` }} />
       </head>
       <body className="min-h-full" style={{ fontFamily: 'var(--font-noto), sans-serif' }}>
         <ThemeProvider>{children}</ThemeProvider>

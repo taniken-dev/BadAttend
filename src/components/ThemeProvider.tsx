@@ -12,16 +12,6 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     setIsDark(document.documentElement.classList.contains('dark'))
-
-    const media = window.matchMedia('(prefers-color-scheme: dark)')
-    const onSystemChange = (e: MediaQueryListEvent) => {
-      if (!localStorage.getItem('theme')) {
-        document.documentElement.classList.toggle('dark', e.matches)
-        setIsDark(e.matches)
-      }
-    }
-    media.addEventListener('change', onSystemChange)
-    return () => media.removeEventListener('change', onSystemChange)
   }, [])
 
   function toggle() {
