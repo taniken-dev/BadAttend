@@ -1,36 +1,23 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# 千葉工業大学 バドミントン部 出欠管理アプリ (BadAttend)
 
-## Getting Started
+千葉工業大学バドミントン部の活動を効率化し、関東リーグ優勝・昇格を目指すための出欠管理プラットフォームです。
 
-First, run the development server:
+## 開発の背景
+現状、チャットベースでの出欠連絡が形骸化しており、直前の欠席連絡が常態化しています。
+部則にある「競技力より練習時の取り組み姿勢を重視する」という方針をシステム化し、公平な選手選考とチームの規律強化を目的として開発しました。
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
-```
+## 主な機能
+- **LINEログイン:** 部員が日常的に使うツールで簡単に認証可能。
+- **出欠ランキング:** 出席率と技術ランクを掛け合わせた独自の選考スコアを表示。
+- **体調不良ロック:** 安易な嘘を抑止し、真に必要な休養を促すシステム。
+- **リアルタイム集計:** 幹部が練習メニューを組みやすいよう、現在の参加予定者を可視化。
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## 使用技術 (Tech Stack)
+- **Frontend:** Next.js (App Router) / Tailwind CSS / Shadcn UI
+- **Backend:** Supabase (Auth, Database)
+- **Auth:** LINE Login (OAuth)
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
-
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
-
-## Learn More
-
-To learn more about Next.js, take a look at the following resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## 運営ルール
+本アプリは[2026年度 部則]に基づいて運用されます。
+- 遅刻・欠席は練習開始の1時間前までに事前申告すること。
+- 無断欠席や直前連絡は、選考スコアに反映されます。
