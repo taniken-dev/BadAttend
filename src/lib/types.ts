@@ -1,4 +1,4 @@
-export type Role = 'member' | 'captain' | 'admin'
+export type Role = 'member' | 'admin'
 export type SkillRank = 1 | 2 | 3 | 4 | 5 | 6
 export type SelectionRank = 'S' | 'A' | 'B' | 'C' | 'D' | 'E'
 
@@ -19,6 +19,7 @@ export type AbsenceReason =
 export interface Profile {
   id: string
   full_name: string
+  display_name: string | null
   student_id: string | null
   grade: number
   gender: string | null
@@ -68,6 +69,7 @@ export interface WarningFlag {
 export interface SelectionScore {
   id: string
   full_name: string
+  display_name: string | null
   grade: number
   gender: string | null
   skill_rank: SkillRank

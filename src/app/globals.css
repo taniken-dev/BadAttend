@@ -61,29 +61,31 @@
     --ease-in-out:   cubic-bezier(0.4, 0, 0.2, 1);
   }
 
-  @media (prefers-color-scheme: dark) {
-    :root {
-      --card-bg:   #1e1e24;
-      --apple-bg:  #0f0f11;
-      --gray-50:   #1a1a1e;
-      --gray-100:  #222228;
-      --gray-200:  #2e2e36;
-      --gray-300:  #3e3e4a;
-      --gray-400:  #5a5a6e;
-      --gray-500:  #7a7a90;
-      --gray-600:  #9a9ab0;
-      --gray-700:  #c0c0d0;
-      --gray-900:  #f0f0f6;
-      --shadow-xs: 0 1px 2px rgba(0,0,0,0.3);
-      --shadow-sm: 0 2px 8px rgba(0,0,0,0.4), 0 1px 3px rgba(0,0,0,0.3);
-      --shadow:    0 8px 30px rgba(0,0,0,0.3), 0 1px 4px rgba(0,0,0,0.4);
-      --shadow-md: 0 12px 40px rgba(0,0,0,0.4), 0 2px 6px rgba(0,0,0,0.3);
-      --shadow-lg: 0 20px 60px rgba(0,0,0,0.5), 0 4px 12px rgba(0,0,0,0.4);
-      --club-blue-light: rgba(67, 56, 202, 0.2);
-      --club-blue-muted: rgba(67, 56, 202, 0.12);
-    }
-  }
+}
 
+/* ダークモード変数 — .dark クラス（システム or 手動トグル） */
+.dark {
+  --card-bg:   #1e1e24;
+  --apple-bg:  #0f0f11;
+  --gray-50:   #1a1a1e;
+  --gray-100:  #222228;
+  --gray-200:  #2e2e36;
+  --gray-300:  #3e3e4a;
+  --gray-400:  #5a5a6e;
+  --gray-500:  #7a7a90;
+  --gray-600:  #9a9ab0;
+  --gray-700:  #c0c0d0;
+  --gray-900:  #f0f0f6;
+  --shadow-xs: 0 1px 2px rgba(0,0,0,0.3);
+  --shadow-sm: 0 2px 8px rgba(0,0,0,0.4), 0 1px 3px rgba(0,0,0,0.3);
+  --shadow:    0 8px 30px rgba(0,0,0,0.3), 0 1px 4px rgba(0,0,0,0.4);
+  --shadow-md: 0 12px 40px rgba(0,0,0,0.4), 0 2px 6px rgba(0,0,0,0.3);
+  --shadow-lg: 0 20px 60px rgba(0,0,0,0.5), 0 4px 12px rgba(0,0,0,0.4);
+  --club-blue-light: rgba(67, 56, 202, 0.2);
+  --club-blue-muted: rgba(67, 56, 202, 0.12);
+}
+
+@layer base {
   html {
     -webkit-text-size-adjust: 100%;
     font-size: 16px;
@@ -242,14 +244,6 @@
   .btn-secondary:hover  { background-color: var(--gray-50); border-color: var(--gray-300); }
   .btn-secondary:active { transform: scale(0.98); }
 
-  @media (prefers-color-scheme: dark) {
-    .btn-secondary {
-      background-color: var(--gray-200);
-      border-color: var(--gray-300);
-      color: var(--gray-900);
-    }
-    .btn-secondary:hover { background-color: var(--gray-300); }
-  }
 
   /* --- フォーム --- */
   .input-field {
@@ -268,13 +262,6 @@
     animation: focus-ring-spring 0.45s var(--ease-out-expo) forwards;
   }
 
-  @media (prefers-color-scheme: dark) {
-    .input-field {
-      background: var(--gray-200);
-      border-color: var(--gray-300);
-      color: var(--gray-900);
-    }
-  }
 
   .label {
     display: block;
@@ -309,18 +296,6 @@
     font-weight: 600;
   }
 
-  @media (prefers-color-scheme: dark) {
-    .chip {
-      background: var(--gray-200);
-      border-color: var(--gray-300);
-      color: var(--gray-700);
-    }
-    .chip--active {
-      background: var(--club-blue-muted);
-      border-color: var(--club-blue);
-      color: #a5b4fc;
-    }
-  }
 
   /* --- バッジ --- */
   .badge {
@@ -406,12 +381,6 @@
     -webkit-backdrop-filter: blur(20px) saturate(180%);
     border-bottom: 1px solid rgba(0,0,0,0.06);
   }
-  @media (prefers-color-scheme: dark) {
-    .glass-white {
-      background: rgba(15,15,17,0.88);
-      border-bottom: 1px solid rgba(255,255,255,0.06);
-    }
-  }
 
   /* --- プログレスバー --- */
   .progress-bar {
@@ -450,33 +419,45 @@
     backdrop-filter: blur(20px);
     -webkit-backdrop-filter: blur(20px);
     border-top: 1px solid rgba(0,0,0,0.06);
-    display: flex;
-    padding: 8px 0 max(8px, env(safe-area-inset-bottom));
     z-index: 50;
   }
-  @media (prefers-color-scheme: dark) {
-    .bottom-nav {
-      background: rgba(15,15,17,0.92);
-      border-top: 1px solid rgba(255,255,255,0.06);
-    }
-  }
-  .bottom-nav-item {
-    flex: 1;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 3px;
-    padding: 4px 0;
-    color: var(--gray-400);
-    font-size: 10px;
-    font-weight: 500;
-    text-decoration: none;
-    transition: color 0.15s;
-  }
-  .bottom-nav-item--active { color: var(--club-blue); }
-  .bottom-nav-item:hover   { color: var(--club-blue); }
 
   /* --- アニメーション適用 --- */
   .animate-slide-up { animation: slide-up 0.35s var(--ease-out-expo) both; }
   .animate-fade-in  { animation: fade-in 0.25s var(--ease-in-out) both; }
+}
+
+/* ダークモード — コンポーネント上書き */
+.dark .btn-secondary {
+  background-color: var(--gray-200);
+  border-color: var(--gray-300);
+  color: var(--gray-900);
+}
+.dark .btn-secondary:hover { background-color: var(--gray-300); }
+
+.dark .input-field {
+  background: var(--gray-200);
+  border-color: var(--gray-300);
+  color: var(--gray-900);
+}
+
+.dark .chip {
+  background: var(--gray-200);
+  border-color: var(--gray-300);
+  color: var(--gray-700);
+}
+.dark .chip--active {
+  background: var(--club-blue-muted);
+  border-color: var(--club-blue);
+  color: #a5b4fc;
+}
+
+.dark .glass-white {
+  background: rgba(15,15,17,0.88);
+  border-bottom: 1px solid rgba(255,255,255,0.06);
+}
+
+.dark .bottom-nav {
+  background: rgba(15,15,17,0.92);
+  border-top: 1px solid rgba(255,255,255,0.06);
 }

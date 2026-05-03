@@ -6,12 +6,13 @@ import { createClient } from '@/lib/supabase/client'
 import {
   Users,
   CheckCircle2,
-  XCircle,
+  Trash2,
   ChevronDown,
   AlertTriangle,
   Shield,
-  Crown,
   GraduationCap,
+  Pencil,
+  X,
 } from 'lucide-react'
 import type { Profile, SkillRank } from '@/lib/types'
 import { getSkillRankLabel } from '@/lib/utils'
@@ -25,11 +26,16 @@ const SKILL_RANK_OPTIONS: { value: SkillRank; label: string }[] = [
   { value: 6, label: '6 — S級' },
 ]
 
+const GRADE_OPTIONS = [1, 2, 3, 4]
+
 const ROLE_OPTIONS = [
-  { value: 'member',  label: '部員',   icon: Users },
-  { value: 'captain', label: '主将',   icon: Crown },
-  { value: 'admin',   label: '管理者', icon: Shield },
+  { value: 'member', label: '部員',   icon: Users },
+  { value: 'admin',  label: '管理者', icon: Shield },
 ]
+
+function displayName(m: Pick<Profile, 'full_name' | 'display_name'>) {
+  return m.display_name ?? m.full_name
+}
 
 export default function MembersManager({
   members,
@@ -40,8 +46,11 @@ export default function MembersManager({
 }) {
   const supabase = createClient()
   const router = useRouter()
-  const [updating, setUpdating] = useState<string | null>(null)
-  const [toast, setToast] = useState<{ msg: string; ok: boolean } | null>(null)
+  const [updating, setUpdating]     = useState<string | null>(null)
+  const [toast, setToast]           = useState<{ msg: string; ok: boolean } | null>(null)
+  const [editTarget, setEditTarget] = useState<Profile | null>(null)
+  const [editName, setEditName]     = useState('')
+  const [saving, setSaving]         = useState(false)
 
   const pending  = members.filter(m => !m.is_approved)
   const approved = members.filter(m => m.is_approved)
@@ -49,6 +58,25 @@ export default function MembersManager({
   function showToast(msg: string, ok: boolean) {
     setToast({ msg, ok })
     setTimeout(() => setToast(null), 3000)
+  }
+
+  function openEdit(m: Profile) {
+    setEditTarget(m)
+    setEditName(m.display_name ?? '')
+  }
+
+  async function saveDisplayName() {
+    if (!editTarget) return
+    setSaving(true)
+    const { error } = await supabase
+      .from('profiles')
+      .update({ display_name: editName.trim() || null })
+      .eq('id', editTarget.id)
+    setSaving(false)
+    if (error) { showToast('更新失敗', false); return }
+    showToast('表示名を更新しました', true)
+    setEditTarget(null)
+    router.refresh()
   }
 
   async function approve(id: string) {
@@ -63,33 +91,41 @@ export default function MembersManager({
     router.refresh()
   }
 
-  async function reject(id: string) {
-    if (!confirm('このユーザーを削除しますか？この操作は取り消せません。')) return
+  async function deleteMember(id: string, name: string) {
+    if (!confirm(`「${name}」を退部処理しますか？\nアカウントと全データが削除されます。この操作は取り消せません。`)) return
     setUpdating(id)
-    // auth.users の削除は service_role が必要なため、ここでは is_approved を false のまま
-    // 代替: プロフィールに rejected フラグを立てる（今回は approved=false のまま放置）
-    showToast('拒否しました（プロフィールは残ります）', false)
+    const res = await fetch('/api/admin/delete-user', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ userId: id }),
+    })
     setUpdating(null)
+    if (!res.ok) { showToast('削除に失敗しました', false); return }
+    showToast(`${name} を退部処理しました`, true)
+    router.refresh()
   }
 
   async function updateSkillRank(id: string, rank: number) {
     setUpdating(id)
-    const { error } = await supabase
-      .from('profiles')
-      .update({ skill_rank: rank })
-      .eq('id', id)
+    const { error } = await supabase.from('profiles').update({ skill_rank: rank }).eq('id', id)
     setUpdating(null)
     if (error) { showToast('更新失敗', false); return }
     showToast('技術ランクを更新しました', true)
     router.refresh()
   }
 
+  async function updateGrade(id: string, grade: number) {
+    setUpdating(id)
+    const { error } = await supabase.from('profiles').update({ grade }).eq('id', id)
+    setUpdating(null)
+    if (error) { showToast('更新失敗', false); return }
+    showToast('学年を更新しました', true)
+    router.refresh()
+  }
+
   async function updateRole(id: string, role: string) {
     setUpdating(id)
-    const { error } = await supabase
-      .from('profiles')
-      .update({ role })
-      .eq('id', id)
+    const { error } = await supabase.from('profiles').update({ role }).eq('id', id)
     setUpdating(null)
     if (error) { showToast('更新失敗', false); return }
     showToast('権限を更新しました', true)
@@ -107,7 +143,7 @@ export default function MembersManager({
           メンバー管理
         </h1>
         <p className="text-sm mt-1" style={{ color: 'var(--gray-500)' }}>
-          承認・技術ランク設定・権限管理
+          承認・表示名・学年・技術ランク・権限・退部管理
         </p>
       </div>
 
@@ -154,46 +190,37 @@ export default function MembersManager({
                   opacity: updating === m.id ? 0.6 : 1,
                 }}
               >
-                {/* アバター */}
                 <div
                   className="w-10 h-10 rounded-xl flex items-center justify-center text-sm font-black shrink-0"
                   style={{ background: '#fef3c7', color: '#b45309' }}
                 >
-                  {m.full_name.charAt(0)}
+                  {displayName(m).charAt(0)}
                 </div>
 
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-bold" style={{ color: 'var(--gray-900)' }}>
-                    {m.full_name}
+                    {displayName(m)}
                   </p>
                   <p className="text-xs" style={{ color: 'var(--gray-500)' }}>
-                    {m.grade}年生
+                    LINEネーム: {m.full_name} · {m.grade}年生
                   </p>
                 </div>
 
                 <div className="flex gap-2 shrink-0">
                   <button
-                    onClick={() => reject(m.id)}
+                    onClick={() => deleteMember(m.id, displayName(m))}
                     disabled={updating === m.id}
                     className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-colors"
-                    style={{
-                      background: '#fef2f2',
-                      color: '#b91c1c',
-                      border: '1px solid #fecaca',
-                    }}
+                    style={{ background: '#fef2f2', color: '#b91c1c', border: '1px solid #fecaca' }}
                   >
-                    <XCircle size={13} />
+                    <Trash2 size={13} />
                     拒否
                   </button>
                   <button
                     onClick={() => approve(m.id)}
                     disabled={updating === m.id}
                     className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-colors"
-                    style={{
-                      background: '#f0fdf4',
-                      color: '#15803d',
-                      border: '1px solid #bbf7d0',
-                    }}
+                    style={{ background: '#f0fdf4', color: '#15803d', border: '1px solid #bbf7d0' }}
                   >
                     {updating === m.id ? (
                       <span className="inline-block w-3 h-3 border-2 border-current border-t-transparent rounded-full animate-spin" />
@@ -238,6 +265,7 @@ export default function MembersManager({
             {approved.map(m => {
               const RoleIcon = ROLE_OPTIONS.find(r => r.value === m.role)?.icon ?? Users
               const isMe = m.id === currentUserId
+              const hasDisplayName = !!m.display_name
 
               return (
                 <div
@@ -249,7 +277,7 @@ export default function MembersManager({
                     opacity: updating === m.id ? 0.6 : 1,
                   }}
                 >
-                  {/* 上段：名前・学年・自分バッジ */}
+                  {/* 上段：名前・バッジ */}
                   <div className="flex items-center gap-3 mb-3">
                     <div
                       className="w-10 h-10 rounded-xl flex items-center justify-center text-sm font-black shrink-0"
@@ -258,13 +286,24 @@ export default function MembersManager({
                         color: isMe ? 'var(--club-blue)' : 'var(--gray-600)',
                       }}
                     >
-                      {m.full_name.charAt(0)}
+                      {displayName(m).charAt(0)}
                     </div>
+
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-1.5 flex-wrap">
-                        <span className="text-sm font-bold" style={{ color: 'var(--gray-900)' }}>
-                          {m.full_name}
-                        </span>
+                        {/* 表示名 or 未設定バッジ */}
+                        {hasDisplayName ? (
+                          <span className="text-sm font-bold" style={{ color: 'var(--gray-900)' }}>
+                            {m.display_name}
+                          </span>
+                        ) : (
+                          <span
+                            className="text-sm font-bold px-1.5 py-0.5 rounded"
+                            style={{ background: '#fef3c7', color: '#b45309', fontSize: '12px' }}
+                          >
+                            未設定
+                          </span>
+                        )}
                         {isMe && (
                           <span
                             className="text-xs px-1.5 py-0.5 rounded-full font-semibold"
@@ -275,34 +314,83 @@ export default function MembersManager({
                         )}
                         <RoleIcon size={13} style={{ color: 'var(--gray-400)' }} />
                       </div>
-                      <div className="flex items-center gap-1 text-xs" style={{ color: 'var(--gray-500)' }}>
+                      <div className="flex items-center gap-1 text-xs mt-0.5" style={{ color: 'var(--gray-500)' }}>
+                        <span>LINE: {m.full_name}</span>
+                        <span className="mx-0.5">·</span>
                         <GraduationCap size={11} />
-                        {m.grade}年生
-                        <span className="ml-1">·</span>
+                        <span>{m.grade}年生</span>
+                        <span className="mx-0.5">·</span>
                         <span>{getSkillRankLabel(m.skill_rank)}</span>
                       </div>
                     </div>
+
+                    {/* アクションボタン */}
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      {/* 表示名編集 */}
+                      <button
+                        onClick={() => openEdit(m)}
+                        disabled={updating === m.id}
+                        className="flex items-center gap-1 px-2 py-1.5 rounded-lg text-xs font-semibold transition-colors"
+                        style={{ background: 'var(--gray-100)', color: 'var(--gray-600)', border: '1px solid var(--gray-200)' }}
+                        title="表示名を編集"
+                      >
+                        <Pencil size={12} />
+                        <span className="hidden sm:inline">編集</span>
+                      </button>
+                      {/* 退部 */}
+                      {!isMe && (
+                        <button
+                          onClick={() => deleteMember(m.id, displayName(m))}
+                          disabled={updating === m.id}
+                          className="flex items-center gap-1 px-2 py-1.5 rounded-lg text-xs font-semibold transition-colors"
+                          style={{ background: '#fef2f2', color: '#b91c1c', border: '1px solid #fecaca' }}
+                          title="退部処理"
+                        >
+                          <Trash2 size={12} />
+                          <span className="hidden sm:inline">退部</span>
+                        </button>
+                      )}
+                    </div>
                   </div>
 
-                  {/* 下段：技術ランク・ロール選択 */}
-                  <div className="grid grid-cols-2 gap-2">
+                  {/* 下段：学年・技術ランク・ロール */}
+                  <div className="grid grid-cols-3 gap-2">
+                    {/* 学年 */}
+                    <div>
+                      <label className="label" style={{ fontSize: '11px' }}>学年</label>
+                      <div className="relative">
+                        <select
+                          value={m.grade}
+                          onChange={e => updateGrade(m.id, Number(e.target.value))}
+                          disabled={updating === m.id}
+                          className="input-field pr-8"
+                          style={{ padding: '7px 32px 7px 10px', fontSize: '13px' }}
+                        >
+                          {GRADE_OPTIONS.map(g => (
+                            <option key={g} value={g}>{g}年生</option>
+                          ))}
+                        </select>
+                        <ChevronDown
+                          size={13}
+                          className="absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none"
+                          style={{ color: 'var(--gray-400)' }}
+                        />
+                      </div>
+                    </div>
+
                     {/* 技術ランク */}
                     <div>
-                      <label className="label" style={{ fontSize: '11px' }}>
-                        技術ランク
-                      </label>
+                      <label className="label" style={{ fontSize: '11px' }}>技術ランク</label>
                       <div className="relative">
                         <select
                           value={m.skill_rank}
                           onChange={e => updateSkillRank(m.id, Number(e.target.value))}
                           disabled={updating === m.id}
-                          className="input-field pr-8 text-sm"
+                          className="input-field pr-8"
                           style={{ padding: '7px 32px 7px 10px', fontSize: '13px' }}
                         >
                           {SKILL_RANK_OPTIONS.map(o => (
-                            <option key={o.value} value={o.value}>
-                              {o.label}
-                            </option>
+                            <option key={o.value} value={o.value}>{o.label}</option>
                           ))}
                         </select>
                         <ChevronDown
@@ -315,21 +403,17 @@ export default function MembersManager({
 
                     {/* 権限 */}
                     <div>
-                      <label className="label" style={{ fontSize: '11px' }}>
-                        権限
-                      </label>
+                      <label className="label" style={{ fontSize: '11px' }}>権限</label>
                       <div className="relative">
                         <select
                           value={m.role}
                           onChange={e => updateRole(m.id, e.target.value)}
                           disabled={updating === m.id || isMe}
-                          className="input-field pr-8 text-sm"
+                          className="input-field pr-8"
                           style={{ padding: '7px 32px 7px 10px', fontSize: '13px' }}
                         >
                           {ROLE_OPTIONS.map(o => (
-                            <option key={o.value} value={o.value}>
-                              {o.label}
-                            </option>
+                            <option key={o.value} value={o.value}>{o.label}</option>
                           ))}
                         </select>
                         <ChevronDown
@@ -357,9 +441,84 @@ export default function MembersManager({
           borderLeft: '3px solid var(--gray-300)',
         }}
       >
-        技術ランクの変更は選考スコアに即時反映されます。
-        権限変更は自分自身には適用できません。
+        退部処理を行うとアカウントと全データが完全に削除されます。この操作は取り消せません。
       </div>
+
+      {/* ── 表示名編集モーダル ───────────────────────────── */}
+      {editTarget && (
+        <div
+          className="fixed inset-0 z-50 flex items-end sm:items-center justify-center"
+          style={{ background: 'rgba(0,0,0,0.45)', backdropFilter: 'blur(2px)' }}
+          onClick={() => setEditTarget(null)}
+        >
+          <div
+            className="w-full sm:max-w-sm rounded-t-2xl sm:rounded-2xl p-6 flex flex-col gap-4"
+            style={{ background: 'var(--card-bg)', boxShadow: 'var(--shadow-lg)' }}
+            onClick={e => e.stopPropagation()}
+          >
+            {/* モーダルヘッダー */}
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="text-base font-bold" style={{ color: 'var(--gray-900)' }}>
+                  表示名を編集
+                </h3>
+                <p className="text-xs mt-0.5" style={{ color: 'var(--gray-500)' }}>
+                  LINEネーム「{editTarget.full_name}」の代わりに表示する本名
+                </p>
+              </div>
+              <button
+                onClick={() => setEditTarget(null)}
+                className="w-8 h-8 rounded-lg flex items-center justify-center cursor-pointer"
+                style={{ color: 'var(--gray-400)' }}
+                onMouseEnter={e => (e.currentTarget as HTMLElement).style.background = 'var(--gray-100)'}
+                onMouseLeave={e => (e.currentTarget as HTMLElement).style.background = 'transparent'}
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            {/* 入力フィールド */}
+            <div>
+              <label className="label">本名（表示名）</label>
+              <input
+                type="text"
+                value={editName}
+                onChange={e => setEditName(e.target.value)}
+                onKeyDown={e => e.key === 'Enter' && saveDisplayName()}
+                placeholder="例: 田中 健太郎"
+                className="input-field"
+                style={{ fontSize: '16px' }}
+                autoFocus
+              />
+              <p className="text-xs mt-1.5" style={{ color: 'var(--gray-400)' }}>
+                空欄にするとLINEネームが表示されます
+              </p>
+            </div>
+
+            {/* ボタン */}
+            <div className="flex gap-2">
+              <button
+                onClick={() => setEditTarget(null)}
+                className="flex-1 py-2.5 rounded-xl text-sm font-semibold transition-colors"
+                style={{ background: 'var(--gray-100)', color: 'var(--gray-600)' }}
+              >
+                キャンセル
+              </button>
+              <button
+                onClick={saveDisplayName}
+                disabled={saving}
+                className="flex-1 py-2.5 rounded-xl text-sm font-semibold transition-colors flex items-center justify-center gap-2"
+                style={{ background: 'var(--club-blue)', color: 'white', opacity: saving ? 0.7 : 1 }}
+              >
+                {saving && (
+                  <span className="inline-block w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                )}
+                保存
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
