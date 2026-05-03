@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm install *)"
+    ],
+    "additionalDirectories": [
+      "c:\\Users\\kenta\\projects\\Attend-app"
+    ]
+  }
+}
