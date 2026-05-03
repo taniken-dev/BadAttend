@@ -67,7 +67,7 @@ export default function CalendarView() {
       .lte('session_date', e)
       .then(({ data }) => {
         const map: SessionMap = {}
-        ;(data ?? []).forEach((s: PracticeSession) => { map[s.session_date] = s })
+        ;(data ?? []).forEach(s => { map[s.session_date] = s as PracticeSession })
         setSessions(map)
       })
 
