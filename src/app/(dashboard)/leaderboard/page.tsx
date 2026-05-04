@@ -154,7 +154,7 @@ export default async function LeaderboardPage() {
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-base font-bold"
             style={{ color: 'var(--gray-900)', letterSpacing: '-0.02em' }}>
-            全部員
+            全部員の活動状況
           </h2>
           <span className="text-xs px-2 py-0.5 rounded-full"
             style={{ background: 'var(--gray-100)', color: 'var(--gray-500)' }}>

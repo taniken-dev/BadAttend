@@ -6,12 +6,11 @@ import {
   CheckCircle2,
   XCircle,
   Clock,
-  AlertTriangle,
   CalendarCheck,
   TrendingUp,
   UserCheck,
 } from 'lucide-react'
-import { formatDate, getAttendanceRateColor, getRankClass } from '@/lib/utils'
+import { getAttendanceRateColor } from '@/lib/utils'
 import {
   ATTENDANCE_STATUS_LABELS,
   REASON_LABELS,
@@ -88,7 +87,6 @@ export default async function DashboardPage() {
     : false
 
   const attendanceRate = myScore?.attendance_rate ?? 100
-  const selectionRank  = myScore?.selection_rank ?? 'C'
 
   return (
     <div className="flex flex-col gap-5">
@@ -249,7 +247,7 @@ export default async function DashboardPage() {
         </div>
       )}
 
-      {/* 自分の出席率カード */}
+      {/* 自分の出席状況カード */}
       <div className="card animate-slide-up" style={{ animationDelay: '0.15s' }}>
         <div className="flex items-center justify-between mb-4">
           <h2
@@ -267,26 +265,17 @@ export default async function DashboardPage() {
           </Link>
         </div>
 
-        <div className="flex items-center gap-4 mb-4">
-          <div className={`rank-badge rank-badge-lg ${getRankClass(selectionRank)}`}>
-            {selectionRank}
-          </div>
-          <div className="flex-1">
-            <div className="flex items-end justify-between mb-1">
-              <span className="text-sm" style={{ color: 'var(--gray-500)' }}>
-                出席率
-              </span>
-              <span
-                className="text-2xl font-black"
-                style={{
-                  color: getAttendanceRateColor(attendanceRate),
-                  letterSpacing: '-0.04em',
-                }}
-              >
-                {attendanceRate}
-                <span className="text-base font-semibold">%</span>
-              </span>
-            </div>
+        {/* 出席率 大きく表示 */}
+        <div className="flex flex-col items-center gap-1 mb-4 py-3 rounded-2xl"
+          style={{ background: 'var(--gray-50)' }}>
+          <span className="text-xs font-medium" style={{ color: 'var(--gray-500)' }}>出席率</span>
+          <span
+            className="text-5xl font-black"
+            style={{ color: getAttendanceRateColor(attendanceRate), letterSpacing: '-0.04em' }}
+          >
+            {attendanceRate}<span className="text-2xl font-semibold">%</span>
+          </span>
+          <div className="w-full px-4 mt-2">
             <div className="progress-bar">
               <div
                 className="progress-fill"
@@ -299,11 +288,8 @@ export default async function DashboardPage() {
           </div>
         </div>
 
-        {/* 出席内訳 */}
-        <div
-          className="grid grid-cols-3 gap-2 pt-4"
-          style={{ borderTop: '1px solid var(--gray-100)' }}
-        >
+        {/* 出席・遅刻・欠席 内訳 */}
+        <div className="grid grid-cols-3 gap-2">
           {[
             { label: '出席',  value: myScore?.present_count ?? 0, color: '#16a34a', bg: '#dcfce7' },
             { label: '遅刻',  value: myScore?.tardy_count ?? 0,   color: '#b45309', bg: '#fef3c7' },
@@ -328,7 +314,7 @@ export default async function DashboardPage() {
         {(recentRecords ?? []).length > 0 && (
           <div className="mt-4 pt-4" style={{ borderTop: '1px solid var(--gray-100)' }}>
             <p className="text-xs mb-2" style={{ color: 'var(--gray-500)' }}>
-              直近 {recentRecords!.length} 回
+              直近 {recentRecords!.length} 回の活動実績
             </p>
             <div className="flex gap-1.5 flex-wrap">
               {recentRecords!.map((r: any, i: number) => {
