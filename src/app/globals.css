@@ -89,6 +89,8 @@
   html {
     -webkit-text-size-adjust: 100%;
     font-size: 16px;
+    /* iOS Safari のオーバースクロール領域にも背景色を適用 */
+    background-color: var(--apple-bg);
   }
 
   body {
