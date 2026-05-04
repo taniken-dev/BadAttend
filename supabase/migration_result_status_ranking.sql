@@ -45,6 +45,7 @@ calc AS (
   SELECT
     p.id,
     p.full_name,
+    p.display_name,
     p.grade,
     p.gender,
     p.skill_rank,
