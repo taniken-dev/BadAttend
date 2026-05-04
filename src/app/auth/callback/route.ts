@@ -76,7 +76,7 @@ async function handleLineCallback(code: string, origin: string, next: string) {
   const syntheticEmail = `line_${lineUserId}@line.user`
 
   // 4. ユーザー作成（既存なら email_exists を無視）
-  const { error: createErr } = await admin.auth.admin.createUser({
+  const { data: createData, error: createErr } = await admin.auth.admin.createUser({
     email:         syntheticEmail,
     email_confirm: true,
     user_metadata: {
@@ -90,6 +90,19 @@ async function handleLineCallback(code: string, origin: string, next: string) {
   if (createErr && !createErr.message.includes('already been registered')) {
     console.error('createUser error:', createErr)
     return NextResponse.redirect(new URL('/login?error=user_create', origin))
+  }
+
+  // 新規ユーザー: プロフィールを作成
+  if (!createErr && createData?.user) {
+    await admin.from('profiles').insert({
+      id:          createData.user.id,
+      full_name:   displayName,
+      avatar_url:  pictureUrl ?? null,
+      grade:       1,
+      role:        'member',
+      skill_rank:  3,
+      is_approved: false,
+    })
   }
 
   // 既存ユーザー: 名前・アイコンのみ更新（is_approved は絶対に触らない）
