@@ -19,9 +19,10 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     document.documentElement.classList.toggle('dark', next)
     localStorage.setItem('theme', next ? 'dark' : 'light')
     setIsDark(next)
-    // iOS Safari の操作バー・セーフエリア背景色をダークモードに合わせる
-    const meta = document.querySelector('meta[name="theme-color"]')
-    if (meta) meta.setAttribute('content', next ? '#0f0f11' : '#f5f5f7')
+    // viewport が出力した media 付き meta を全て更新（手動トグルで上書き）
+    document.querySelectorAll('meta[name="theme-color"]').forEach(m =>
+      m.setAttribute('content', next ? '#0f0f11' : '#f5f5f7')
+    )
   }
 
   return (
