@@ -30,7 +30,7 @@ export const viewport: Viewport = {
   width: 'device-width',
   initialScale: 1,
   maximumScale: 1,
-  themeColor: '#4338ca',
+  // themeColor はダークモードトグルと連動させるため JS で管理
   viewportFit: 'cover',
 }
 
@@ -38,8 +38,10 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="ja" className={`${notoSansJP.variable} h-full`}>
       <head>
-        {/* フラッシュなしでテーマを適用 */}
-        <Script id="theme-init" strategy="beforeInteractive">{`(function(){if(localStorage.getItem('theme')==='dark')document.documentElement.classList.add('dark');})()`}</Script>
+        {/* theme-color: ライト=#f5f5f7 / ダーク=#0f0f11 — JS で動的に切り替え */}
+        <meta name="theme-color" content="#f5f5f7" />
+        {/* フラッシュなし＆theme-color即時適用 */}
+        <Script id="theme-init" strategy="beforeInteractive">{`(function(){var d=localStorage.getItem('theme')==='dark';if(d)document.documentElement.classList.add('dark');var m=document.querySelector('meta[name="theme-color"]');if(m)m.setAttribute('content',d?'#0f0f11':'#f5f5f7');})()`}</Script>
       </head>
       <body className="min-h-full" style={{ fontFamily: 'var(--font-noto), sans-serif' }}>
         <ThemeProvider>{children}</ThemeProvider>
