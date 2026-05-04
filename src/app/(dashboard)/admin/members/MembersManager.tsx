@@ -13,9 +13,11 @@ import {
   GraduationCap,
   Pencil,
   X,
+  UserPlus,
 } from 'lucide-react'
 import type { Profile, SkillRank } from '@/lib/types'
 import { getSkillRankLabel } from '@/lib/utils'
+import type { OrphanUser } from './page'
 
 const SKILL_RANK_OPTIONS: { value: SkillRank; label: string }[] = [
   { value: 1, label: '1 — E級' },
@@ -42,10 +44,12 @@ export default function MembersManager({
   members,
   currentUserId,
   readOnly = false,
+  orphanUsers = [],
 }: {
   members: Profile[]
   currentUserId: string
   readOnly?: boolean
+  orphanUsers?: OrphanUser[]
 }) {
   const supabase = createClient()
   const router = useRouter()
@@ -91,6 +95,22 @@ export default function MembersManager({
     setUpdating(null)
     if (error) { showToast('エラーが発生しました', false); return }
     showToast('承認しました', true)
+    router.refresh()
+  }
+
+  async function approveOrphan(orphan: OrphanUser) {
+    setUpdating(orphan.id)
+    const { error } = await supabase.from('profiles').insert({
+      id:         orphan.id,
+      full_name:  orphan.full_name,
+      grade:      1,
+      role:       'member',
+      skill_rank: 3,
+      is_approved: false,
+    })
+    setUpdating(null)
+    if (error) { showToast('プロフィール作成失敗: ' + error.message, false); return }
+    showToast(`${orphan.full_name} を承認待ちに追加しました`, true)
     router.refresh()
   }
 
@@ -161,6 +181,49 @@ export default function MembersManager({
             : <AlertTriangle size={15} className="shrink-0" />
           }
           <span>{toast.msg}</span>
+        </div>
+      )}
+
+      {/* 孤立ユーザー警告（プロフィール未作成） */}
+      {orphanUsers.length > 0 && (
+        <div className="card animate-slide-up" style={{ border: '1.5px solid #fca5a5', animationDelay: '0.03s' }}>
+          <div className="flex items-center gap-2 mb-4">
+            <div className="w-5 h-5 rounded-full flex items-center justify-center text-xs font-bold text-white" style={{ background: '#dc2626' }}>
+              {orphanUsers.length}
+            </div>
+            <h2 className="text-base font-bold" style={{ color: '#b91c1c', letterSpacing: '-0.02em' }}>
+              プロフィール未作成のユーザー
+            </h2>
+          </div>
+          <p className="text-xs mb-3" style={{ color: 'var(--gray-500)' }}>
+            LINEでログインしたがプロフィールが自動作成されなかったユーザーです。「承認待ちに追加」すると通常の承認フローに移行します。
+          </p>
+          <div className="flex flex-col gap-3">
+            {orphanUsers.map(o => (
+              <div key={o.id} className="flex items-center gap-3 p-3.5 rounded-xl"
+                style={{ background: '#fef2f2', border: '1px solid #fecaca', opacity: updating === o.id ? 0.6 : 1 }}>
+                <div className="w-10 h-10 rounded-xl flex items-center justify-center text-sm font-black shrink-0"
+                  style={{ background: '#fee2e2', color: '#b91c1c' }}>
+                  {o.full_name.charAt(0)}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-bold" style={{ color: 'var(--gray-900)' }}>{o.full_name}</p>
+                  <p className="text-xs" style={{ color: 'var(--gray-500)' }}>
+                    {new Date(o.created_at).toLocaleString('ja-JP', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                  </p>
+                </div>
+                <button
+                  onClick={() => approveOrphan(o)}
+                  disabled={updating === o.id}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors"
+                  style={{ background: 'var(--club-blue)', color: 'white' }}
+                >
+                  <UserPlus size={13} />
+                  承認待ちに追加
+                </button>
+              </div>
+            ))}
+          </div>
         </div>
       )}
 
