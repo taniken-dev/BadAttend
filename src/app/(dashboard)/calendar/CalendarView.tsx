@@ -479,43 +479,6 @@ function DetailPanel({
         </span>
       </div>
 
-      {/* 未提出者リスト */}
-      {unsubmitted.length > 0 && (
-        <div>
-          <div className="flex items-center gap-2 mb-2">
-            <span className="text-xs font-bold px-2 py-0.5 rounded-full"
-              style={{ background: '#fef3c7', color: '#b45309' }}>
-              未提出 {unsubmitted.length}名
-            </span>
-          </div>
-          <div className="flex flex-col gap-1.5">
-            {[...unsubmitted]
-              .sort((a, b) => (roleOrder[a.role] ?? 2) - (roleOrder[b.role] ?? 2))
-              .map(p => (
-              <div key={p.id}
-                className="flex items-center gap-2.5 px-3 py-2 rounded-xl"
-                style={{ background: '#fffbeb', border: '1px solid #fde68a' }}>
-                {p.avatar_url ? (
-                  <img src={p.avatar_url} alt=""
-                    className="w-7 h-7 rounded-full object-cover shrink-0" />
-                ) : (
-                  <div className="w-7 h-7 rounded-full flex items-center justify-center text-xs font-black shrink-0"
-                    style={{ background: '#fef3c7', color: '#b45309' }}>
-                    {(p.display_name ?? p.full_name).charAt(0)}
-                  </div>
-                )}
-                <span className="text-sm font-medium" style={{ color: 'var(--gray-700)' }}>
-                  {p.display_name ?? p.full_name}
-                </span>
-                <span className="text-xs ml-auto" style={{ color: 'var(--gray-400)' }}>
-                  {p.grade}年生
-                </span>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
       {/* マネージャー/管理者向け：一括確定ボタン */}
       {isManagerOrAdmin && attendance.length > 0 && !session.is_cancelled && (
         <div className="flex flex-col gap-2 px-3 py-3 rounded-xl"
@@ -714,6 +677,43 @@ function DetailPanel({
             </div>
           )
         })
+      )}
+
+      {/* 未提出者リスト（提出者リストの下） */}
+      {unsubmitted.length > 0 && (
+        <div>
+          <div className="flex items-center gap-2 mb-2">
+            <span className="text-xs font-bold px-2 py-0.5 rounded-full"
+              style={{ background: '#fef3c7', color: '#b45309' }}>
+              未提出 {unsubmitted.length}名
+            </span>
+          </div>
+          <div className="flex flex-col gap-1.5">
+            {[...unsubmitted]
+              .sort((a, b) => (roleOrder[a.role] ?? 2) - (roleOrder[b.role] ?? 2))
+              .map(p => (
+              <div key={p.id}
+                className="flex items-center gap-2.5 px-3 py-2 rounded-xl"
+                style={{ background: '#fffbeb', border: '1px solid #fde68a' }}>
+                {p.avatar_url ? (
+                  <img src={p.avatar_url} alt=""
+                    className="w-7 h-7 rounded-full object-cover shrink-0" />
+                ) : (
+                  <div className="w-7 h-7 rounded-full flex items-center justify-center text-xs font-black shrink-0"
+                    style={{ background: '#fef3c7', color: '#b45309' }}>
+                    {(p.display_name ?? p.full_name).charAt(0)}
+                  </div>
+                )}
+                <span className="text-sm font-medium" style={{ color: 'var(--gray-700)' }}>
+                  {p.display_name ?? p.full_name}
+                </span>
+                <span className="text-xs ml-auto" style={{ color: 'var(--gray-400)' }}>
+                  {p.grade}年生
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
       )}
     </div>
   )
