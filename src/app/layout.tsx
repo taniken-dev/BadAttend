@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from 'next'
 import { Noto_Sans_JP } from 'next/font/google'
+import Script from 'next/script'
 import './globals.css'
 import { ThemeProvider } from '@/components/ThemeProvider'
 
@@ -34,7 +35,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     <html lang="ja" className={`${notoSansJP.variable} h-full`}>
       <head>
         {/* フラッシュなしでテーマを適用 */}
-        <script dangerouslySetInnerHTML={{ __html: `(function(){if(localStorage.getItem('theme')==='dark')document.documentElement.classList.add('dark');})();` }} />
+        <Script id="theme-init" strategy="beforeInteractive">{`(function(){if(localStorage.getItem('theme')==='dark')document.documentElement.classList.add('dark');})()`}</Script>
       </head>
       <body className="min-h-full" style={{ fontFamily: 'var(--font-noto), sans-serif' }}>
         <ThemeProvider>{children}</ThemeProvider>

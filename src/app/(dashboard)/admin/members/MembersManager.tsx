@@ -17,6 +17,7 @@ import {
 } from 'lucide-react'
 import type { Profile, SkillRank } from '@/lib/types'
 import { getSkillRankLabel } from '@/lib/utils'
+import { useViewRole } from '@/contexts/ViewRoleContext'
 import type { OrphanUser } from './page'
 
 const SKILL_RANK_OPTIONS: { value: SkillRank; label: string }[] = [
@@ -54,6 +55,9 @@ export default function MembersManager({
 }) {
   const supabase = createClient()
   const router = useRouter()
+  const { viewRole } = useViewRole()
+  // デバッグスイッチャーでロールを変更した場合もreadOnlyを反映
+  const effectiveReadOnly = readOnly || viewRole !== 'admin'
   const [updating, setUpdating]     = useState<string | null>(null)
   const [toast, setToast]           = useState<{ msg: string; ok: boolean } | null>(null)
   const [editTarget, setEditTarget] = useState<Profile | null>(null)
@@ -164,10 +168,10 @@ export default function MembersManager({
           className="text-2xl font-black tracking-tight"
           style={{ color: 'var(--gray-900)', letterSpacing: '-0.04em' }}
         >
-          {readOnly ? 'メンバー一覧' : 'メンバー管理'}
+          {effectiveReadOnly ? 'メンバー一覧' : 'メンバー管理'}
         </h1>
         <p className="text-sm mt-1" style={{ color: 'var(--gray-500)' }}>
-          {readOnly ? '部員・技術ランク・出席状況の閲覧（読み取り専用）' : '承認・表示名・学年・技術ランク・権限・退部管理'}
+          {effectiveReadOnly ? '部員・技術ランク・出席状況の閲覧（読み取り専用）' : '承認・表示名・学年・技術ランク・権限・退部管理'}
         </p>
       </div>
 
@@ -228,8 +232,8 @@ export default function MembersManager({
         </div>
       )}
 
-      {/* 承認待ち（readOnly では非表示） */}
-      {!readOnly && pending.length > 0 && (
+      {/* 承認待ち（effectiveReadOnly では非表示） */}
+      {!effectiveReadOnly && pending.length > 0 && (
         <div className="card animate-slide-up" style={{ animationDelay: '0.05s' }}>
           <div className="flex items-center gap-2 mb-4">
             <div
@@ -391,8 +395,8 @@ export default function MembersManager({
                       </div>
                     </div>
 
-                    {/* アクションボタン（readOnly では非表示） */}
-                    {!readOnly && (
+                    {/* アクションボタン（effectiveReadOnly では非表示） */}
+                    {!effectiveReadOnly && (
                       <div className="flex items-center gap-1.5 shrink-0">
                         {/* 表示名編集 */}
                         <button
@@ -423,7 +427,7 @@ export default function MembersManager({
                   </div>
 
                   {/* 下段：学年・技術ランク・ロール */}
-                  {readOnly ? (
+                  {effectiveReadOnly ? (
                     <div className="flex flex-wrap gap-3 text-xs" style={{ color: 'var(--gray-500)' }}>
                       <span>{m.grade}年生</span>
                       <span>·</span>
@@ -510,8 +514,8 @@ export default function MembersManager({
         )}
       </div>
 
-      {/* 注意書き（readOnly では非表示） */}
-      {!readOnly && (
+      {/* 注意書き（effectiveReadOnly では非表示） */}
+      {!effectiveReadOnly && (
         <div
           className="text-xs leading-relaxed px-4 py-3 rounded-xl animate-slide-up"
           style={{
