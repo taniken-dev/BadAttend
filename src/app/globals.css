@@ -420,6 +420,9 @@
     -webkit-backdrop-filter: blur(20px);
     border-top: 1px solid rgba(0,0,0,0.06);
     z-index: 50;
+    /* viewport-fit:cover 対応 — safe-area は NavBar 側の inline style で管理 */
+    padding-left:  env(safe-area-inset-left);
+    padding-right: env(safe-area-inset-right);
   }
 
   /* --- アニメーション適用 --- */

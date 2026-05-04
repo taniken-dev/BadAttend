@@ -31,6 +31,7 @@ const GRADE_OPTIONS = [1, 2, 3, 4]
 const ROLE_OPTIONS = [
   { value: 'member', label: '部員',   icon: Users },
   { value: 'admin',  label: '管理者', icon: Shield },
+  { value: 'komon',  label: '顧問',   icon: GraduationCap },
 ]
 
 function displayName(m: Pick<Profile, 'full_name' | 'display_name'>) {
@@ -40,9 +41,11 @@ function displayName(m: Pick<Profile, 'full_name' | 'display_name'>) {
 export default function MembersManager({
   members,
   currentUserId,
+  readOnly = false,
 }: {
   members: Profile[]
   currentUserId: string
+  readOnly?: boolean
 }) {
   const supabase = createClient()
   const router = useRouter()
@@ -140,10 +143,10 @@ export default function MembersManager({
           className="text-2xl font-black tracking-tight"
           style={{ color: 'var(--gray-900)', letterSpacing: '-0.04em' }}
         >
-          メンバー管理
+          {readOnly ? 'メンバー一覧' : 'メンバー管理'}
         </h1>
         <p className="text-sm mt-1" style={{ color: 'var(--gray-500)' }}>
-          承認・表示名・学年・技術ランク・権限・退部管理
+          {readOnly ? '部員・技術ランク・出席状況の閲覧（読み取り専用）' : '承認・表示名・学年・技術ランク・権限・退部管理'}
         </p>
       </div>
 
@@ -161,8 +164,8 @@ export default function MembersManager({
         </div>
       )}
 
-      {/* 承認待ち */}
-      {pending.length > 0 && (
+      {/* 承認待ち（readOnly では非表示） */}
+      {!readOnly && pending.length > 0 && (
         <div className="card animate-slide-up" style={{ animationDelay: '0.05s' }}>
           <div className="flex items-center gap-2 mb-4">
             <div
@@ -324,36 +327,47 @@ export default function MembersManager({
                       </div>
                     </div>
 
-                    {/* アクションボタン */}
-                    <div className="flex items-center gap-1.5 shrink-0">
-                      {/* 表示名編集 */}
-                      <button
-                        onClick={() => openEdit(m)}
-                        disabled={updating === m.id}
-                        className="flex items-center gap-1 px-2 py-1.5 rounded-lg text-xs font-semibold transition-colors"
-                        style={{ background: 'var(--gray-100)', color: 'var(--gray-600)', border: '1px solid var(--gray-200)' }}
-                        title="表示名を編集"
-                      >
-                        <Pencil size={12} />
-                        <span className="hidden sm:inline">編集</span>
-                      </button>
-                      {/* 退部 */}
-                      {!isMe && (
+                    {/* アクションボタン（readOnly では非表示） */}
+                    {!readOnly && (
+                      <div className="flex items-center gap-1.5 shrink-0">
+                        {/* 表示名編集 */}
                         <button
-                          onClick={() => deleteMember(m.id, displayName(m))}
+                          onClick={() => openEdit(m)}
                           disabled={updating === m.id}
                           className="flex items-center gap-1 px-2 py-1.5 rounded-lg text-xs font-semibold transition-colors"
-                          style={{ background: '#fef2f2', color: '#b91c1c', border: '1px solid #fecaca' }}
-                          title="退部処理"
+                          style={{ background: 'var(--gray-100)', color: 'var(--gray-600)', border: '1px solid var(--gray-200)' }}
+                          title="表示名を編集"
                         >
-                          <Trash2 size={12} />
-                          <span className="hidden sm:inline">退部</span>
+                          <Pencil size={12} />
+                          <span className="hidden sm:inline">編集</span>
                         </button>
-                      )}
-                    </div>
+                        {/* 退部 */}
+                        {!isMe && (
+                          <button
+                            onClick={() => deleteMember(m.id, displayName(m))}
+                            disabled={updating === m.id}
+                            className="flex items-center gap-1 px-2 py-1.5 rounded-lg text-xs font-semibold transition-colors"
+                            style={{ background: '#fef2f2', color: '#b91c1c', border: '1px solid #fecaca' }}
+                            title="退部処理"
+                          >
+                            <Trash2 size={12} />
+                            <span className="hidden sm:inline">退部</span>
+                          </button>
+                        )}
+                      </div>
+                    )}
                   </div>
 
                   {/* 下段：学年・技術ランク・ロール */}
+                  {readOnly ? (
+                    <div className="flex flex-wrap gap-3 text-xs" style={{ color: 'var(--gray-500)' }}>
+                      <span>{m.grade}年生</span>
+                      <span>·</span>
+                      <span>{getSkillRankLabel(m.skill_rank)}</span>
+                      <span>·</span>
+                      <span>{ROLE_OPTIONS.find(r => r.value === m.role)?.label ?? m.role}</span>
+                    </div>
+                  ) : (
                   <div className="grid grid-cols-3 gap-2">
                     {/* 学年 */}
                     <div>
@@ -424,6 +438,7 @@ export default function MembersManager({
                       </div>
                     </div>
                   </div>
+                  )}
                 </div>
               )
             })}
@@ -431,18 +446,20 @@ export default function MembersManager({
         )}
       </div>
 
-      {/* 注意書き */}
-      <div
-        className="text-xs leading-relaxed px-4 py-3 rounded-xl animate-slide-up"
-        style={{
-          animationDelay: '0.15s',
-          background: 'var(--gray-100)',
-          color: 'var(--gray-500)',
-          borderLeft: '3px solid var(--gray-300)',
-        }}
-      >
-        退部処理を行うとアカウントと全データが完全に削除されます。この操作は取り消せません。
-      </div>
+      {/* 注意書き（readOnly では非表示） */}
+      {!readOnly && (
+        <div
+          className="text-xs leading-relaxed px-4 py-3 rounded-xl animate-slide-up"
+          style={{
+            animationDelay: '0.15s',
+            background: 'var(--gray-100)',
+            color: 'var(--gray-500)',
+            borderLeft: '3px solid var(--gray-300)',
+          }}
+        >
+          退部処理を行うとアカウントと全データが完全に削除されます。この操作は取り消せません。
+        </div>
+      )}
 
       {/* ── 表示名編集モーダル ───────────────────────────── */}
       {editTarget && (

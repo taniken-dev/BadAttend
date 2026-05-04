@@ -90,6 +90,14 @@ export default function AttendancePage() {
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return
 
+    // coach はこのページを使用しない
+    const { data: myProfile } = await supabase
+      .from('profiles').select('role').eq('id', user.id).single()
+    if (myProfile?.role === 'coach') {
+      router.replace('/dashboard')
+      return
+    }
+
     const info = getWeeklyRegistrationInfo()
     setRegInfo(info)
 
@@ -312,7 +320,7 @@ export default function AttendancePage() {
             {/* セッションカード */}
             <div className="card" style={{
               border: isActive ? '1.5px solid var(--club-blue)' : '1.5px solid var(--gray-200)',
-              background: isActive ? 'color-mix(in srgb, var(--club-blue) 4%, white)' : undefined,
+              background: isActive ? 'color-mix(in srgb, var(--club-blue) 6%, var(--card-bg))' : undefined,
             }}>
               <div className="flex items-center gap-3">
                 <div className="w-11 h-11 rounded-xl flex items-center justify-center shrink-0"
@@ -432,18 +440,18 @@ export default function AttendancePage() {
                           style={{
                             border: `1.5px solid ${active ? color : 'var(--gray-200)'}`,
                             background: active
-                              ? `color-mix(in srgb, ${color} 12%, var(--gray-50))`
-                              : 'var(--gray-50)',
+                              ? `color-mix(in srgb, ${color} 15%, var(--gray-100))`
+                              : 'var(--gray-100)',
                             cursor: 'pointer',
                           }}
                         >
-                          <Icon size={20} style={{ color: active ? color : 'var(--gray-400)' }} />
+                          <Icon size={20} style={{ color: active ? color : 'var(--gray-500)' }} />
                           <span className="text-sm font-bold"
-                            style={{ color: active ? color : 'var(--gray-600)' }}>
+                            style={{ color: active ? color : 'var(--gray-700)' }}>
                             {label}
                           </span>
                           <span className="text-xs leading-tight"
-                            style={{ color: active ? color : 'var(--gray-400)', opacity: 0.85 }}>
+                            style={{ color: active ? color : 'var(--gray-500)', opacity: 0.9 }}>
                             {description}
                           </span>
                         </button>
@@ -480,25 +488,25 @@ export default function AttendancePage() {
                                 style={{
                                   border: `1.5px solid ${active ? color : 'var(--gray-200)'}`,
                                   background: active
-                                    ? `color-mix(in srgb, ${color} 12%, var(--gray-50))`
-                                    : 'var(--gray-50)',
+                                    ? `color-mix(in srgb, ${color} 15%, var(--gray-100))`
+                                    : 'var(--gray-100)',
                                   cursor: 'pointer',
                                 }}
                               >
                                 <div className="w-9 h-9 rounded-lg flex items-center justify-center shrink-0"
                                   style={{
                                     background: active
-                                      ? `color-mix(in srgb, ${color} 20%, var(--gray-100))`
+                                      ? `color-mix(in srgb, ${color} 20%, var(--gray-200))`
                                       : 'var(--gray-200)',
                                   }}>
-                                  <Icon size={18} style={{ color: active ? color : 'var(--gray-500)' }} />
+                                  <Icon size={18} style={{ color: active ? color : 'var(--gray-600)' }} />
                                 </div>
                                 <div className="flex-1 min-w-0">
                                   <p className="text-sm font-semibold"
                                     style={{ color: active ? color : 'var(--gray-700)' }}>
                                     {label}
                                   </p>
-                                  <p className="text-xs mt-0.5" style={{ color: 'var(--gray-500)' }}>
+                                  <p className="text-xs mt-0.5" style={{ color: 'var(--gray-600)' }}>
                                     {description}
                                   </p>
                                 </div>

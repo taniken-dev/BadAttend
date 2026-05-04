@@ -31,7 +31,9 @@ export default async function DashboardPage() {
     .eq('id', user.id)
     .single<Profile>()
 
-  const { data: myScore } = await supabase
+  const isCoach = profile?.role === 'coach'
+
+  const { data: myScore } = isCoach ? { data: null } : await supabase
     .from('v_selection_scores')
     .select('*')
     .eq('id', user.id)
@@ -62,9 +64,9 @@ export default async function DashboardPage() {
     absentees = all.filter(r => r.status !== 'present' && r.status !== 'tardy')
   }
 
-  // 自分の今日の出欠
+  // 自分の今日の出欠（komon は不要）
   let myTodayRecord: any = null
-  if (todaySession) {
+  if (todaySession && !isCoach) {
     const { data } = await supabase
       .from('attendance_records')
       .select('status, reason')
@@ -74,8 +76,8 @@ export default async function DashboardPage() {
     myTodayRecord = data
   }
 
-  // 直近10回の自分の出欠履歴
-  const { data: recentRecords } = await supabase
+  // 直近10回の自分の出欠履歴（komon は不要）
+  const { data: recentRecords } = isCoach ? { data: null } : await supabase
     .from('attendance_records')
     .select('status, reason, practice_sessions(session_date)')
     .eq('user_id', user.id)
@@ -123,8 +125,8 @@ export default async function DashboardPage() {
                   今日の練習
                 </h1>
               </div>
-              {/* 自分の状態 */}
-              {myTodayRecord ? (
+              {/* 自分の状態（komon は非表示） */}
+              {!isCoach && (myTodayRecord ? (
                 <span className={`badge ${STATUS_BADGE[myTodayRecord.status as keyof typeof STATUS_BADGE] ?? 'badge'}`}>
                   {ATTENDANCE_STATUS_LABELS[myTodayRecord.status as keyof typeof ATTENDANCE_STATUS_LABELS] ?? myTodayRecord.status}
                 </span>
@@ -137,7 +139,7 @@ export default async function DashboardPage() {
                   <CalendarCheck size={14} />
                   出欠連絡
                 </Link>
-              )}
+              ))}
             </div>
           </div>
 
@@ -247,8 +249,8 @@ export default async function DashboardPage() {
         </div>
       )}
 
-      {/* 自分の出席状況カード */}
-      <div className="card animate-slide-up" style={{ animationDelay: '0.15s' }}>
+      {/* 自分の出席状況カード（komon は非表示） */}
+      {!isCoach && <div className="card animate-slide-up" style={{ animationDelay: '0.15s' }}>
         <div className="flex items-center justify-between mb-4">
           <h2
             className="text-base font-bold"
@@ -333,10 +335,10 @@ export default async function DashboardPage() {
             </div>
           </div>
         )}
-      </div>
+      </div>}
 
-      {/* 出欠連絡ボタン（今日セッションあり・未連絡の場合） */}
-      {todaySession && !myTodayRecord && !isLocked && (
+      {/* 出欠連絡ボタン（今日セッションあり・未連絡・komon以外） */}
+      {!isCoach && todaySession && !myTodayRecord && !isLocked && (
         <Link
           href="/attendance"
           className="btn-primary animate-slide-up"
