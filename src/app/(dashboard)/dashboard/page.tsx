@@ -64,14 +64,14 @@ export default async function DashboardPage() {
     .single<PracticeSession>()
 
   // 今日の全出欠レコード
-  type AttendeeRow = { status: string; reason: string | null; reason_detail: string | null; profiles: { full_name: string; grade: number } }
+  type AttendeeRow = { status: string; reason: string | null; reason_detail: string | null; profiles: { full_name: string; display_name: string | null; grade: number } }
   let attendees: AttendeeRow[] = []
   let absentees: AttendeeRow[] = []
 
   if (todaySession) {
     const { data: records } = await supabase
       .from('attendance_records')
-      .select('status, reason, reason_detail, profiles!inner(full_name, grade)')
+      .select('status, reason, reason_detail, profiles!inner(full_name, display_name, grade)')
       .eq('session_id', todaySession.id)
 
     const all = (records ?? []) as unknown as AttendeeRow[]
@@ -188,7 +188,7 @@ export default async function DashboardPage() {
                     }}
                   >
                     {a.status === 'tardy' && <Clock size={12} />}
-                    {a.profiles.full_name}
+                    {a.profiles.display_name ?? a.profiles.full_name}
                     {a.status === 'tardy' && <span className="text-xs opacity-70">遅刻</span>}
                   </div>
                 ))}
@@ -218,11 +218,11 @@ export default async function DashboardPage() {
                       className="w-8 h-8 rounded-lg flex items-center justify-center text-xs font-black shrink-0"
                       style={{ background: '#fee2e2', color: '#b91c1c' }}
                     >
-                      {a.profiles.full_name.charAt(0)}
+                      {(a.profiles.display_name ?? a.profiles.full_name).charAt(0)}
                     </div>
                     <div className="flex-1">
                       <p className="text-sm font-semibold" style={{ color: 'var(--gray-900)' }}>
-                        {a.profiles.full_name}
+                        {a.profiles.display_name ?? a.profiles.full_name}
                       </p>
                       {a.reason && (
                         <p className="text-xs" style={{ color: 'var(--gray-500)' }}>
