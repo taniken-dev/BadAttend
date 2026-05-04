@@ -517,10 +517,11 @@ function DetailPanel({
   onRevertAll: () => Promise<void>
 }) {
   const { session, attendance, unsubmitted, totalApproved } = detail
-  const [confirming,  setConfirming]  = useState(false)
-  const [reverting,   setReverting]   = useState(false)
-  const [updatingId,  setUpdatingId]  = useState<string | null>(null)
-  const [clearingId,  setClearingId]  = useState<string | null>(null)
+  const [confirming,    setConfirming]    = useState(false)
+  const [reverting,     setReverting]     = useState(false)
+  const [updatingId,    setUpdatingId]    = useState<string | null>(null)
+  const [clearingId,    setClearingId]    = useState<string | null>(null)
+  const [pendingStatus, setPendingStatus] = useState<Record<string, AttendanceStatus>>({})
 
   const dateObj   = new Date(session.session_date + 'T00:00:00')
   const dateLabel = dateObj.toLocaleDateString('ja-JP', {
@@ -535,12 +536,6 @@ function DetailPanel({
 
   const allMembers = sortMembers(attendance)
   const unconfirmedCount = attendance.filter(a => !a.result_status).length
-
-  async function handleUpdate(id: string, status: AttendanceStatus) {
-    setUpdatingId(id)
-    await onUpdateResultStatus(id, status)
-    setUpdatingId(null)
-  }
 
   async function handleBulk() {
     setConfirming(true)
@@ -682,7 +677,7 @@ function DetailPanel({
             const statusGroup = STATUS_GROUPS.find(g =>
               g.key === (a.status.startsWith('absent') ? 'absent' : a.status)
             )
-            const effectiveStatus = (a.result_status ?? a.status) as AttendanceStatus
+            const confirmedOption = RESULT_STATUS_OPTIONS.find(o => o.value === a.result_status)
             const isDiverged = a.result_status && a.result_status !== a.status
 
             return (
@@ -733,62 +728,72 @@ function DetailPanel({
 
                   {/* 予定 + 実績 */}
                   <div className="flex items-center gap-2 flex-wrap mt-1.5">
-                    {/* 予定（読み取り専用バッジ） */}
-                    <div className="flex items-center gap-1">
-                      <span className="text-xs" style={{ color: 'var(--gray-400)' }}>予定:</span>
-                      <span className="text-xs px-1.5 py-0.5 rounded font-medium"
-                        style={{
-                          background: statusGroup?.bg ?? 'var(--gray-100)',
-                          color: statusGroup?.color ?? 'var(--gray-500)',
-                        }}>
-                        {RESULT_STATUS_OPTIONS.find(o => o.value === a.status)?.label ?? a.status}
-                      </span>
-                    </div>
-
-                    {/* 実績：未確定なら「確定」ボタン、確定済みならドロップダウン＋取消 */}
+                    {/* 未確定: 予定バッジ＋実績プルダウン＋確定ボタン */}
                     {!a.result_status ? (
-                      <button
-                        onClick={() => handleConfirmOne(a.id, a.status as AttendanceStatus)}
-                        disabled={updatingId === a.id}
-                        className="flex items-center gap-1 text-xs px-2 py-0.5 rounded-lg font-semibold cursor-pointer transition-opacity hover:opacity-80"
-                        style={{ background: '#dcfce7', color: '#15803d', border: '1px solid #86efac' }}
-                      >
-                        {updatingId === a.id
-                          ? <span className="w-2.5 h-2.5 border border-current border-t-transparent rounded-full animate-spin" />
-                          : <CheckCircle2 size={11} />}
-                        確定
-                      </button>
-                    ) : (
-                      <div className="flex items-center gap-1">
-                        <span className="text-xs" style={{ color: 'var(--gray-400)' }}>実績:</span>
-                        <select
-                          value={effectiveStatus}
+                      <>
+                        <div className="flex items-center gap-1">
+                          <span className="text-xs" style={{ color: 'var(--gray-400)' }}>予定:</span>
+                          <span className="text-xs px-1.5 py-0.5 rounded font-medium"
+                            style={{
+                              background: statusGroup?.bg ?? 'var(--gray-100)',
+                              color: statusGroup?.color ?? 'var(--gray-500)',
+                            }}>
+                            {RESULT_STATUS_OPTIONS.find(o => o.value === a.status)?.label ?? a.status}
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-1">
+                          <span className="text-xs" style={{ color: 'var(--gray-400)' }}>実績:</span>
+                          <select
+                            value={pendingStatus[a.id] ?? a.status}
+                            disabled={updatingId === a.id}
+                            onChange={e => setPendingStatus(prev => ({ ...prev, [a.id]: e.target.value as AttendanceStatus }))}
+                            className="text-xs rounded-lg border px-1.5 py-0.5 cursor-pointer"
+                            style={{
+                              borderColor: 'var(--gray-200)',
+                              background: 'var(--card-bg)',
+                              color: RESULT_STATUS_OPTIONS.find(o => o.value === (pendingStatus[a.id] ?? a.status))?.color ?? 'var(--gray-700)',
+                              fontSize: '12px',
+                            }}
+                          >
+                            {RESULT_STATUS_OPTIONS.map(o => (
+                              <option key={o.value} value={o.value}>{o.label}</option>
+                            ))}
+                          </select>
+                        </div>
+                        <button
+                          onClick={() => handleConfirmOne(a.id, (pendingStatus[a.id] ?? a.status) as AttendanceStatus)}
                           disabled={updatingId === a.id}
-                          onChange={e => handleUpdate(a.id, e.target.value as AttendanceStatus)}
-                          className="text-xs rounded-lg border px-1.5 py-0.5 cursor-pointer"
-                          style={{
-                            borderColor: 'var(--gray-200)',
-                            background: 'var(--card-bg)',
-                            color: RESULT_STATUS_OPTIONS.find(o => o.value === effectiveStatus)?.color ?? 'var(--gray-700)',
-                            fontSize: '12px',
-                          }}
+                          className="flex items-center gap-1 text-xs px-2 py-0.5 rounded-lg font-semibold cursor-pointer transition-opacity hover:opacity-80"
+                          style={{ background: '#dcfce7', color: '#15803d', border: '1px solid #86efac' }}
                         >
-                          {RESULT_STATUS_OPTIONS.map(o => (
-                            <option key={o.value} value={o.value}>{o.label}</option>
-                          ))}
-                        </select>
+                          {updatingId === a.id
+                            ? <span className="w-2.5 h-2.5 border border-current border-t-transparent rounded-full animate-spin" />
+                            : <CheckCircle2 size={11} />}
+                          確定
+                        </button>
+                      </>
+                    ) : (
+                      /* 確定済み: 実績バッジ＋取消ボタン */
+                      <>
+                        <span className="text-xs font-medium px-1.5 py-0.5 rounded"
+                          style={{
+                            background: (confirmedOption?.color ?? '#888') + '22',
+                            color: confirmedOption?.color ?? 'var(--gray-700)',
+                          }}>
+                          実績: {confirmedOption?.label ?? a.result_status}
+                        </span>
                         <button
                           onClick={() => handleClear(a.id)}
                           disabled={clearingId === a.id}
-                          className="flex items-center justify-center w-5 h-5 rounded cursor-pointer transition-opacity hover:opacity-70"
-                          style={{ color: 'var(--gray-400)' }}
-                          title="確定を取消して未確定に戻す"
+                          className="flex items-center gap-1 text-xs px-2 py-0.5 rounded-lg font-semibold cursor-pointer transition-opacity hover:opacity-70"
+                          style={{ background: 'var(--gray-100)', color: 'var(--gray-500)', border: '1px solid var(--gray-200)' }}
                         >
                           {clearingId === a.id
                             ? <span className="w-2.5 h-2.5 border border-current border-t-transparent rounded-full animate-spin" />
-                            : <RotateCcw size={11} />}
+                            : <RotateCcw size={10} />}
+                          取消
                         </button>
-                      </div>
+                      </>
                     )}
                   </div>
                 </div>
