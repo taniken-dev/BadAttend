@@ -2,7 +2,6 @@ import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import {
-  ChevronRight,
   CheckCircle2,
   XCircle,
   Clock,
@@ -18,7 +17,9 @@ import {
   type Profile,
   type SelectionScore,
   type PracticeSession,
+  type WarningFlag,
 } from '@/lib/types'
+import LeaderboardSection from './LeaderboardSection'
 
 export default async function DashboardPage() {
   const supabase = await createClient()
@@ -32,12 +33,26 @@ export default async function DashboardPage() {
     .single<Profile>()
 
   const isCoach = profile?.role === 'coach'
+  const isAdmin = profile?.role === 'admin'
 
+  // 個人スコア（coach は不要）
   const { data: myScore } = isCoach ? { data: null } : await supabase
     .from('v_selection_scores')
     .select('*')
     .eq('id', user.id)
     .single<SelectionScore>()
+
+  // 全部員ランキング
+  const { data: allScores } = await supabase
+    .from('v_selection_scores')
+    .select('*')
+    .order('attendance_rate', { ascending: false })
+
+  // 注意勧告（admin のみ）
+  const { data: warningData } = isAdmin
+    ? await supabase.from('warning_flags').select('*').is('resolved_at', null)
+    : { data: [] }
+  const warnedUserIds = ((warningData ?? []) as WarningFlag[]).map(w => w.user_id)
 
   // 今日のセッション
   const today = new Date().toISOString().split('T')[0]
@@ -48,7 +63,7 @@ export default async function DashboardPage() {
     .eq('is_cancelled', false)
     .single<PracticeSession>()
 
-  // 今日の全出欠レコード（参加者・欠席者を分類）
+  // 今日の全出欠レコード
   type AttendeeRow = { status: string; reason: string | null; reason_detail: string | null; profiles: { full_name: string; grade: number } }
   let attendees: AttendeeRow[] = []
   let absentees: AttendeeRow[] = []
@@ -64,7 +79,7 @@ export default async function DashboardPage() {
     absentees = all.filter(r => r.status !== 'present' && r.status !== 'tardy')
   }
 
-  // 自分の今日の出欠（komon は不要）
+  // 自分の今日の出欠（coach は不要）
   let myTodayRecord: any = null
   if (todaySession && !isCoach) {
     const { data } = await supabase
@@ -76,7 +91,7 @@ export default async function DashboardPage() {
     myTodayRecord = data
   }
 
-  // 直近10回の自分の出欠履歴（komon は不要）
+  // 直近10回の自分の出欠履歴（coach は不要）
   const { data: recentRecords } = isCoach ? { data: null } : await supabase
     .from('attendance_records')
     .select('status, reason, practice_sessions(session_date)')
@@ -125,7 +140,7 @@ export default async function DashboardPage() {
                   今日の練習
                 </h1>
               </div>
-              {/* 自分の状態（komon は非表示） */}
+              {/* 自分の状態（coach は非表示） */}
               {!isCoach && (myTodayRecord ? (
                 <span className={`badge ${STATUS_BADGE[myTodayRecord.status as keyof typeof STATUS_BADGE] ?? 'badge'}`}>
                   {ATTENDANCE_STATUS_LABELS[myTodayRecord.status as keyof typeof ATTENDANCE_STATUS_LABELS] ?? myTodayRecord.status}
@@ -157,7 +172,6 @@ export default async function DashboardPage() {
                 {attendees.length} 名
               </span>
             </div>
-
             {attendees.length === 0 ? (
               <p className="text-sm py-2" style={{ color: 'var(--gray-400)' }}>
                 まだ出欠連絡がありません
@@ -175,9 +189,7 @@ export default async function DashboardPage() {
                   >
                     {a.status === 'tardy' && <Clock size={12} />}
                     {a.profiles.full_name}
-                    {a.status === 'tardy' && (
-                      <span className="text-xs opacity-70">遅刻</span>
-                    )}
+                    {a.status === 'tardy' && <span className="text-xs opacity-70">遅刻</span>}
                   </div>
                 ))}
               </div>
@@ -249,95 +261,77 @@ export default async function DashboardPage() {
         </div>
       )}
 
-      {/* 自分の出席状況カード（komon は非表示） */}
-      {!isCoach && <div className="card animate-slide-up" style={{ animationDelay: '0.15s' }}>
-        <div className="flex items-center justify-between mb-4">
+      {/* 自分の出席状況カード（coach は非表示） */}
+      {!isCoach && (
+        <div className="card animate-slide-up" style={{ animationDelay: '0.15s' }}>
           <h2
-            className="text-base font-bold"
+            className="text-base font-bold mb-4"
             style={{ color: 'var(--gray-900)', letterSpacing: '-0.02em' }}
           >
             自分の出席状況
           </h2>
-          <Link
-            href="/leaderboard"
-            className="flex items-center gap-1 text-xs font-medium"
-            style={{ color: 'var(--club-blue)' }}
-          >
-            全体ランキング <ChevronRight size={13} />
-          </Link>
-        </div>
 
-        {/* 出席率 大きく表示 */}
-        <div className="flex flex-col items-center gap-1 mb-4 py-3 rounded-2xl"
-          style={{ background: 'var(--gray-50)' }}>
-          <span className="text-xs font-medium" style={{ color: 'var(--gray-500)' }}>出席率</span>
-          <span
-            className="text-5xl font-black"
-            style={{ color: getAttendanceRateColor(attendanceRate), letterSpacing: '-0.04em' }}
-          >
-            {attendanceRate}<span className="text-2xl font-semibold">%</span>
-          </span>
-          <div className="w-full px-4 mt-2">
-            <div className="progress-bar">
-              <div
-                className="progress-fill"
-                style={{
-                  width: `${attendanceRate}%`,
-                  background: getAttendanceRateColor(attendanceRate),
-                }}
-              />
-            </div>
-          </div>
-        </div>
-
-        {/* 出席・遅刻・欠席 内訳 */}
-        <div className="grid grid-cols-3 gap-2">
-          {[
-            { label: '出席',  value: myScore?.present_count ?? 0, color: '#16a34a', bg: '#dcfce7' },
-            { label: '遅刻',  value: myScore?.tardy_count ?? 0,   color: '#b45309', bg: '#fef3c7' },
-            { label: '欠席',  value: myScore?.absent_count ?? 0,  color: '#b91c1c', bg: '#fee2e2' },
-          ].map(({ label, value, color, bg }) => (
-            <div
-              key={label}
-              className="flex flex-col items-center gap-1 py-3 rounded-xl"
-              style={{ background: bg }}
+          {/* 出席率 */}
+          <div className="flex flex-col items-center gap-1 mb-4 py-3 rounded-2xl"
+            style={{ background: 'var(--gray-50)' }}>
+            <span className="text-xs font-medium" style={{ color: 'var(--gray-500)' }}>出席率</span>
+            <span
+              className="text-5xl font-black"
+              style={{ color: getAttendanceRateColor(attendanceRate), letterSpacing: '-0.04em' }}
             >
-              <span className="text-2xl font-black" style={{ color }}>
-                {value}
-              </span>
-              <span className="text-xs font-medium" style={{ color }}>
-                {label}
-              </span>
-            </div>
-          ))}
-        </div>
-
-        {/* 直近の出欠ドット */}
-        {(recentRecords ?? []).length > 0 && (
-          <div className="mt-4 pt-4" style={{ borderTop: '1px solid var(--gray-100)' }}>
-            <p className="text-xs mb-2" style={{ color: 'var(--gray-500)' }}>
-              直近 {recentRecords!.length} 回の活動実績
-            </p>
-            <div className="flex gap-1.5 flex-wrap">
-              {recentRecords!.map((r: any, i: number) => {
-                const dotColor =
-                  r.status === 'present' ? '#16a34a' :
-                  r.status === 'tardy'   ? '#d97706' : '#dc2626'
-                return (
-                  <div
-                    key={i}
-                    title={`${r.practice_sessions?.session_date ?? ''} ${ATTENDANCE_STATUS_LABELS[r.status as keyof typeof ATTENDANCE_STATUS_LABELS]}`}
-                    className="w-5 h-5 rounded-full"
-                    style={{ background: dotColor, opacity: 1 - i * 0.06 }}
-                  />
-                )
-              })}
+              {attendanceRate}<span className="text-2xl font-semibold">%</span>
+            </span>
+            <div className="w-full px-4 mt-2">
+              <div className="progress-bar">
+                <div
+                  className="progress-fill"
+                  style={{ width: `${attendanceRate}%`, background: getAttendanceRateColor(attendanceRate) }}
+                />
+              </div>
             </div>
           </div>
-        )}
-      </div>}
 
-      {/* 出欠連絡ボタン（今日セッションあり・未連絡・komon以外） */}
+          {/* 出席・遅刻・欠席 内訳 */}
+          <div className="grid grid-cols-3 gap-2">
+            {[
+              { label: '出席', value: myScore?.present_count ?? 0, color: '#16a34a', bg: '#dcfce7' },
+              { label: '遅刻', value: myScore?.tardy_count ?? 0,   color: '#b45309', bg: '#fef3c7' },
+              { label: '欠席', value: myScore?.absent_count ?? 0,  color: '#b91c1c', bg: '#fee2e2' },
+            ].map(({ label, value, color, bg }) => (
+              <div key={label} className="flex flex-col items-center gap-1 py-3 rounded-xl" style={{ background: bg }}>
+                <span className="text-2xl font-black" style={{ color }}>{value}</span>
+                <span className="text-xs font-medium" style={{ color }}>{label}</span>
+              </div>
+            ))}
+          </div>
+
+          {/* 直近の出欠ドット */}
+          {(recentRecords ?? []).length > 0 && (
+            <div className="mt-4 pt-4" style={{ borderTop: '1px solid var(--gray-100)' }}>
+              <p className="text-xs mb-2" style={{ color: 'var(--gray-500)' }}>
+                直近 {recentRecords!.length} 回の活動実績
+              </p>
+              <div className="flex gap-1.5 flex-wrap">
+                {recentRecords!.map((r: any, i: number) => {
+                  const dotColor =
+                    r.status === 'present' ? '#16a34a' :
+                    r.status === 'tardy'   ? '#d97706' : '#dc2626'
+                  return (
+                    <div
+                      key={i}
+                      title={`${r.practice_sessions?.session_date ?? ''} ${ATTENDANCE_STATUS_LABELS[r.status as keyof typeof ATTENDANCE_STATUS_LABELS]}`}
+                      className="w-5 h-5 rounded-full"
+                      style={{ background: dotColor, opacity: 1 - i * 0.06 }}
+                    />
+                  )
+                })}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* 出欠連絡ボタン（今日セッションあり・未連絡・coach以外） */}
       {!isCoach && todaySession && !myTodayRecord && !isLocked && (
         <Link
           href="/attendance"
@@ -348,6 +342,14 @@ export default async function DashboardPage() {
           今日の出欠を連絡する
         </Link>
       )}
+
+      {/* 出席率ランキング */}
+      <LeaderboardSection
+        scores={(allScores ?? []) as SelectionScore[]}
+        currentUserId={user.id}
+        isAdmin={isAdmin}
+        warnedUserIds={warnedUserIds}
+      />
     </div>
   )
 }
