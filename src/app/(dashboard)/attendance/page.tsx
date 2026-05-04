@@ -90,13 +90,14 @@ export default function AttendancePage() {
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return
 
-    // coach はこのページを使用しない
+    // coach（顧問）はこのページを使用しない
     const { data: myProfile } = await supabase
       .from('profiles').select('role').eq('id', user.id).single()
     if (myProfile?.role === 'coach') {
       router.replace('/dashboard')
       return
     }
+    // member / manager / admin は出欠連絡可能
 
     const info = getWeeklyRegistrationInfo()
     setRegInfo(info)

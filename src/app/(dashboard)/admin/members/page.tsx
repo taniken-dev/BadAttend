@@ -21,7 +21,7 @@ export default async function AdminMembersPage() {
     .eq('id', user.id)
     .single()
 
-  if (!myProfile || (myProfile.role !== 'admin' && myProfile.role !== 'coach')) {
+  if (!myProfile) {
     redirect('/dashboard')
   }
 

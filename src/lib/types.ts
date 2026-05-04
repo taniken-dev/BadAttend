@@ -1,4 +1,4 @@
-export type Role = 'member' | 'captain' | 'admin' | 'coach'
+export type Role = 'member' | 'manager' | 'admin' | 'coach'
 export type SkillRank = 1 | 2 | 3 | 4 | 5 | 6
 export type SelectionRank = 'S' | 'A' | 'B' | 'C' | 'D' | 'E'
 
@@ -39,6 +39,8 @@ export interface PracticeSession {
   end_time: string
   location: string
   is_cancelled: boolean
+  is_results_confirmed: boolean
+  results_confirmed_at: string | null
   note: string | null
   created_at: string
 }
@@ -48,6 +50,8 @@ export interface AttendanceRecord {
   session_id: string
   user_id: string
   status: AttendanceStatus
+  result_status: AttendanceStatus | null
+  verified_by: string | null
   reason: AbsenceReason | null
   reason_detail: string | null
   reported_at: string | null

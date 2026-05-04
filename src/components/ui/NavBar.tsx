@@ -65,13 +65,14 @@ export default function NavBar() {
     return () => document.removeEventListener('mousedown', handler)
   }, [])
 
-  const isAdmin = role === 'admin'
-  const isCoach = role === 'coach'
+  const isAdmin   = role === 'admin'
+  const isCoach   = role === 'coach'
+  const canReport = !isCoach  // member / manager / admin は出欠連絡可能
 
   // ── PC 左ナビ（ホーム・[出欠連絡]・カレンダー + admin はメンバー管理） ──
   const desktopLeftItems = [
     { href: '/dashboard',      icon: LayoutDashboard, label: 'ホーム' },
-    ...(!isCoach ? [{ href: '/attendance', icon: CalendarCheck, label: '出欠連絡' }] : []),
+    ...(canReport ? [{ href: '/attendance', icon: CalendarCheck, label: '出欠連絡' }] : []),
     { href: '/calendar',       icon: CalendarDays,    label: 'カレンダー' },
     ...(isAdmin ? [{ href: '/admin/members', icon: Users, label: 'メンバー管理' }] : []),
   ]
@@ -150,8 +151,8 @@ export default function NavBar() {
   function GearMenuContent() {
     return (
       <>
-        {/* メンバー一覧（coach のみ：admin は左ナビに表示済み） */}
-        {isCoach && (
+        {/* メンバー一覧（admin 以外：admin は左ナビに表示済み） */}
+        {!isAdmin && (
           <>
             <MenuItem
               href="/admin/members" onClick={() => setShowGear(false)}
@@ -198,15 +199,13 @@ export default function NavBar() {
   function MobileMenuContent() {
     return (
       <>
-        {/* メンバー一覧（admin / coach） */}
-        {(isAdmin || isCoach) && (
-          <>
-            <MenuItem
-              href="/admin/members" onClick={() => setShowMore(false)}
-              icon={<Users size={17} />} label="メンバー一覧"
-              color="#0891b2" bg="#ecfeff"
-            />
-          </>
+        {/* メンバー一覧（admin 以外：admin は左ナビに表示済み） */}
+        {!isAdmin && (
+          <MenuItem
+            href="/admin/members" onClick={() => setShowMore(false)}
+            icon={<Users size={17} />} label="メンバー一覧"
+            color="#0891b2" bg="#ecfeff"
+          />
         )}
 
         {/* 届いた意見を確認（admin のみ） */}
@@ -218,7 +217,7 @@ export default function NavBar() {
           />
         )}
 
-        {(isAdmin || isCoach) && <Divider />}
+        <Divider />
 
         {/* ご意見箱 */}
         <MenuItem

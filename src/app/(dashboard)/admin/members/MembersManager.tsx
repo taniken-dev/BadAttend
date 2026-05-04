@@ -31,9 +31,10 @@ const SKILL_RANK_OPTIONS: { value: SkillRank; label: string }[] = [
 const GRADE_OPTIONS = [1, 2, 3, 4]
 
 const ROLE_OPTIONS = [
-  { value: 'member', label: '部員',   icon: Users },
-  { value: 'admin',  label: '管理者', icon: Shield },
-  { value: 'komon',  label: '顧問',   icon: GraduationCap },
+  { value: 'member',  label: '部員',         icon: Users },
+  { value: 'manager', label: 'マネージャー', icon: Shield },
+  { value: 'admin',   label: '管理者',       icon: Shield },
+  { value: 'coach',   label: '顧問',         icon: GraduationCap },
 ]
 
 function displayName(m: Pick<Profile, 'full_name' | 'display_name'>) {
@@ -215,7 +216,7 @@ export default function MembersManager({
                 <button
                   onClick={() => approveOrphan(o)}
                   disabled={updating === o.id}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors"
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer active:scale-95 hover:opacity-80"
                   style={{ background: 'var(--club-blue)', color: 'white' }}
                 >
                   <UserPlus size={13} />
@@ -276,7 +277,7 @@ export default function MembersManager({
                   <button
                     onClick={() => deleteMember(m.id, displayName(m))}
                     disabled={updating === m.id}
-                    className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-colors"
+                    className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer active:scale-95 hover:opacity-80"
                     style={{ background: '#fef2f2', color: '#b91c1c', border: '1px solid #fecaca' }}
                   >
                     <Trash2 size={13} />
@@ -285,7 +286,7 @@ export default function MembersManager({
                   <button
                     onClick={() => approve(m.id)}
                     disabled={updating === m.id}
-                    className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-colors"
+                    className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer active:scale-95 hover:opacity-80"
                     style={{ background: '#f0fdf4', color: '#15803d', border: '1px solid #bbf7d0' }}
                   >
                     {updating === m.id ? (
@@ -397,7 +398,7 @@ export default function MembersManager({
                         <button
                           onClick={() => openEdit(m)}
                           disabled={updating === m.id}
-                          className="flex items-center gap-1 px-2 py-1.5 rounded-lg text-xs font-semibold transition-colors"
+                          className="flex items-center gap-1 px-2 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer active:scale-95 hover:opacity-80"
                           style={{ background: 'var(--gray-100)', color: 'var(--gray-600)', border: '1px solid var(--gray-200)' }}
                           title="表示名を編集"
                         >
@@ -409,7 +410,7 @@ export default function MembersManager({
                           <button
                             onClick={() => deleteMember(m.id, displayName(m))}
                             disabled={updating === m.id}
-                            className="flex items-center gap-1 px-2 py-1.5 rounded-lg text-xs font-semibold transition-colors"
+                            className="flex items-center gap-1 px-2 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer active:scale-95 hover:opacity-80"
                             style={{ background: '#fef2f2', color: '#b91c1c', border: '1px solid #fecaca' }}
                             title="退部処理"
                           >
@@ -579,7 +580,7 @@ export default function MembersManager({
             <div className="flex gap-2">
               <button
                 onClick={() => setEditTarget(null)}
-                className="flex-1 py-2.5 rounded-xl text-sm font-semibold transition-colors"
+                className="flex-1 py-2.5 rounded-xl text-sm font-semibold transition-all cursor-pointer active:scale-95 hover:opacity-80"
                 style={{ background: 'var(--gray-100)', color: 'var(--gray-600)' }}
               >
                 キャンセル
@@ -587,7 +588,7 @@ export default function MembersManager({
               <button
                 onClick={saveDisplayName}
                 disabled={saving}
-                className="flex-1 py-2.5 rounded-xl text-sm font-semibold transition-colors flex items-center justify-center gap-2"
+                className="flex-1 py-2.5 rounded-xl text-sm font-semibold transition-all cursor-pointer active:scale-95 hover:opacity-80 flex items-center justify-center gap-2"
                 style={{ background: 'var(--club-blue)', color: 'white', opacity: saving ? 0.7 : 1 }}
               >
                 {saving && (
