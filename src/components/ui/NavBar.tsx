@@ -186,6 +186,14 @@ export default function NavBar() {
   function MobileMenuContent() {
     return (
       <>
+        {/* メンバー一覧（モバイルのみ：PCは左ナビに表示済み） */}
+        <MenuItem
+          href="/admin/members" onClick={() => setShowMore(false)}
+          icon={<Users size={17} />}
+          label={isAdmin ? 'メンバー管理' : 'メンバー一覧'}
+          color="#0891b2" bg="#ecfeff"
+        />
+
         {/* 届いた意見を確認（admin のみ） */}
         {isAdmin && (
           <MenuItem
