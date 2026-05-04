@@ -16,6 +16,7 @@ type AttendanceRow = {
   status: string
   result_status: string | null
   reason: string | null
+  reason_detail: string | null
   user_id: string
 }
 
@@ -38,6 +39,39 @@ type DayDetail = {
 }
 
 const DOW = ['日', '月', '火', '水', '木', '金', '土']
+
+const REASON_LABELS: Record<string, string> = {
+  practice: '別練習・大会',
+  class: '授業',
+  sick: '体調不良',
+  personal: '私用',
+  other: 'その他',
+}
+
+function formatReason(reason: string | null, reasonDetail: string | null): string | null {
+  if (!reason) return null
+  const label = REASON_LABELS[reason] ?? 'その他'
+  if (reasonDetail) return `${label}: ${reasonDetail}`
+  return label
+}
+
+function ReasonBadge({ reason, reasonDetail }: { reason: string | null; reasonDetail: string | null }) {
+  if (!reason) return null
+  const label = REASON_LABELS[reason] ?? 'その他'
+  return (
+    <div className="flex items-center gap-1.5 mt-1.5 flex-wrap">
+      <span className="text-xs font-semibold px-2 py-0.5 rounded-full shrink-0"
+        style={{ background: 'var(--gray-100)', color: 'var(--gray-600)', border: '1px solid var(--gray-200)' }}>
+        {label}
+      </span>
+      {reasonDetail && (
+        <span className="text-xs" style={{ color: 'var(--gray-600)' }}>
+          {reasonDetail}
+        </span>
+      )}
+    </div>
+  )
+}
 
 const STATUS_GROUPS = [
   { key: 'present',           label: '出席予定',    color: '#16a34a', bg: '#dcfce7' },
@@ -114,7 +148,7 @@ export default function CalendarView() {
     const [{ data: atRows }, { data: allProfiles }] = await Promise.all([
       supabase
         .from('attendance_records')
-        .select('id, status, result_status, reason, user_id')
+        .select('id, status, result_status, reason, reason_detail, user_id')
         .eq('session_id', session.id),
       supabase
         .from('profiles')
@@ -552,7 +586,7 @@ function DetailPanel({
 
                 <div className="flex-1 min-w-0">
                   {/* 名前行 */}
-                  <div className="flex items-center gap-1.5 flex-wrap mb-1.5">
+                  <div className="flex items-center gap-1.5 flex-wrap">
                     <span className="text-sm font-semibold" style={{ color: 'var(--gray-900)' }}>
                       {a.profile.display_name ?? a.profile.full_name}
                     </span>
@@ -574,8 +608,11 @@ function DetailPanel({
                     )}
                   </div>
 
+                  {/* 欠席理由 */}
+                  {a.reason && <ReasonBadge reason={a.reason} reasonDetail={a.reason_detail} />}
+
                   {/* 予定 + 実績 セレクト */}
-                  <div className="flex items-center gap-2 flex-wrap">
+                  <div className="flex items-center gap-2 flex-wrap mt-1.5">
                     {/* 予定（読み取り専用バッジ） */}
                     <div className="flex items-center gap-1">
                       <span className="text-xs" style={{ color: 'var(--gray-400)' }}>予定:</span>
@@ -632,13 +669,13 @@ function DetailPanel({
               <div className="flex flex-col gap-1.5">
                 {members.map((a, i) => (
                   <div key={i}
-                    className="flex items-center gap-2.5 px-3 py-2.5 rounded-xl"
+                    className="flex items-start gap-2.5 px-3 py-2.5 rounded-xl"
                     style={{ background: 'var(--gray-50)', border: '1px solid var(--gray-100)' }}>
                     {a.profile.avatar_url ? (
                       <img src={a.profile.avatar_url} alt=""
-                        className="w-8 h-8 rounded-full object-cover shrink-0" />
+                        className="w-8 h-8 rounded-full object-cover shrink-0 mt-0.5" />
                     ) : (
-                      <div className="w-8 h-8 rounded-full flex items-center justify-center text-sm font-black shrink-0"
+                      <div className="w-8 h-8 rounded-full flex items-center justify-center text-sm font-black shrink-0 mt-0.5"
                         style={{ background: g.bg, color: g.color }}>
                         {(a.profile.display_name ?? a.profile.full_name).charAt(0)}
                       </div>
@@ -661,16 +698,8 @@ function DetailPanel({
                       <span className="text-xs" style={{ color: 'var(--gray-400)' }}>
                         {a.profile.grade}年生
                       </span>
+                      <ReasonBadge reason={a.reason} reasonDetail={a.reason_detail} />
                     </div>
-                    {a.reason && (
-                      <span className="text-xs px-2 py-0.5 rounded-full shrink-0"
-                        style={{ background: 'var(--gray-100)', color: 'var(--gray-500)' }}>
-                        {a.reason === 'practice' ? '別練習' :
-                         a.reason === 'class'    ? '授業'   :
-                         a.reason === 'sick'     ? '体調不良':
-                         a.reason === 'personal' ? '私用'   : 'その他'}
-                      </span>
-                    )}
                   </div>
                 ))}
               </div>

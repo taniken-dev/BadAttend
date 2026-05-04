@@ -523,14 +523,22 @@ export default function AttendancePage() {
                       </div>
 
                       <div>
-                        <label className="label">詳細（任意）</label>
+                        <label className="label">
+                          詳細
+                          {selectedReason === 'other' ? (
+                            <span className="ml-1 text-xs font-semibold" style={{ color: '#dc2626' }}>（必須）</span>
+                          ) : (
+                            <span className="ml-1 text-xs font-normal" style={{ color: 'var(--gray-400)' }}>（任意）</span>
+                          )}
+                        </label>
                         <textarea
                           value={detail}
                           onChange={e => setDetail(e.target.value)}
                           className="input-field resize-none"
                           rows={3}
-                          placeholder="補足事項があれば入力してください"
+                          placeholder={selectedReason === 'other' ? '欠席理由を入力してください（必須）' : '補足事項があれば入力してください'}
                           maxLength={200}
+                          style={selectedReason === 'other' && !detail.trim() ? { borderColor: '#fca5a5' } : undefined}
                         />
                         <p className="text-right text-xs mt-1" style={{ color: 'var(--gray-400)' }}>
                           {detail.length}/200
@@ -543,7 +551,7 @@ export default function AttendancePage() {
                     <button
                       type="submit"
                       className={isAbsent && isEmergency ? 'btn-danger' : 'btn-primary'}
-                      disabled={!selectedStatus || (isAbsent && !selectedReason) || submitting}
+                      disabled={!selectedStatus || (isAbsent && !selectedReason) || (isAbsent && selectedReason === 'other' && !detail.trim()) || submitting}
                     >
                       {submitting ? (
                         <span className="flex items-center gap-2">
