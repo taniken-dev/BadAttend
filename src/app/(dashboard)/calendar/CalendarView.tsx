@@ -6,6 +6,7 @@ import {
   ChevronLeft, ChevronRight, MapPin, Clock, Users,
   CheckCircle2, ClipboardCheck, AlertCircle,
 } from 'lucide-react'
+import { useViewRole } from '@/contexts/ViewRoleContext'
 import type { PracticeSession, AttendanceStatus } from '@/lib/types'
 
 type SessionMap = Record<string, PracticeSession>
@@ -60,7 +61,7 @@ export default function CalendarView() {
   const today    = new Date()
   const todayStr = toDateStr(today.getFullYear(), today.getMonth(), today.getDate())
 
-  const [role,         setRole]        = useState<string | null>(null)
+  const { viewRole } = useViewRole()
   const [userId,       setUserId]      = useState<string | null>(null)
   const [current,      setCurrent]     = useState(new Date(today.getFullYear(), today.getMonth(), 1))
   const [sessions,     setSessions]    = useState<SessionMap>({})
@@ -68,14 +69,12 @@ export default function CalendarView() {
   const [detail,       setDetail]      = useState<DayDetail | null>(null)
   const [loading,      setLoading]     = useState(false)
 
-  const isManagerOrAdmin = role === 'manager' || role === 'admin'
+  const isManagerOrAdmin = viewRole === 'manager' || viewRole === 'admin'
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data: { user } }) => {
       if (!user) return
       setUserId(user.id)
-      supabase.from('profiles').select('role').eq('id', user.id).single()
-        .then(({ data }) => setRole(data?.role ?? null))
     })
   }, [])
 

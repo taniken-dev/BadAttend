@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
+import { useViewRole } from '@/contexts/ViewRoleContext'
 import {
   CalendarCheck,
   Clock,
@@ -59,6 +60,7 @@ const REASON_OPTIONS: {
 export default function AttendancePage() {
   const supabase = createClient()
   const router = useRouter()
+  const { viewRole } = useViewRole()
 
   // セッション一覧
   const [sessions, setSessions] = useState<PracticeSession[]>([])
@@ -84,20 +86,16 @@ export default function AttendancePage() {
     ? isEmergencyReport(activeSession.session_date, activeSession.start_time)
     : false
 
+  // coach（顧問）はこのページを使用しない — viewRole 変化に追従してリダイレクト
+  useEffect(() => {
+    if (viewRole === 'coach') router.replace('/dashboard')
+  }, [viewRole])
+
   useEffect(() => { loadData() }, [])
 
   async function loadData() {
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return
-
-    // coach（顧問）はこのページを使用しない
-    const { data: myProfile } = await supabase
-      .from('profiles').select('role').eq('id', user.id).single()
-    if (myProfile?.role === 'coach') {
-      router.replace('/dashboard')
-      return
-    }
-    // member / manager / admin は出欠連絡可能
 
     const info = getWeeklyRegistrationInfo()
     setRegInfo(info)
