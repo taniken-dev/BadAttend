@@ -522,9 +522,11 @@ export default function MembersManager({
           className="text-xs leading-relaxed px-4 py-3 rounded-xl animate-slide-up"
           style={{
             animationDelay: '0.15s',
-            background: 'var(--gray-100)',
-            color: 'var(--gray-500)',
-            borderLeft: '3px solid var(--gray-300)',
+            background: 'color-mix(in srgb, #f59e0b 8%, var(--card-bg))',
+            color: 'var(--gray-600)',
+            border: '1px solid color-mix(in srgb, #f59e0b 30%, transparent)',
+            borderLeft: '3px solid #f59e0b',
+            boxShadow: 'var(--shadow-xs)',
           }}
         >
           退部処理を行うとアカウントと全データが完全に削除されます。この操作は取り消せません。
