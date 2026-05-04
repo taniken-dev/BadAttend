@@ -262,12 +262,16 @@ export default function MembersManager({
                   opacity: updating === m.id ? 0.6 : 1,
                 }}
               >
-                <div
-                  className="w-10 h-10 rounded-xl flex items-center justify-center text-sm font-black shrink-0"
-                  style={{ background: '#fef3c7', color: '#b45309' }}
-                >
-                  {displayName(m).charAt(0)}
-                </div>
+                {m.avatar_url ? (
+                  <img src={m.avatar_url} alt="" className="w-10 h-10 rounded-xl object-cover shrink-0" />
+                ) : (
+                  <div
+                    className="w-10 h-10 rounded-xl flex items-center justify-center text-sm font-black shrink-0"
+                    style={{ background: '#fef3c7', color: '#b45309' }}
+                  >
+                    {displayName(m).charAt(0)}
+                  </div>
+                )}
 
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-bold" style={{ color: 'var(--gray-900)' }}>
@@ -351,15 +355,23 @@ export default function MembersManager({
                 >
                   {/* 上段：名前・バッジ */}
                   <div className="flex items-center gap-3 mb-3">
-                    <div
-                      className="w-10 h-10 rounded-xl flex items-center justify-center text-sm font-black shrink-0"
-                      style={{
-                        background: isMe ? 'var(--club-blue-light)' : 'var(--gray-200)',
-                        color: isMe ? 'var(--club-blue)' : 'var(--gray-600)',
-                      }}
-                    >
-                      {displayName(m).charAt(0)}
-                    </div>
+                    {m.avatar_url ? (
+                      <img
+                        src={m.avatar_url} alt=""
+                        className="w-10 h-10 rounded-xl object-cover shrink-0"
+                        style={{ outline: isMe ? '2px solid var(--club-blue)' : 'none', outlineOffset: '1px' }}
+                      />
+                    ) : (
+                      <div
+                        className="w-10 h-10 rounded-xl flex items-center justify-center text-sm font-black shrink-0"
+                        style={{
+                          background: isMe ? 'var(--club-blue-light)' : 'var(--gray-200)',
+                          color: isMe ? 'var(--club-blue)' : 'var(--gray-600)',
+                        }}
+                      >
+                        {displayName(m).charAt(0)}
+                      </div>
+                    )}
 
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-1.5 flex-wrap">
