@@ -90,7 +90,7 @@ export default function LeaderboardSection({ scores, currentUserId, isAdmin, war
       )}
 
       {/* 全員リスト */}
-      <div className="card" style={{ padding: '0' }}>
+      <div className="card" style={{ padding: '0', overflow: 'hidden' }}>
         <div className="flex flex-col">
           {displayList.map((s, i) => {
             const isMe = s.id === currentUserId
