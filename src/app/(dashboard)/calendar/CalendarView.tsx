@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import {
   ChevronLeft, ChevronRight, MapPin, Clock, Users,
-  CheckCircle2, ClipboardCheck, AlertCircle,
+  CheckCircle2, ClipboardCheck, AlertCircle, RotateCcw,
 } from 'lucide-react'
 import { useViewRole } from '@/contexts/ViewRoleContext'
 import type { PracticeSession, AttendanceStatus } from '@/lib/types'
@@ -246,6 +246,82 @@ export default function CalendarView() {
     }))
   }, [detail, userId])
 
+  // ── 個別実績を未確定に戻す ──────────────────────────────────
+  const handleClearResultStatus = useCallback(async (
+    recordId: string,
+    sessionDate: string,
+  ) => {
+    if (!detail) return
+    const sessionId = detail.session.id
+    const { error } = await supabase
+      .from('attendance_records')
+      .update({ result_status: null, verified_by: null })
+      .eq('id', recordId)
+    if (error) return
+
+    const updatedAttendance = detail.attendance.map(a =>
+      a.id === recordId ? { ...a, result_status: null } : a
+    )
+    const allCleared = updatedAttendance.every(a => !a.result_status)
+
+    if (allCleared) {
+      await supabase
+        .from('practice_sessions')
+        .update({ is_results_confirmed: false, results_confirmed_at: null })
+        .eq('id', sessionId)
+    }
+
+    setDetail(prev => {
+      if (!prev) return prev
+      return {
+        ...prev,
+        session: allCleared ? { ...prev.session, is_results_confirmed: false } : prev.session,
+        attendance: updatedAttendance,
+      }
+    })
+    if (allCleared) {
+      setSessions(prev => ({
+        ...prev,
+        [sessionDate]: { ...prev[sessionDate], is_results_confirmed: false },
+      }))
+    }
+  }, [detail])
+
+  // ── セッション全員の実績を未確定に戻す ──────────────────────
+  const handleRevertAll = useCallback(async () => {
+    if (!detail) return
+    const sessionId = detail.session.id
+    const sessionDate = detail.session.session_date
+
+    const clears = detail.attendance
+      .filter(a => a.result_status)
+      .map(a =>
+        supabase
+          .from('attendance_records')
+          .update({ result_status: null, verified_by: null })
+          .eq('id', a.id)
+      )
+    await Promise.all(clears)
+
+    await supabase
+      .from('practice_sessions')
+      .update({ is_results_confirmed: false, results_confirmed_at: null })
+      .eq('id', sessionId)
+
+    setDetail(prev => {
+      if (!prev) return prev
+      return {
+        ...prev,
+        session: { ...prev.session, is_results_confirmed: false },
+        attendance: prev.attendance.map(a => ({ ...a, result_status: null })),
+      }
+    })
+    setSessions(prev => ({
+      ...prev,
+      [sessionDate]: { ...prev[sessionDate], is_results_confirmed: false },
+    }))
+  }, [detail])
+
   // ── カレンダーグリッド ────────────────────────────────────
   const y = current.getFullYear()
   const m = current.getMonth()
@@ -411,6 +487,10 @@ export default function CalendarView() {
                 handleUpdateResultStatus(id, status, detail.session.session_date)
               }
               onBulkConfirm={handleBulkConfirm}
+              onClearResultStatus={(id) =>
+                handleClearResultStatus(id, detail.session.session_date)
+              }
+              onRevertAll={handleRevertAll}
             />
 
           ) : null}
@@ -426,15 +506,21 @@ function DetailPanel({
   isManagerOrAdmin,
   onUpdateResultStatus,
   onBulkConfirm,
+  onClearResultStatus,
+  onRevertAll,
 }: {
   detail: DayDetail
   isManagerOrAdmin: boolean
   onUpdateResultStatus: (id: string, status: AttendanceStatus) => Promise<void>
   onBulkConfirm: () => Promise<void>
+  onClearResultStatus: (id: string) => Promise<void>
+  onRevertAll: () => Promise<void>
 }) {
   const { session, attendance, unsubmitted, totalApproved } = detail
-  const [confirming, setConfirming] = useState(false)
-  const [updatingId, setUpdatingId] = useState<string | null>(null)
+  const [confirming,  setConfirming]  = useState(false)
+  const [reverting,   setReverting]   = useState(false)
+  const [updatingId,  setUpdatingId]  = useState<string | null>(null)
+  const [clearingId,  setClearingId]  = useState<string | null>(null)
 
   const dateObj   = new Date(session.session_date + 'T00:00:00')
   const dateLabel = dateObj.toLocaleDateString('ja-JP', {
@@ -462,6 +548,24 @@ function DetailPanel({
     setConfirming(false)
   }
 
+  async function handleConfirmOne(id: string, status: AttendanceStatus) {
+    setUpdatingId(id)
+    await onUpdateResultStatus(id, status)
+    setUpdatingId(null)
+  }
+
+  async function handleClear(id: string) {
+    setClearingId(id)
+    await onClearResultStatus(id)
+    setClearingId(null)
+  }
+
+  async function handleRevert() {
+    setReverting(true)
+    await onRevertAll()
+    setReverting(false)
+  }
+
   return (
     <div className="flex flex-col gap-4">
       {/* セッション情報ヘッダー */}
@@ -472,11 +576,27 @@ function DetailPanel({
           </h2>
           <div className="flex items-center gap-2">
             {session.is_results_confirmed && (
-              <span className="flex items-center gap-1 text-xs px-2 py-0.5 rounded-full font-semibold"
-                style={{ background: '#dcfce7', color: '#15803d' }}>
-                <CheckCircle2 size={11} />
-                実績確定済み
-              </span>
+              <div className="flex items-center gap-1.5">
+                <span className="flex items-center gap-1 text-xs px-2 py-0.5 rounded-full font-semibold"
+                  style={{ background: '#dcfce7', color: '#15803d' }}>
+                  <CheckCircle2 size={11} />
+                  実績確定済み
+                </span>
+                {isManagerOrAdmin && (
+                  <button
+                    onClick={handleRevert}
+                    disabled={reverting}
+                    className="flex items-center gap-1 text-xs px-2 py-0.5 rounded-full font-semibold cursor-pointer transition-opacity hover:opacity-70"
+                    style={{ background: 'var(--gray-100)', color: 'var(--gray-500)', border: '1px solid var(--gray-200)' }}
+                    title="全員の実績確定を解除"
+                  >
+                    {reverting
+                      ? <span className="w-2.5 h-2.5 border border-current border-t-transparent rounded-full animate-spin" />
+                      : <RotateCcw size={10} />}
+                    全解除
+                  </button>
+                )}
+              </div>
             )}
             {session.is_cancelled && (
               <span className="text-xs px-2 py-0.5 rounded-full font-semibold"
@@ -611,7 +731,7 @@ function DetailPanel({
                   {/* 欠席理由 */}
                   {a.reason && <ReasonBadge reason={a.reason} reasonDetail={a.reason_detail} />}
 
-                  {/* 予定 + 実績 セレクト */}
+                  {/* 予定 + 実績 */}
                   <div className="flex items-center gap-2 flex-wrap mt-1.5">
                     {/* 予定（読み取り専用バッジ） */}
                     <div className="flex items-center gap-1">
@@ -625,26 +745,51 @@ function DetailPanel({
                       </span>
                     </div>
 
-                    {/* 実績（変更可能） */}
-                    <div className="flex items-center gap-1">
-                      <span className="text-xs" style={{ color: 'var(--gray-400)' }}>実績:</span>
-                      <select
-                        value={effectiveStatus}
+                    {/* 実績：未確定なら「確定」ボタン、確定済みならドロップダウン＋取消 */}
+                    {!a.result_status ? (
+                      <button
+                        onClick={() => handleConfirmOne(a.id, a.status as AttendanceStatus)}
                         disabled={updatingId === a.id}
-                        onChange={e => handleUpdate(a.id, e.target.value as AttendanceStatus)}
-                        className="text-xs rounded-lg border px-1.5 py-0.5 cursor-pointer"
-                        style={{
-                          borderColor: 'var(--gray-200)',
-                          background: 'white',
-                          color: RESULT_STATUS_OPTIONS.find(o => o.value === effectiveStatus)?.color ?? 'var(--gray-700)',
-                          fontSize: '12px',
-                        }}
+                        className="flex items-center gap-1 text-xs px-2 py-0.5 rounded-lg font-semibold cursor-pointer transition-opacity hover:opacity-80"
+                        style={{ background: '#dcfce7', color: '#15803d', border: '1px solid #86efac' }}
                       >
-                        {RESULT_STATUS_OPTIONS.map(o => (
-                          <option key={o.value} value={o.value}>{o.label}</option>
-                        ))}
-                      </select>
-                    </div>
+                        {updatingId === a.id
+                          ? <span className="w-2.5 h-2.5 border border-current border-t-transparent rounded-full animate-spin" />
+                          : <CheckCircle2 size={11} />}
+                        確定
+                      </button>
+                    ) : (
+                      <div className="flex items-center gap-1">
+                        <span className="text-xs" style={{ color: 'var(--gray-400)' }}>実績:</span>
+                        <select
+                          value={effectiveStatus}
+                          disabled={updatingId === a.id}
+                          onChange={e => handleUpdate(a.id, e.target.value as AttendanceStatus)}
+                          className="text-xs rounded-lg border px-1.5 py-0.5 cursor-pointer"
+                          style={{
+                            borderColor: 'var(--gray-200)',
+                            background: 'var(--card-bg)',
+                            color: RESULT_STATUS_OPTIONS.find(o => o.value === effectiveStatus)?.color ?? 'var(--gray-700)',
+                            fontSize: '12px',
+                          }}
+                        >
+                          {RESULT_STATUS_OPTIONS.map(o => (
+                            <option key={o.value} value={o.value}>{o.label}</option>
+                          ))}
+                        </select>
+                        <button
+                          onClick={() => handleClear(a.id)}
+                          disabled={clearingId === a.id}
+                          className="flex items-center justify-center w-5 h-5 rounded cursor-pointer transition-opacity hover:opacity-70"
+                          style={{ color: 'var(--gray-400)' }}
+                          title="確定を取消して未確定に戻す"
+                        >
+                          {clearingId === a.id
+                            ? <span className="w-2.5 h-2.5 border border-current border-t-transparent rounded-full animate-spin" />
+                            : <RotateCcw size={11} />}
+                        </button>
+                      </div>
+                    )}
                   </div>
                 </div>
               </div>
