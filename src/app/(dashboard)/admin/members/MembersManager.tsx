@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useMemo, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import {
@@ -65,8 +65,8 @@ export default function MembersManager({
   const [editName, setEditName]     = useState('')
   const [saving, setSaving]         = useState(false)
 
-  const pending  = members.filter(m => !m.is_approved)
-  const approved = members.filter(m => m.is_approved)
+  const pending  = useMemo(() => members.filter(m => !m.is_approved), [members])
+  const approved = useMemo(() => members.filter(m => m.is_approved),  [members])
 
   function showToast(msg: string, ok: boolean) {
     setToast({ msg, ok })
@@ -221,7 +221,7 @@ export default function MembersManager({
                 <button
                   onClick={() => approveOrphan(o)}
                   disabled={updating === o.id}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer active:scale-95 hover:opacity-80"
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-opacity cursor-pointer active:scale-95 hover:opacity-80"
                   style={{ background: 'var(--club-blue)', color: 'white' }}
                 >
                   <UserPlus size={13} />
@@ -260,10 +260,12 @@ export default function MembersManager({
                   background: 'var(--gray-50)',
                   border: '1.5px solid var(--gray-200)',
                   opacity: updating === m.id ? 0.6 : 1,
+                  willChange: 'transform',
+                  contain: 'layout style',
                 }}
               >
                 {m.avatar_url ? (
-                  <img src={m.avatar_url} alt="" className="w-10 h-10 rounded-xl object-cover shrink-0" />
+                  <img src={m.avatar_url} alt="" width={40} height={40} className="w-10 h-10 rounded-xl object-cover shrink-0" />
                 ) : (
                   <div
                     className="w-10 h-10 rounded-xl flex items-center justify-center text-sm font-black shrink-0"
@@ -286,7 +288,7 @@ export default function MembersManager({
                   <button
                     onClick={() => deleteMember(m.id, displayName(m))}
                     disabled={updating === m.id}
-                    className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer active:scale-95 hover:opacity-80"
+                    className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-opacity cursor-pointer active:scale-95 hover:opacity-80"
                     style={{ background: '#fef2f2', color: '#b91c1c', border: '1px solid #fecaca' }}
                   >
                     <Trash2 size={13} />
@@ -295,7 +297,7 @@ export default function MembersManager({
                   <button
                     onClick={() => approve(m.id)}
                     disabled={updating === m.id}
-                    className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer active:scale-95 hover:opacity-80"
+                    className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-opacity cursor-pointer active:scale-95 hover:opacity-80"
                     style={{ background: '#f0fdf4', color: '#15803d', border: '1px solid #bbf7d0' }}
                   >
                     {updating === m.id ? (
@@ -351,6 +353,8 @@ export default function MembersManager({
                     border: `1.5px solid ${isMe ? 'var(--club-blue-light)' : 'var(--gray-200)'}`,
                     background: isMe ? 'var(--club-blue-muted)' : 'var(--gray-50)',
                     opacity: updating === m.id ? 0.6 : 1,
+                    willChange: 'transform',
+                    contain: 'layout style',
                   }}
                 >
                   {/* 上段：名前・バッジ */}
@@ -358,6 +362,7 @@ export default function MembersManager({
                     {m.avatar_url ? (
                       <img
                         src={m.avatar_url} alt=""
+                        width={40} height={40}
                         className="w-10 h-10 rounded-xl object-cover shrink-0"
                         style={{ outline: isMe ? '2px solid var(--club-blue)' : 'none', outlineOffset: '1px' }}
                       />
@@ -465,7 +470,7 @@ export default function MembersManager({
                         <button
                           onClick={() => deleteMember(m.id, displayName(m))}
                           disabled={updating === m.id}
-                          className="flex items-center gap-1 px-2 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer active:scale-95 hover:opacity-80"
+                          className="flex items-center gap-1 px-2 py-1.5 rounded-lg text-xs font-semibold transition-opacity cursor-pointer active:scale-95 hover:opacity-80"
                           style={{ background: '#fef2f2', color: '#b91c1c', border: '1px solid #fecaca' }}
                           title="退部処理"
                         >
