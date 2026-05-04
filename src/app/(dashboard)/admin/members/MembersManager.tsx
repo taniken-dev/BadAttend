@@ -13,6 +13,7 @@ import {
   GraduationCap,
   Pencil,
   X,
+  Check,
   UserPlus,
 } from 'lucide-react'
 import type { Profile, SkillRank } from '@/lib/types'
@@ -60,7 +61,7 @@ export default function MembersManager({
   const effectiveReadOnly = readOnly || viewRole !== 'admin'
   const [updating, setUpdating]     = useState<string | null>(null)
   const [toast, setToast]           = useState<{ msg: string; ok: boolean } | null>(null)
-  const [editTarget, setEditTarget] = useState<Profile | null>(null)
+  const [editTarget, setEditTarget] = useState<string | null>(null)
   const [editName, setEditName]     = useState('')
   const [saving, setSaving]         = useState(false)
 
@@ -73,7 +74,7 @@ export default function MembersManager({
   }
 
   function openEdit(m: Profile) {
-    setEditTarget(m)
+    setEditTarget(m.id)
     setEditName(m.display_name ?? '')
   }
 
@@ -83,7 +84,7 @@ export default function MembersManager({
     const { error } = await supabase
       .from('profiles')
       .update({ display_name: editName.trim() || null })
-      .eq('id', editTarget.id)
+      .eq('id', editTarget)
     setSaving(false)
     if (error) { showToast('更新失敗', false); return }
     showToast('表示名を更新しました', true)
@@ -362,18 +363,65 @@ export default function MembersManager({
 
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-1.5 flex-wrap">
-                        {/* 表示名 or 未設定バッジ */}
-                        {hasDisplayName ? (
-                          <span className="text-sm font-bold" style={{ color: 'var(--gray-900)' }}>
-                            {m.display_name}
-                          </span>
+                        {/* 表示名インライン編集 */}
+                        {!effectiveReadOnly && editTarget === m.id ? (
+                          <>
+                            <input
+                              type="text"
+                              value={editName}
+                              onChange={e => setEditName(e.target.value)}
+                              onKeyDown={e => {
+                                if (e.key === 'Enter') saveDisplayName()
+                                if (e.key === 'Escape') setEditTarget(null)
+                              }}
+                              autoFocus
+                              className="text-sm font-bold bg-transparent outline-none border-b"
+                              style={{ color: 'var(--gray-900)', borderColor: 'var(--club-blue)', minWidth: '80px', maxWidth: '160px' }}
+                            />
+                            <button
+                              onClick={saveDisplayName}
+                              disabled={saving}
+                              className="w-5 h-5 rounded flex items-center justify-center cursor-pointer transition-opacity"
+                              style={{ color: 'var(--club-blue)' }}
+                            >
+                              {saving
+                                ? <span className="inline-block w-3 h-3 border border-current border-t-transparent rounded-full animate-spin" />
+                                : <Check size={13} />}
+                            </button>
+                            <button
+                              onClick={() => setEditTarget(null)}
+                              className="w-5 h-5 rounded flex items-center justify-center cursor-pointer"
+                              style={{ color: 'var(--gray-400)' }}
+                            >
+                              <X size={13} />
+                            </button>
+                          </>
                         ) : (
-                          <span
-                            className="text-sm font-bold px-1.5 py-0.5 rounded"
-                            style={{ background: '#fef3c7', color: '#b45309', fontSize: '12px' }}
-                          >
-                            未設定
-                          </span>
+                          <>
+                            {hasDisplayName ? (
+                              <span className="text-sm font-bold" style={{ color: 'var(--gray-900)' }}>
+                                {m.display_name}
+                              </span>
+                            ) : (
+                              <span
+                                className="text-sm font-bold px-1.5 py-0.5 rounded"
+                                style={{ background: '#fef3c7', color: '#b45309', fontSize: '12px' }}
+                              >
+                                未設定
+                              </span>
+                            )}
+                            {!effectiveReadOnly && (
+                              <button
+                                onClick={() => openEdit(m)}
+                                disabled={updating === m.id}
+                                className="w-4 h-4 flex items-center justify-center cursor-pointer transition-opacity opacity-40 hover:opacity-100"
+                                style={{ color: 'var(--gray-600)' }}
+                                title="表示名を編集"
+                              >
+                                <Pencil size={12} />
+                              </button>
+                            )}
+                          </>
                         )}
                         {isMe && (
                           <span
@@ -399,33 +447,19 @@ export default function MembersManager({
                       </div>
                     </div>
 
-                    {/* アクションボタン（effectiveReadOnly では非表示） */}
-                    {!effectiveReadOnly && (
-                      <div className="flex items-center gap-1.5 shrink-0">
-                        {/* 表示名編集 */}
+                    {/* 退部ボタン（effectiveReadOnly では非表示） */}
+                    {!effectiveReadOnly && !isMe && (
+                      <div className="flex items-center shrink-0">
                         <button
-                          onClick={() => openEdit(m)}
+                          onClick={() => deleteMember(m.id, displayName(m))}
                           disabled={updating === m.id}
                           className="flex items-center gap-1 px-2 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer active:scale-95 hover:opacity-80"
-                          style={{ background: 'var(--gray-100)', color: 'var(--gray-600)', border: '1px solid var(--gray-200)' }}
-                          title="表示名を編集"
+                          style={{ background: '#fef2f2', color: '#b91c1c', border: '1px solid #fecaca' }}
+                          title="退部処理"
                         >
-                          <Pencil size={12} />
-                          <span className="hidden sm:inline">編集</span>
+                          <Trash2 size={12} />
+                          <span className="hidden sm:inline">退部</span>
                         </button>
-                        {/* 退部 */}
-                        {!isMe && (
-                          <button
-                            onClick={() => deleteMember(m.id, displayName(m))}
-                            disabled={updating === m.id}
-                            className="flex items-center gap-1 px-2 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer active:scale-95 hover:opacity-80"
-                            style={{ background: '#fef2f2', color: '#b91c1c', border: '1px solid #fecaca' }}
-                            title="退部処理"
-                          >
-                            <Trash2 size={12} />
-                            <span className="hidden sm:inline">退部</span>
-                          </button>
-                        )}
                       </div>
                     )}
                   </div>
@@ -530,82 +564,6 @@ export default function MembersManager({
           }}
         >
           退部処理を行うとアカウントと全データが完全に削除されます。この操作は取り消せません。
-        </div>
-      )}
-
-      {/* ── 表示名編集モーダル ───────────────────────────── */}
-      {editTarget && (
-        <div
-          className="fixed inset-0 z-50 flex items-end sm:items-center justify-center"
-          style={{ background: 'rgba(0,0,0,0.45)', backdropFilter: 'blur(2px)' }}
-          onClick={() => setEditTarget(null)}
-        >
-          <div
-            className="w-full sm:max-w-sm rounded-t-2xl sm:rounded-2xl p-6 flex flex-col gap-4"
-            style={{ background: 'var(--card-bg)', boxShadow: 'var(--shadow-lg)' }}
-            onClick={e => e.stopPropagation()}
-          >
-            {/* モーダルヘッダー */}
-            <div className="flex items-center justify-between">
-              <div>
-                <h3 className="text-base font-bold" style={{ color: 'var(--gray-900)' }}>
-                  表示名を編集
-                </h3>
-                <p className="text-xs mt-0.5" style={{ color: 'var(--gray-500)' }}>
-                  LINEネーム「{editTarget.full_name}」の代わりに表示する本名
-                </p>
-              </div>
-              <button
-                onClick={() => setEditTarget(null)}
-                className="w-8 h-8 rounded-lg flex items-center justify-center cursor-pointer"
-                style={{ color: 'var(--gray-400)' }}
-                onMouseEnter={e => (e.currentTarget as HTMLElement).style.background = 'var(--gray-100)'}
-                onMouseLeave={e => (e.currentTarget as HTMLElement).style.background = 'transparent'}
-              >
-                <X size={16} />
-              </button>
-            </div>
-
-            {/* 入力フィールド */}
-            <div>
-              <label className="label">本名（表示名）</label>
-              <input
-                type="text"
-                value={editName}
-                onChange={e => setEditName(e.target.value)}
-                onKeyDown={e => e.key === 'Enter' && saveDisplayName()}
-                placeholder="例: 田中 健太郎"
-                className="input-field"
-                style={{ fontSize: '16px' }}
-                autoFocus
-              />
-              <p className="text-xs mt-1.5" style={{ color: 'var(--gray-400)' }}>
-                空欄にするとLINEネームが表示されます
-              </p>
-            </div>
-
-            {/* ボタン */}
-            <div className="flex gap-2">
-              <button
-                onClick={() => setEditTarget(null)}
-                className="flex-1 py-2.5 rounded-xl text-sm font-semibold transition-all cursor-pointer active:scale-95 hover:opacity-80"
-                style={{ background: 'var(--gray-100)', color: 'var(--gray-600)' }}
-              >
-                キャンセル
-              </button>
-              <button
-                onClick={saveDisplayName}
-                disabled={saving}
-                className="flex-1 py-2.5 rounded-xl text-sm font-semibold transition-all cursor-pointer active:scale-95 hover:opacity-80 flex items-center justify-center gap-2"
-                style={{ background: 'var(--club-blue)', color: 'white', opacity: saving ? 0.7 : 1 }}
-              >
-                {saving && (
-                  <span className="inline-block w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                )}
-                保存
-              </button>
-            </div>
-          </div>
         </div>
       )}
     </div>
