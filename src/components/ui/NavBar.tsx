@@ -33,7 +33,7 @@ export default function NavBar() {
   const supabase = createClient()
   const { isDark, toggle } = useTheme()
 
-  const [isAdmin,   setIsAdmin]   = useState(false)
+  const [role,      setRole]      = useState<string | null>(null)
   const [showMore,  setShowMore]  = useState(false)
   const moreRef = useRef<HTMLDivElement>(null)
 
@@ -46,7 +46,7 @@ export default function NavBar() {
         .eq('id', user.id)
         .single()
         .then(({ data }) => {
-          setIsAdmin(data?.role === 'admin')
+          setRole(data?.role ?? null)
         })
     })
   }, [])
@@ -67,7 +67,14 @@ export default function NavBar() {
     router.refresh()
   }
 
-  const navItems = isAdmin ? [...BASE_NAV, ADMIN_NAV] : BASE_NAV
+  const isAdmin  = role === 'admin'
+  const isCoach  = role === 'coach'
+
+  // coach は 出欠連絡 を除外、admin/coach はメンバータブを追加
+  const baseItems = isCoach
+    ? BASE_NAV.filter(item => item.href !== '/attendance')
+    : BASE_NAV
+  const navItems = (isAdmin || isCoach) ? [...baseItems, ADMIN_NAV] : baseItems
 
   // ── デスクトップ用リンクスタイル ──────────────────────────
   function desktopLinkStyle(active: boolean) {

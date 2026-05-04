@@ -1,4 +1,4 @@
-export type Role = 'member' | 'admin'
+export type Role = 'member' | 'captain' | 'admin' | 'coach'
 export type SkillRank = 1 | 2 | 3 | 4 | 5 | 6
 export type SelectionRank = 'S' | 'A' | 'B' | 'C' | 'D' | 'E'
 

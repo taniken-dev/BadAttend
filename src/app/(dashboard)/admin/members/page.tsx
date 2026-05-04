@@ -14,7 +14,7 @@ export default async function AdminMembersPage() {
     .eq('id', user.id)
     .single()
 
-  if (!myProfile || myProfile.role !== 'admin') {
+  if (!myProfile || (myProfile.role !== 'admin' && myProfile.role !== 'coach')) {
     redirect('/dashboard')
   }
 
@@ -25,5 +25,11 @@ export default async function AdminMembersPage() {
     .order('grade')
     .order('full_name')
 
-  return <MembersManager members={(members ?? []) as Profile[]} currentUserId={user.id} />
+  return (
+    <MembersManager
+      members={(members ?? []) as Profile[]}
+      currentUserId={user.id}
+      readOnly={myProfile.role === 'coach'}
+    />
+  )
 }
