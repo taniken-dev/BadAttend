@@ -20,6 +20,10 @@ export const metadata: Metadata = {
     statusBarStyle: 'default',
     title: 'BadAttend',
   },
+  other: {
+    // iOS Safari PWA: タブ切り替え時にURLバーが出ないようにする
+    'mobile-web-app-capable': 'yes',
+  },
 }
 
 export const viewport: Viewport = {

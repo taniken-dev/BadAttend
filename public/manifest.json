@@ -1,0 +1,12 @@
+{
+  "name": "千葉工大 バドミントン部 出欠管理",
+  "short_name": "BadAttend",
+  "description": "部活動の出欠連絡・選手選考支援システム",
+  "start_url": "/dashboard",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#f8fafc",
+  "theme_color": "#4338ca",
+  "orientation": "portrait-primary",
+  "lang": "ja"
+}
