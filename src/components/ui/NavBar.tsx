@@ -64,12 +64,16 @@ export default function NavBar() {
   const isCoach   = role === 'coach'
   const canReport = !isCoach  // member / manager / admin は出欠連絡可能
 
-  // ── PC 左ナビ（ホーム・[出欠連絡]・カレンダー + admin はメンバー管理） ──
+  // ── PC 左ナビ（ホーム・[出欠連絡]・カレンダー・メンバー一覧/管理） ──
   const desktopLeftItems = [
-    { href: '/dashboard',      icon: LayoutDashboard, label: 'ホーム' },
+    { href: '/dashboard',     icon: LayoutDashboard, label: 'ホーム' },
     ...(canReport ? [{ href: '/attendance', icon: CalendarCheck, label: '出欠連絡' }] : []),
-    { href: '/calendar',       icon: CalendarDays,    label: 'カレンダー' },
-    ...(isAdmin ? [{ href: '/admin/members', icon: Users, label: 'メンバー管理' }] : []),
+    { href: '/calendar',      icon: CalendarDays,    label: 'カレンダー' },
+    {
+      href: '/admin/members',
+      icon: Users,
+      label: isAdmin ? 'メンバー管理' : 'メンバー一覧',
+    },
   ]
 
   // ── モバイルタブ ──
@@ -146,18 +150,6 @@ export default function NavBar() {
   function GearMenuContent() {
     return (
       <>
-        {/* メンバー一覧（admin 以外：admin は左ナビに表示済み） */}
-        {!isAdmin && (
-          <>
-            <MenuItem
-              href="/admin/members" onClick={() => setShowGear(false)}
-              icon={<Users size={17} />} label="メンバー一覧"
-              color="#0891b2" bg="#ecfeff"
-            />
-            <Divider />
-          </>
-        )}
-
         {/* 届いた意見を確認（admin のみ） */}
         {isAdmin && (
           <>
@@ -194,15 +186,6 @@ export default function NavBar() {
   function MobileMenuContent() {
     return (
       <>
-        {/* メンバー一覧（admin 以外：admin は左ナビに表示済み） */}
-        {!isAdmin && (
-          <MenuItem
-            href="/admin/members" onClick={() => setShowMore(false)}
-            icon={<Users size={17} />} label="メンバー一覧"
-            color="#0891b2" bg="#ecfeff"
-          />
-        )}
-
         {/* 届いた意見を確認（admin のみ） */}
         {isAdmin && (
           <MenuItem

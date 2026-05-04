@@ -33,6 +33,7 @@ type EnrichedAttendance = AttendanceRow & { profile: MemberProfile }
 type DayDetail = {
   session: PracticeSession
   attendance: EnrichedAttendance[]
+  unsubmitted: MemberProfile[]
   totalApproved: number
 }
 
@@ -110,34 +111,30 @@ export default function CalendarView() {
     setLoading(true)
     setDetail(null)
 
-    const [{ data: atRows }, { count }] = await Promise.all([
+    const [{ data: atRows }, { data: allProfiles }] = await Promise.all([
       supabase
         .from('attendance_records')
         .select('id, status, result_status, reason, user_id')
         .eq('session_id', session.id),
       supabase
         .from('profiles')
-        .select('*', { count: 'exact', head: true })
+        .select('id, full_name, display_name, avatar_url, grade, role')
         .eq('is_approved', true),
     ])
 
-    const rows = (atRows ?? []) as AttendanceRow[]
-    let profiles: MemberProfile[] = []
+    const rows     = (atRows ?? []) as AttendanceRow[]
+    const everyone = (allProfiles ?? []) as MemberProfile[]
 
-    if (rows.length > 0) {
-      const { data: pData } = await supabase
-        .from('profiles')
-        .select('id, full_name, display_name, avatar_url, grade, role')
-        .in('id', rows.map(r => r.user_id))
-      profiles = (pData ?? []) as MemberProfile[]
-    }
+    const submittedIds = new Set(rows.map(r => r.user_id))
+    const profileMap   = Object.fromEntries(everyone.map(p => [p.id, p]))
 
-    const profileMap = Object.fromEntries(profiles.map(p => [p.id, p]))
     const attendance: EnrichedAttendance[] = rows
       .filter(r => profileMap[r.user_id])
       .map(r => ({ ...r, profile: profileMap[r.user_id] }))
 
-    setDetail({ session, attendance, totalApproved: count ?? 0 })
+    const unsubmitted = everyone.filter(p => !submittedIds.has(p.id))
+
+    setDetail({ session, attendance, unsubmitted, totalApproved: everyone.length })
     setLoading(false)
   }, [sessions, selectedDate])
 
@@ -381,6 +378,7 @@ export default function CalendarView() {
               }
               onBulkConfirm={handleBulkConfirm}
             />
+
           ) : null}
         </div>
       )}
@@ -400,7 +398,7 @@ function DetailPanel({
   onUpdateResultStatus: (id: string, status: AttendanceStatus) => Promise<void>
   onBulkConfirm: () => Promise<void>
 }) {
-  const { session, attendance, totalApproved } = detail
+  const { session, attendance, unsubmitted, totalApproved } = detail
   const [confirming, setConfirming] = useState(false)
   const [updatingId, setUpdatingId] = useState<string | null>(null)
 
@@ -480,6 +478,43 @@ function DetailPanel({
           )}
         </span>
       </div>
+
+      {/* 未提出者リスト */}
+      {unsubmitted.length > 0 && (
+        <div>
+          <div className="flex items-center gap-2 mb-2">
+            <span className="text-xs font-bold px-2 py-0.5 rounded-full"
+              style={{ background: '#fef3c7', color: '#b45309' }}>
+              未提出 {unsubmitted.length}名
+            </span>
+          </div>
+          <div className="flex flex-col gap-1.5">
+            {[...unsubmitted]
+              .sort((a, b) => (roleOrder[a.role] ?? 2) - (roleOrder[b.role] ?? 2))
+              .map(p => (
+              <div key={p.id}
+                className="flex items-center gap-2.5 px-3 py-2 rounded-xl"
+                style={{ background: '#fffbeb', border: '1px solid #fde68a' }}>
+                {p.avatar_url ? (
+                  <img src={p.avatar_url} alt=""
+                    className="w-7 h-7 rounded-full object-cover shrink-0" />
+                ) : (
+                  <div className="w-7 h-7 rounded-full flex items-center justify-center text-xs font-black shrink-0"
+                    style={{ background: '#fef3c7', color: '#b45309' }}>
+                    {(p.display_name ?? p.full_name).charAt(0)}
+                  </div>
+                )}
+                <span className="text-sm font-medium" style={{ color: 'var(--gray-700)' }}>
+                  {p.display_name ?? p.full_name}
+                </span>
+                <span className="text-xs ml-auto" style={{ color: 'var(--gray-400)' }}>
+                  {p.grade}年生
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* マネージャー/管理者向け：一括確定ボタン */}
       {isManagerOrAdmin && attendance.length > 0 && !session.is_cancelled && (

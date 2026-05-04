@@ -390,8 +390,12 @@ export default function MembersManager({
                         <span className="mx-0.5">·</span>
                         <GraduationCap size={11} />
                         <span>{m.grade}年生</span>
-                        <span className="mx-0.5">·</span>
-                        <span>{getSkillRankLabel(m.skill_rank)}</span>
+                        {!effectiveReadOnly && (
+                          <>
+                            <span className="mx-0.5">·</span>
+                            <span>{getSkillRankLabel(m.skill_rank)}</span>
+                          </>
+                        )}
                       </div>
                     </div>
 
@@ -426,12 +430,10 @@ export default function MembersManager({
                     )}
                   </div>
 
-                  {/* 下段：学年・技術ランク・ロール */}
+                  {/* 下段：学年・（技術ランクはadminのみ）・ロール */}
                   {effectiveReadOnly ? (
                     <div className="flex flex-wrap gap-3 text-xs" style={{ color: 'var(--gray-500)' }}>
                       <span>{m.grade}年生</span>
-                      <span>·</span>
-                      <span>{getSkillRankLabel(m.skill_rank)}</span>
                       <span>·</span>
                       <span>{ROLE_OPTIONS.find(r => r.value === m.role)?.label ?? m.role}</span>
                     </div>
