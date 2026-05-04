@@ -112,11 +112,11 @@ export default function MembersManager({
       grade:      1,
       role:       'member',
       skill_rank: 3,
-      is_approved: false,
+      is_approved: true,
     })
     setUpdating(null)
     if (error) { showToast('プロフィール作成失敗: ' + error.message, false); return }
-    showToast(`${orphan.full_name} を承認待ちに追加しました`, true)
+    showToast(`${orphan.full_name} を承認しました`, true)
     router.refresh()
   }
 
@@ -202,7 +202,7 @@ export default function MembersManager({
             </h2>
           </div>
           <p className="text-xs mb-3" style={{ color: 'var(--gray-500)' }}>
-            LINEでログインしたがプロフィールが自動作成されなかったユーザーです。「承認待ちに追加」すると通常の承認フローに移行します。
+            LINEでログインしたがプロフィールが自動作成されなかったユーザーです。承認すると部員一覧に即時追加されます。
           </p>
           <div className="flex flex-col gap-3">
             {orphanUsers.map(o => (
@@ -225,7 +225,7 @@ export default function MembersManager({
                   style={{ background: 'var(--club-blue)', color: 'white' }}
                 >
                   <UserPlus size={13} />
-                  承認待ちに追加
+                  承認する
                 </button>
               </div>
             ))}
