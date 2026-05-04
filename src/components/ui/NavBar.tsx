@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { useTheme } from '@/components/ThemeProvider'
+import { useViewRole } from '@/contexts/ViewRoleContext'
 import {
   Feather,
   LayoutDashboard,
@@ -36,7 +37,6 @@ export default function NavBar() {
   const supabase = createClient()
   const { isDark, toggle } = useTheme()
 
-  const [role,           setRole]          = useState<string | null>(null)
   const [showGear,       setShowGear]      = useState(false)
   const [showMore,       setShowMore]      = useState(false)
   const [showSuggestion, setShowSuggestion] = useState(false)
@@ -48,13 +48,7 @@ export default function NavBar() {
   const gearRef = useRef<HTMLDivElement>(null)
   const moreRef = useRef<HTMLDivElement>(null)
 
-  useEffect(() => {
-    supabase.auth.getUser().then(({ data: { user } }) => {
-      if (!user) return
-      supabase.from('profiles').select('role').eq('id', user.id).single()
-        .then(({ data }) => setRole(data?.role ?? null))
-    })
-  }, [])
+  const { viewRole } = useViewRole()
 
   useEffect(() => {
     const handler = (e: MouseEvent) => {
@@ -65,6 +59,7 @@ export default function NavBar() {
     return () => document.removeEventListener('mousedown', handler)
   }, [])
 
+  const role      = viewRole
   const isAdmin   = role === 'admin'
   const isCoach   = role === 'coach'
   const canReport = !isCoach  // member / manager / admin は出欠連絡可能
