@@ -10,11 +10,11 @@ import {
   LayoutDashboard,
   CalendarCheck,
   CalendarDays,
+  Users,
   LogOut,
   Sun,
   Moon,
   MoreHorizontal,
-  Users,
   MessageSquarePlus,
   Inbox,
   X,
@@ -23,17 +23,10 @@ import {
   Settings,
 } from 'lucide-react'
 
-// ── デスクトップ左ナビ（ホーム・[出欠連絡]・カレンダー のみ）──
-const DESKTOP_LEFT = [
-  { href: '/dashboard',  icon: LayoutDashboard, label: 'ホーム' },
-  { href: '/attendance', icon: CalendarCheck,   label: '出欠連絡' }, // coach は除外
-  { href: '/calendar',   icon: CalendarDays,    label: 'カレンダー' },
-]
-
-// ── モバイル ボトムタブ（最大 4 項目）──
+// モバイル ボトムタブ定義（coach は出欠連絡を動的除外）
 const MOBILE_TABS = [
   { href: '/dashboard',  icon: LayoutDashboard, label: 'ホーム' },
-  { href: '/attendance', icon: CalendarCheck,   label: '出欠連絡' }, // coach は除外
+  { href: '/attendance', icon: CalendarCheck,   label: '出欠連絡' },
   { href: '/calendar',   icon: CalendarDays,    label: 'カレンダー' },
 ]
 
@@ -44,9 +37,9 @@ export default function NavBar() {
   const { isDark, toggle } = useTheme()
 
   const [role,           setRole]          = useState<string | null>(null)
-  const [showGear,       setShowGear]      = useState(false)  // PC ギアドロップダウン
-  const [showMore,       setShowMore]      = useState(false)  // モバイル その他
-  const [showSuggestion, setShowSuggestion] = useState(false) // ご意見箱モーダル
+  const [showGear,       setShowGear]      = useState(false)
+  const [showMore,       setShowMore]      = useState(false)
+  const [showSuggestion, setShowSuggestion] = useState(false)
   const [sugTitle,       setSugTitle]      = useState('')
   const [sugBody,        setSugBody]       = useState('')
   const [submitting,     setSubmitting]    = useState(false)
@@ -63,7 +56,6 @@ export default function NavBar() {
     })
   }, [])
 
-  // どちらかのドロップダウン外クリックで閉じる
   useEffect(() => {
     const handler = (e: MouseEvent) => {
       if (gearRef.current && !gearRef.current.contains(e.target as Node)) setShowGear(false)
@@ -76,11 +68,15 @@ export default function NavBar() {
   const isAdmin = role === 'admin'
   const isCoach = role === 'coach'
 
-  // coach は出欠連絡を除外
-  const desktopLeftItems = isCoach
-    ? DESKTOP_LEFT.filter(i => i.href !== '/attendance')
-    : DESKTOP_LEFT
+  // ── PC 左ナビ（ホーム・[出欠連絡]・カレンダー + admin はメンバー管理） ──
+  const desktopLeftItems = [
+    { href: '/dashboard',      icon: LayoutDashboard, label: 'ホーム' },
+    ...(!isCoach ? [{ href: '/attendance', icon: CalendarCheck, label: '出欠連絡' }] : []),
+    { href: '/calendar',       icon: CalendarDays,    label: 'カレンダー' },
+    ...(isAdmin ? [{ href: '/admin/members', icon: Users, label: 'メンバー管理' }] : []),
+  ]
 
+  // ── モバイルタブ ──
   const mobileTabItems = isCoach
     ? MOBILE_TABS.filter(i => i.href !== '/attendance')
     : MOBILE_TABS
@@ -113,7 +109,7 @@ export default function NavBar() {
     }
   }
 
-  // ── その他・ギアメニューの共通行 ──────────────────────────────
+  // ── メニュー行コンポーネント ──────────────────────────────────
   function MenuItem({
     icon, label, color, bg, onClick, href, danger,
   }: {
@@ -121,8 +117,8 @@ export default function NavBar() {
     onClick?: () => void; href?: string; danger?: boolean
   }) {
     const labelColor = danger ? color : 'var(--gray-800)'
+    const hoverBg    = danger ? '#fef2f2' : 'var(--gray-50)'
     const cls = "w-full flex items-center gap-3 px-4 py-3.5 cursor-pointer transition-colors text-left"
-    const hoverBg = danger ? '#fef2f2' : 'var(--gray-50)'
     const inner = (
       <>
         <span className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0" style={{ background: bg, color }}>
@@ -131,14 +127,12 @@ export default function NavBar() {
         <span className="flex-1 text-sm font-medium" style={{ color: labelColor }}>{label}</span>
       </>
     )
-    if (href) {
-      return (
-        <Link href={href} onClick={onClick} className={cls}
-          onMouseEnter={e => (e.currentTarget as HTMLElement).style.background = hoverBg}
-          onMouseLeave={e => (e.currentTarget as HTMLElement).style.background = 'transparent'}
-        >{inner}</Link>
-      )
-    }
+    if (href) return (
+      <Link href={href} onClick={onClick} className={cls}
+        onMouseEnter={e => (e.currentTarget as HTMLElement).style.background = hoverBg}
+        onMouseLeave={e => (e.currentTarget as HTMLElement).style.background = 'transparent'}
+      >{inner}</Link>
+    )
     return (
       <button onClick={onClick} className={cls}
         onMouseEnter={e => (e.currentTarget as HTMLElement).style.background = hoverBg}
@@ -147,54 +141,107 @@ export default function NavBar() {
     )
   }
 
-  // ── ギア / その他メニューの中身（共通） ──────────────────────
-  function MenuContent({ onClose }: { onClose: () => void }) {
+  const Divider = () => <div style={{ height: '1px', background: 'var(--gray-200)' }} />
+
+  // ── PC ギアメニュー（重複なし・設定系のみ） ─────────────────
+  // admin: メンバー管理は左ナビにあるので省略。意見確認+設定
+  // coach: メンバー一覧（左ナビにないため）+設定
+  // member: 設定のみ
+  function GearMenuContent() {
     return (
       <>
-        {/* メンバー一覧（admin / coach） */}
-        {(isAdmin || isCoach) && (
-          <MenuItem
-            href="/admin/members" onClick={onClose}
-            icon={<Users size={17} />} label="メンバー一覧"
-            color="#0891b2" bg="#ecfeff"
-          />
-        )}
-
-        {/* 管理者専用セクション */}
-        {isAdmin && (
+        {/* メンバー一覧（coach のみ：admin は左ナビに表示済み） */}
+        {isCoach && (
           <>
             <MenuItem
-              href="/admin/suggestions" onClick={onClose}
-              icon={<Inbox size={17} />} label="【管理者】意見箱の確認"
-              color="#b45309" bg="#fef3c7"
+              href="/admin/members" onClick={() => setShowGear(false)}
+              icon={<Users size={17} />} label="メンバー一覧"
+              color="#0891b2" bg="#ecfeff"
             />
+            <Divider />
           </>
         )}
 
-        {(isAdmin || isCoach) && <div style={{ height: '1px', background: 'var(--gray-200)' }} />}
-
-        {/* ご意見箱 */}
-        <MenuItem
-          onClick={() => { onClose(); openSuggestion() }}
-          icon={<MessageSquarePlus size={17} />} label="ご意見箱（匿名）"
-          color="#16a34a" bg="#dcfce7"
-        />
-
-        <div style={{ height: '1px', background: 'var(--gray-200)' }} />
+        {/* 届いた意見を確認（admin のみ） */}
+        {isAdmin && (
+          <>
+            <MenuItem
+              href="/admin/suggestions" onClick={() => setShowGear(false)}
+              icon={<Inbox size={17} />} label="【管理者】届いた意見を確認"
+              color="#b45309" bg="#fef3c7"
+            />
+            <Divider />
+          </>
+        )}
 
         {/* ダークモード */}
         <MenuItem
-          onClick={() => { toggle(); onClose() }}
+          onClick={() => { toggle(); setShowGear(false) }}
           icon={isDark ? <Sun size={17} /> : <Moon size={17} />}
           label={isDark ? 'ライトモード' : 'ダークモード'}
           color="var(--gray-600)" bg="var(--gray-100)"
         />
 
-        <div style={{ height: '1px', background: 'var(--gray-200)' }} />
+        <Divider />
 
         {/* ログアウト */}
         <MenuItem
-          onClick={() => { handleLogout(); onClose() }}
+          onClick={() => { handleLogout(); setShowGear(false) }}
+          icon={<LogOut size={17} />} label="ログアウト"
+          color="#dc2626" bg="#fef2f2" danger
+        />
+      </>
+    )
+  }
+
+  // ── モバイル その他メニュー（PC にない項目も含む） ──────────
+  function MobileMenuContent() {
+    return (
+      <>
+        {/* メンバー一覧（admin / coach） */}
+        {(isAdmin || isCoach) && (
+          <>
+            <MenuItem
+              href="/admin/members" onClick={() => setShowMore(false)}
+              icon={<Users size={17} />} label="メンバー一覧"
+              color="#0891b2" bg="#ecfeff"
+            />
+          </>
+        )}
+
+        {/* 届いた意見を確認（admin のみ） */}
+        {isAdmin && (
+          <MenuItem
+            href="/admin/suggestions" onClick={() => setShowMore(false)}
+            icon={<Inbox size={17} />} label="【管理者】届いた意見を確認"
+            color="#b45309" bg="#fef3c7"
+          />
+        )}
+
+        {(isAdmin || isCoach) && <Divider />}
+
+        {/* ご意見箱 */}
+        <MenuItem
+          onClick={() => openSuggestion()}
+          icon={<MessageSquarePlus size={17} />} label="ご意見箱（匿名）"
+          color="#16a34a" bg="#dcfce7"
+        />
+
+        <Divider />
+
+        {/* ダークモード */}
+        <MenuItem
+          onClick={() => { toggle(); setShowMore(false) }}
+          icon={isDark ? <Sun size={17} /> : <Moon size={17} />}
+          label={isDark ? 'ライトモード' : 'ダークモード'}
+          color="var(--gray-600)" bg="var(--gray-100)"
+        />
+
+        <Divider />
+
+        {/* ログアウト */}
+        <MenuItem
+          onClick={() => { handleLogout(); setShowMore(false) }}
           icon={<LogOut size={17} />} label="ログアウト"
           color="#dc2626" bg="#fef2f2" danger
         />
@@ -206,14 +253,14 @@ export default function NavBar() {
     <>
       {/* ══════════════════════════════════════════════
           PC トップナビ（md 以上）
-          左: ロゴ + ホーム・[出欠連絡]・カレンダー
+          左: ロゴ + メインナビ
           右: ご意見箱アイコン + ギアドロップダウン
       ══════════════════════════════════════════════ */}
       <header className="glass-white sticky top-0 z-40 hidden md:block">
-        <div className="flex items-center h-14 px-5 mx-auto gap-4" style={{ maxWidth: '52rem' }}>
+        <div className="flex items-center h-14 px-5 mx-auto gap-3" style={{ maxWidth: '52rem' }}>
 
           {/* ロゴ */}
-          <Link href="/dashboard" className="flex items-center gap-2 shrink-0 select-none">
+          <Link href="/dashboard" className="flex items-center gap-2 shrink-0 select-none mr-1">
             <div
               className="w-7 h-7 rounded-lg flex items-center justify-center"
               style={{ background: 'linear-gradient(135deg, #312e81 0%, #4338ca 100%)' }}
@@ -226,13 +273,13 @@ export default function NavBar() {
           </Link>
 
           {/* 左ナビリンク */}
-          <nav className="flex items-center gap-0.5 flex-1">
+          <nav className="flex items-center gap-0.5 flex-1 min-w-0">
             {desktopLeftItems.map(({ href, icon: Icon, label }) => {
-              const active = pathname.startsWith(href)
+              const active = pathname === href || (href !== '/dashboard' && pathname.startsWith(href))
               return (
                 <Link
                   key={href} href={href}
-                  className="relative flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-sm font-medium transition-all duration-150"
+                  className="relative flex items-center gap-1.5 px-3 py-2 rounded-xl text-sm font-medium transition-all duration-150 whitespace-nowrap"
                   style={desktopLinkStyle(active)}
                   onMouseEnter={e => {
                     if (!active) {
@@ -251,7 +298,7 @@ export default function NavBar() {
                   {label}
                   {active && (
                     <span
-                      className="absolute bottom-0.5 left-3.5 right-3.5 h-0.5 rounded-full"
+                      className="absolute bottom-0.5 left-3 right-3 h-0.5 rounded-full"
                       style={{ background: 'var(--club-blue)' }}
                     />
                   )}
@@ -262,7 +309,7 @@ export default function NavBar() {
 
           {/* 右アクション */}
           <div className="flex items-center gap-1 shrink-0">
-            {/* ご意見箱 */}
+            {/* ご意見箱アイコン */}
             <button
               onClick={openSuggestion}
               title="ご意見箱"
@@ -284,7 +331,7 @@ export default function NavBar() {
             <div ref={gearRef} className="relative">
               <button
                 onClick={() => setShowGear(v => !v)}
-                title="メニュー"
+                title="設定・メニュー"
                 className="flex items-center justify-center w-8 h-8 rounded-lg cursor-pointer transition-all duration-150"
                 style={{
                   color:      showGear ? 'var(--club-blue)' : 'var(--gray-400)',
@@ -306,17 +353,17 @@ export default function NavBar() {
                 <Settings size={16} strokeWidth={showGear ? 2.5 : 2} />
               </button>
 
-              {/* ドロップダウン */}
               {showGear && (
                 <div
-                  className="absolute top-full mt-2 right-0 w-60 rounded-2xl overflow-hidden animate-fade-in"
+                  className="absolute top-full mt-2 right-0 rounded-2xl overflow-hidden animate-fade-in"
                   style={{
+                    width:      '17rem',
                     background: 'var(--card-bg)',
                     boxShadow:  'var(--shadow-lg)',
                     border:     '1px solid var(--gray-200)',
                   }}
                 >
-                  <MenuContent onClose={() => setShowGear(false)} />
+                  <GearMenuContent />
                 </div>
               )}
             </div>
@@ -326,7 +373,6 @@ export default function NavBar() {
 
       {/* ══════════════════════════════════════════════
           スマホ ボトムタブバー（md 未満）
-          ホーム・[出欠連絡]・カレンダー・その他
       ══════════════════════════════════════════════ */}
       <nav
         className="fixed bottom-0 left-0 right-0 z-50 md:hidden bottom-nav"
@@ -334,7 +380,7 @@ export default function NavBar() {
       >
         <div className="flex items-stretch w-full">
           {mobileTabItems.map(({ href, icon: Icon, label }) => {
-            const active = pathname.startsWith(href)
+            const active = pathname === href || (href !== '/dashboard' && pathname.startsWith(href))
             return (
               <Link
                 key={href} href={href}
@@ -365,22 +411,20 @@ export default function NavBar() {
                 style={{ background: showMore ? 'var(--club-blue)' : 'transparent', marginBottom: '-2px' }}
               />
               <MoreHorizontal size={showMore ? 23 : 22} strokeWidth={showMore ? 2.5 : 1.8} />
-              <span style={{ fontSize: '10px', fontWeight: showMore ? 700 : 500, lineHeight: 1 }}>
-                その他
-              </span>
+              <span style={{ fontSize: '10px', fontWeight: showMore ? 700 : 500, lineHeight: 1 }}>その他</span>
             </button>
 
-            {/* ポップアップ */}
             {showMore && (
               <div
-                className="absolute bottom-full mb-3 right-0 w-60 rounded-2xl overflow-hidden animate-fade-in"
+                className="absolute bottom-full mb-3 right-0 rounded-2xl overflow-hidden animate-fade-in"
                 style={{
+                  width:      '17rem',
                   background: 'var(--card-bg)',
                   boxShadow:  'var(--shadow-lg)',
                   border:     '1px solid var(--gray-200)',
                 }}
               >
-                <MenuContent onClose={() => setShowMore(false)} />
+                <MobileMenuContent />
               </div>
             )}
           </div>
@@ -406,12 +450,10 @@ export default function NavBar() {
             }}
             onClick={e => e.stopPropagation()}
           >
-            {/* ハンドルバー（スマホ） */}
             <div className="flex justify-center pt-3 pb-1 sm:hidden">
               <div className="w-10 h-1 rounded-full" style={{ background: 'var(--gray-200)' }} />
             </div>
 
-            {/* ヘッダー */}
             <div className="flex items-center justify-between px-5 pt-4 pb-3">
               <div className="flex items-center gap-2.5">
                 <span className="w-9 h-9 rounded-xl flex items-center justify-center" style={{ background: '#dcfce7', color: '#16a34a' }}>
