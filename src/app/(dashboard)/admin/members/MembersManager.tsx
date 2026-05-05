@@ -456,7 +456,7 @@ export default function MembersManager({
                         <span className="mx-0.5">·</span>
                         <GraduationCap size={11} />
                         <span>{m.grade}年生</span>
-                        {!effectiveReadOnly && (
+                        {!effectiveReadOnly && m.role !== 'manager' && (
                           <>
                             <span className="mx-0.5">·</span>
                             <span>{getSkillRankLabel(m.skill_rank)}</span>
@@ -488,7 +488,7 @@ export default function MembersManager({
                       <span>{m.grade}年生</span>
                       <span>·</span>
                       <span>{ROLE_OPTIONS.find(r => r.value === m.role)?.label ?? m.role}</span>
-                      {canSeeSkillRank && (
+                      {canSeeSkillRank && m.role !== 'manager' && (
                         <>
                           <span>·</span>
                           <span style={{ color: 'var(--gray-500)' }}>技術ランク:</span>
@@ -499,7 +499,7 @@ export default function MembersManager({
                       )}
                     </div>
                   ) : (
-                  <div className="grid grid-cols-3 gap-2">
+                  <div className={`grid gap-2 ${m.role === 'manager' ? 'grid-cols-2' : 'grid-cols-3'}`}>
                     {/* 学年 */}
                     <div>
                       <label className="label" style={{ fontSize: '11px' }}>学年</label>
@@ -523,28 +523,30 @@ export default function MembersManager({
                       </div>
                     </div>
 
-                    {/* 技術ランク */}
-                    <div>
-                      <label className="label" style={{ fontSize: '11px' }}>技術ランク</label>
-                      <div className="relative">
-                        <select
-                          value={m.skill_rank}
-                          onChange={e => updateSkillRank(m.id, Number(e.target.value))}
-                          disabled={updating === m.id}
-                          className="input-field pr-8"
-                          style={{ padding: '7px 32px 7px 10px', fontSize: '13px' }}
-                        >
-                          {SKILL_RANK_OPTIONS.map(o => (
-                            <option key={o.value} value={o.value}>{o.label}</option>
-                          ))}
-                        </select>
-                        <ChevronDown
-                          size={13}
-                          className="absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none"
-                          style={{ color: 'var(--gray-400)' }}
-                        />
+                    {/* 技術ランク（マネージャーには非表示） */}
+                    {m.role !== 'manager' && (
+                      <div>
+                        <label className="label" style={{ fontSize: '11px' }}>技術ランク</label>
+                        <div className="relative">
+                          <select
+                            value={m.skill_rank}
+                            onChange={e => updateSkillRank(m.id, Number(e.target.value))}
+                            disabled={updating === m.id}
+                            className="input-field pr-8"
+                            style={{ padding: '7px 32px 7px 10px', fontSize: '13px' }}
+                          >
+                            {SKILL_RANK_OPTIONS.map(o => (
+                              <option key={o.value} value={o.value}>{o.label}</option>
+                            ))}
+                          </select>
+                          <ChevronDown
+                            size={13}
+                            className="absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none"
+                            style={{ color: 'var(--gray-400)' }}
+                          />
+                        </div>
                       </div>
-                    </div>
+                    )}
 
                     {/* 権限 */}
                     <div>
