@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useMemo, useCallback } from 'react'
+import { useState, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import {
@@ -58,7 +58,8 @@ export default function MembersManager({
   const router = useRouter()
   const { viewRole } = useViewRole()
   // デバッグスイッチャーでロールを変更した場合もreadOnlyを反映
-  const effectiveReadOnly = readOnly || viewRole !== 'admin'
+  const effectiveReadOnly  = readOnly || viewRole !== 'admin'
+  const canSeeSkillRank   = viewRole === 'admin' || viewRole === 'coach'
   const [updating, setUpdating]     = useState<string | null>(null)
   const [toast, setToast]           = useState<{ msg: string; ok: boolean } | null>(null)
   const [editTarget, setEditTarget] = useState<string | null>(null)
@@ -487,6 +488,14 @@ export default function MembersManager({
                       <span>{m.grade}年生</span>
                       <span>·</span>
                       <span>{ROLE_OPTIONS.find(r => r.value === m.role)?.label ?? m.role}</span>
+                      {canSeeSkillRank && (
+                        <>
+                          <span>·</span>
+                          <span className="font-semibold" style={{ color: 'var(--gray-700)' }}>
+                            {getSkillRankLabel(m.skill_rank)}
+                          </span>
+                        </>
+                      )}
                     </div>
                   ) : (
                   <div className="grid grid-cols-3 gap-2">
