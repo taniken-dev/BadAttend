@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import {
   ChevronLeft, ChevronRight, MapPin, Clock, Users,
-  CheckCircle2, ClipboardCheck, AlertCircle, RotateCcw,
+  CheckCircle2, ClipboardCheck, AlertCircle, RotateCcw, Bell,
 } from 'lucide-react'
 import { useViewRole } from '@/contexts/ViewRoleContext'
 import type { PracticeSession, AttendanceStatus } from '@/lib/types'
@@ -491,6 +491,13 @@ export default function CalendarView() {
                 handleClearResultStatus(id, detail.session.session_date)
               }
               onRevertAll={handleRevertAll}
+              onRemind={async (userIds) => {
+                await fetch('/api/line/notify', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ userIds, sessionDate: detail.session.session_date }),
+                })
+              }}
             />
 
           ) : null}
@@ -508,6 +515,7 @@ function DetailPanel({
   onBulkConfirm,
   onClearResultStatus,
   onRevertAll,
+  onRemind,
 }: {
   detail: DayDetail
   isManagerOrAdmin: boolean
@@ -515,6 +523,7 @@ function DetailPanel({
   onBulkConfirm: () => Promise<void>
   onClearResultStatus: (id: string) => Promise<void>
   onRevertAll: () => Promise<void>
+  onRemind: (userIds: string[]) => Promise<void>
 }) {
   const { session, attendance, unsubmitted, totalApproved } = detail
   const [confirming,    setConfirming]    = useState(false)
@@ -522,6 +531,8 @@ function DetailPanel({
   const [updatingId,    setUpdatingId]    = useState<string | null>(null)
   const [clearingId,    setClearingId]    = useState<string | null>(null)
   const [pendingStatus, setPendingStatus] = useState<Record<string, AttendanceStatus>>({})
+  const [reminding,     setReminding]     = useState(false)
+  const [remindResult,  setRemindResult]  = useState<{ sent: number } | 'error' | null>(null)
 
   const dateObj   = new Date(session.session_date + 'T00:00:00')
   const dateLabel = dateObj.toLocaleDateString('ja-JP', {
@@ -559,6 +570,21 @@ function DetailPanel({
     setReverting(true)
     await onRevertAll()
     setReverting(false)
+  }
+
+  async function handleRemind() {
+    const userIds = unsubmitted.map(p => p.id)
+    if (userIds.length === 0) return
+    setReminding(true)
+    setRemindResult(null)
+    try {
+      await onRemind(userIds)
+      setRemindResult({ sent: userIds.length })
+    } catch {
+      setRemindResult('error')
+    } finally {
+      setReminding(false)
+    }
   }
 
   return (
@@ -866,7 +892,32 @@ function DetailPanel({
               style={{ background: '#fef3c7', color: '#b45309' }}>
               未提出 {unsubmitted.length}名
             </span>
+            {isManagerOrAdmin && (
+              <button
+                onClick={handleRemind}
+                disabled={reminding}
+                className="ml-auto flex items-center gap-1.5 text-xs px-3 py-1 rounded-full font-semibold cursor-pointer transition-opacity hover:opacity-80 active:scale-95"
+                style={{ background: '#06c755', color: 'white', opacity: reminding ? 0.7 : 1 }}
+              >
+                {reminding
+                  ? <span className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                  : <Bell size={12} />}
+                {reminding ? '送信中...' : 'LINEでリマインド'}
+              </button>
+            )}
           </div>
+          {remindResult !== null && (
+            <div className="mb-2 px-3 py-2 rounded-xl text-xs font-semibold"
+              style={
+                remindResult === 'error'
+                  ? { background: '#fee2e2', color: '#b91c1c' }
+                  : { background: '#dcfce7', color: '#15803d' }
+              }>
+              {remindResult === 'error'
+                ? 'LINE送信に失敗しました'
+                : `${(remindResult as { sent: number }).sent}名にLINEを送信しました`}
+            </div>
+          )}
           <div className="flex flex-col gap-1.5">
             {[...unsubmitted]
               .sort((a, b) => (roleOrder[a.role] ?? 2) - (roleOrder[b.role] ?? 2))
