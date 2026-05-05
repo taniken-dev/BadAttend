@@ -20,6 +20,7 @@ import {
   type WarningFlag,
 } from '@/lib/types'
 import LeaderboardSection from './LeaderboardSection'
+import { HideFor } from '@/components/ui/RoleGate'
 
 export default async function DashboardPage() {
   const supabase = await createClient()
@@ -141,20 +142,22 @@ export default async function DashboardPage() {
                 </h1>
               </div>
               {/* 自分の状態（coach は非表示） */}
-              {!isCoach && (myTodayRecord ? (
-                <span className={`badge ${STATUS_BADGE[myTodayRecord.status as keyof typeof STATUS_BADGE] ?? 'badge'}`}>
-                  {ATTENDANCE_STATUS_LABELS[myTodayRecord.status as keyof typeof ATTENDANCE_STATUS_LABELS] ?? myTodayRecord.status}
-                </span>
-              ) : (
-                <Link
-                  href="/attendance"
-                  className="flex items-center gap-1.5 text-sm font-semibold px-3 py-1.5 rounded-full"
-                  style={{ background: 'var(--club-blue)', color: 'white' }}
-                >
-                  <CalendarCheck size={14} />
-                  出欠連絡
-                </Link>
-              ))}
+              <HideFor roles={['coach']}>
+                {myTodayRecord ? (
+                  <span className={`badge ${STATUS_BADGE[myTodayRecord.status as keyof typeof STATUS_BADGE] ?? 'badge'}`}>
+                    {ATTENDANCE_STATUS_LABELS[myTodayRecord.status as keyof typeof ATTENDANCE_STATUS_LABELS] ?? myTodayRecord.status}
+                  </span>
+                ) : (
+                  <Link
+                    href="/attendance"
+                    className="flex items-center gap-1.5 text-sm font-semibold px-3 py-1.5 rounded-full"
+                    style={{ background: 'var(--club-blue)', color: 'white' }}
+                  >
+                    <CalendarCheck size={14} />
+                    出欠連絡
+                  </Link>
+                )}
+              </HideFor>
             </div>
           </div>
 
@@ -262,7 +265,7 @@ export default async function DashboardPage() {
       )}
 
       {/* 自分の出席状況カード（coach は非表示） */}
-      {!isCoach && (
+      <HideFor roles={['coach']}>
         <div className="card animate-slide-up" style={{ animationDelay: '0.15s' }}>
           <h2
             className="text-base font-bold mb-4"
@@ -329,19 +332,21 @@ export default async function DashboardPage() {
             </div>
           )}
         </div>
-      )}
+      </HideFor>
 
       {/* 出欠連絡ボタン（今日セッションあり・未連絡・coach以外） */}
-      {!isCoach && todaySession && !myTodayRecord && !isLocked && (
-        <Link
-          href="/attendance"
-          className="btn-primary animate-slide-up"
-          style={{ animationDelay: '0.2s' }}
-        >
-          <UserCheck size={18} />
-          今日の出欠を連絡する
-        </Link>
-      )}
+      <HideFor roles={['coach']}>
+        {todaySession && !myTodayRecord && !isLocked && (
+          <Link
+            href="/attendance"
+            className="btn-primary animate-slide-up"
+            style={{ animationDelay: '0.2s' }}
+          >
+            <UserCheck size={18} />
+            今日の出欠を連絡する
+          </Link>
+        )}
+      </HideFor>
 
       {/* 出席率ランキング */}
       <LeaderboardSection
