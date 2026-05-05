@@ -3,7 +3,19 @@
     "allow": [
       "Bash(npm install *)",
       "Bash(Get-ChildItem -Path \"c:\\\\Users\\\\kenta\\\\projects\\\\Attend-app\" -Recurse -Directory)",
-      "Bash(Select-Object -ExpandProperty FullName)"
+      "Bash(Select-Object -ExpandProperty FullName)",
+      "Bash(npx tsc *)",
+      "Bash(Get-ChildItem -Path \"C:\\\\Users\\\\kenta\\\\projects\\\\Attend-app\" -Recurse -Directory)",
+      "Bash(pip show *)",
+      "Bash(pip install *)",
+      "Bash(python docs/generate_manuals.py)",
+      "Bash(python -c \"import sys; print\\(sys.executable\\)\")",
+      "Bash(python -m pip install python-docx)",
+      "Bash(where python3 *)",
+      "Read(//c/msys64/ucrt64/bin/**)",
+      "Bash(pacman -S mingw-w64-ucrt-x86_64-python-docx --noconfirm)",
+      "PowerShell($pyPath = \"C:\\\\Users\\\\kenta\\\\AppData\\\\Local\\\\Microsoft\\\\WindowsApps\\\\python.exe\"; & $pyPath -m pip install python-docx --quiet; & $pyPath docs/generate_manuals.py)",
+      "PowerShell($env:PYTHONIOENCODING = \"utf-8\"; $pyPath = \"C:\\\\Users\\\\kenta\\\\AppData\\\\Local\\\\Microsoft\\\\WindowsApps\\\\python.exe\"; & $pyPath docs/generate_manuals.py 2>&1)"
     ],
     "additionalDirectories": [
       "c:\\Users\\kenta\\projects\\Attend-app"
