@@ -491,6 +491,7 @@ export default function MembersManager({
                       {canSeeSkillRank && (
                         <>
                           <span>·</span>
+                          <span style={{ color: 'var(--gray-500)' }}>技術ランク:</span>
                           <span className="font-semibold" style={{ color: 'var(--gray-700)' }}>
                             {getSkillRankLabel(m.skill_rank)}
                           </span>
