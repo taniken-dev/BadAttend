@@ -192,7 +192,7 @@ export default function MembersManager({
       )}
 
       {/* 孤立ユーザー警告（プロフィール未作成） */}
-      {orphanUsers.length > 0 && (
+      {!effectiveReadOnly && orphanUsers.length > 0 && (
         <div className="card animate-slide-up" style={{ border: '1.5px solid #fca5a5', animationDelay: '0.03s' }}>
           <div className="flex items-center gap-2 mb-4">
             <div className="w-5 h-5 rounded-full flex items-center justify-center text-xs font-bold text-white" style={{ background: '#dc2626' }}>
@@ -453,10 +453,14 @@ export default function MembersManager({
                       </div>
                       <div className="flex items-center gap-1 text-xs mt-0.5" style={{ color: 'var(--gray-500)' }}>
                         <span>LINE: {m.full_name}</span>
-                        <span className="mx-0.5">·</span>
-                        <GraduationCap size={11} />
-                        <span>{m.grade}年生</span>
-                        {!effectiveReadOnly && m.role !== 'manager' && (
+                        {m.role !== 'coach' && (
+                          <>
+                            <span className="mx-0.5">·</span>
+                            <GraduationCap size={11} />
+                            <span>{m.grade}年生</span>
+                          </>
+                        )}
+                        {!effectiveReadOnly && m.role !== 'manager' && m.role !== 'coach' && (
                           <>
                             <span className="mx-0.5">·</span>
                             <span>{getSkillRankLabel(m.skill_rank)}</span>
@@ -485,10 +489,14 @@ export default function MembersManager({
                   {/* 下段：学年・（技術ランクはadminのみ）・ロール */}
                   {effectiveReadOnly ? (
                     <div className="flex flex-wrap gap-3 text-xs" style={{ color: 'var(--gray-500)' }}>
-                      <span>{m.grade}年生</span>
-                      <span>·</span>
+                      {m.role !== 'coach' && (
+                        <>
+                          <span>{m.grade}年生</span>
+                          <span>·</span>
+                        </>
+                      )}
                       <span>{ROLE_OPTIONS.find(r => r.value === m.role)?.label ?? m.role}</span>
-                      {canSeeSkillRank && m.role !== 'manager' && (
+                      {canSeeSkillRank && m.role !== 'manager' && m.role !== 'coach' && (
                         <>
                           <span>·</span>
                           <span style={{ color: 'var(--gray-500)' }}>技術ランク:</span>
@@ -499,32 +507,34 @@ export default function MembersManager({
                       )}
                     </div>
                   ) : (
-                  <div className={`grid gap-2 ${m.role === 'manager' ? 'grid-cols-2' : 'grid-cols-3'}`}>
-                    {/* 学年 */}
-                    <div>
-                      <label className="label" style={{ fontSize: '11px' }}>学年</label>
-                      <div className="relative">
-                        <select
-                          value={m.grade}
-                          onChange={e => updateGrade(m.id, Number(e.target.value))}
-                          disabled={updating === m.id}
-                          className="input-field pr-8"
-                          style={{ padding: '7px 32px 7px 10px', fontSize: '13px' }}
-                        >
-                          {GRADE_OPTIONS.map(g => (
-                            <option key={g} value={g}>{g}年生</option>
-                          ))}
-                        </select>
-                        <ChevronDown
-                          size={13}
-                          className="absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none"
-                          style={{ color: 'var(--gray-400)' }}
-                        />
+                  <div className={m.role === 'manager' ? 'flex justify-center gap-2' : 'grid grid-cols-3 gap-2'}>
+                    {/* 学年（顧問には非表示） */}
+                    {m.role !== 'coach' && (
+                      <div className={m.role === 'manager' ? 'w-[calc((100%-1rem)/3)]' : undefined}>
+                        <label className="label" style={{ fontSize: '11px' }}>学年</label>
+                        <div className="relative">
+                          <select
+                            value={m.grade}
+                            onChange={e => updateGrade(m.id, Number(e.target.value))}
+                            disabled={updating === m.id}
+                            className="input-field pr-8"
+                            style={{ padding: '7px 32px 7px 10px', fontSize: '13px' }}
+                          >
+                            {GRADE_OPTIONS.map(g => (
+                              <option key={g} value={g}>{g}年生</option>
+                            ))}
+                          </select>
+                          <ChevronDown
+                            size={13}
+                            className="absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none"
+                            style={{ color: 'var(--gray-400)' }}
+                          />
+                        </div>
                       </div>
-                    </div>
+                    )}
 
-                    {/* 技術ランク（マネージャーには非表示） */}
-                    {m.role !== 'manager' && (
+                    {/* 技術ランク（マネージャー・顧問には非表示）/ 顧問の場合は権限を2列目に */}
+                    {m.role !== 'manager' && m.role !== 'coach' && (
                       <div>
                         <label className="label" style={{ fontSize: '11px' }}>技術ランク</label>
                         <div className="relative">
@@ -548,8 +558,8 @@ export default function MembersManager({
                       </div>
                     )}
 
-                    {/* 権限 */}
-                    <div>
+                    {/* 権限（顧問は3列グリッドの2列目、マネージャーはflex内で1/3幅） */}
+                    <div className={m.role === 'coach' ? 'col-start-2' : m.role === 'manager' ? 'w-[calc((100%-1rem)/3)]' : undefined}>
                       <label className="label" style={{ fontSize: '11px' }}>権限</label>
                       <div className="relative">
                         <select

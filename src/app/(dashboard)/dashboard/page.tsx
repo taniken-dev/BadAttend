@@ -109,18 +109,20 @@ export default async function DashboardPage() {
   return (
     <div className="flex flex-col gap-5">
 
-      {/* ロックアウトバナー */}
-      {isLocked && (
-        <div className="alert-warning animate-slide-up">
-          <Clock size={16} className="shrink-0 mt-0.5" />
-          <div>
-            <p className="font-semibold">休養推奨モード</p>
-            <p className="text-xs mt-0.5">
-              体調不良のため、本日の練習はロックされています。
-            </p>
+      {/* ロックアウトバナー（顧問には非表示） */}
+      <HideFor roles={['coach']}>
+        {isLocked && (
+          <div className="alert-warning animate-slide-up">
+            <Clock size={16} className="shrink-0 mt-0.5" />
+            <div>
+              <p className="font-semibold">休養推奨モード</p>
+              <p className="text-xs mt-0.5">
+                体調不良のため、本日の練習はロックされています。
+              </p>
+            </div>
           </div>
-        </div>
-      )}
+        )}
+      </HideFor>
 
       {/* 今日の練習セクション */}
       {todaySession ? (
