@@ -42,7 +42,21 @@ export interface PracticeSession {
   is_results_confirmed: boolean
   results_confirmed_at: string | null
   note: string | null
+  google_event_id: string | null
+  is_camp: boolean
   created_at: string
+}
+
+export interface GoogleCalendarEvent {
+  id: string
+  title: string
+  date: string        // YYYY-MM-DD
+  startTime?: string  // HH:MM（終日イベントは undefined）
+  endTime?: string    // HH:MM
+  location?: string
+  description?: string
+  isActivityDay: boolean   // title === '活動日'
+  alreadyImported: boolean // practice_sessions に登録済み
 }
 
 export interface AttendanceRecord {
@@ -82,6 +96,7 @@ export interface SelectionScore {
   tardy_count: number
   absent_count: number
   emergency_count: number
+  unreported_count: number
   attendance_rate: number
   selection_score: number
   selection_rank: SelectionRank
@@ -100,7 +115,7 @@ export const ATTENDANCE_STATUS_LABELS: Record<AttendanceStatus, string> = {
   present: '出席',
   tardy: '遅刻',
   absent_normal: '欠席',
-  absent_emergency: '緊急欠席',
+  absent_emergency: '当日欠席',
   absent_unreported: '無連絡欠席',
 }
 

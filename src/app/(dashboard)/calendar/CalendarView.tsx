@@ -1,13 +1,17 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useMemo } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import {
   ChevronLeft, ChevronRight, MapPin, Clock, Users,
   CheckCircle2, ClipboardCheck, AlertCircle, RotateCcw, Bell,
+  Pencil, CalendarCheck, UserCheck, UserX,
+  BookOpen, HeartPulse, User, HelpCircle, Dumbbell,
+  ExternalLink,
 } from 'lucide-react'
 import { useViewRole } from '@/contexts/ViewRoleContext'
-import type { PracticeSession, AttendanceStatus } from '@/lib/types'
+import { getWeeklyRegistrationInfo } from '@/lib/utils'
+import type { PracticeSession, AttendanceStatus, AbsenceReason, GoogleCalendarEvent } from '@/lib/types'
 
 type SessionMap = Record<string, PracticeSession>
 
@@ -48,12 +52,6 @@ const REASON_LABELS: Record<string, string> = {
   other: 'その他',
 }
 
-function formatReason(reason: string | null, reasonDetail: string | null): string | null {
-  if (!reason) return null
-  const label = REASON_LABELS[reason] ?? 'その他'
-  if (reasonDetail) return `${label}: ${reasonDetail}`
-  return label
-}
 
 function ReasonBadge({ reason, reasonDetail }: { reason: string | null; reasonDetail: string | null }) {
   if (!reason) return null
@@ -79,11 +77,37 @@ const STATUS_GROUPS = [
   { key: 'absent',            label: '欠席・その他', color: '#dc2626', bg: '#fee2e2' },
 ]
 
+const MEMBER_STATUS_OPTIONS: {
+  value: AttendanceStatus; label: string; description: string; color: string; icon: React.ElementType
+}[] = [
+  { value: 'present',      label: '出席', description: '練習に参加します',         color: '#16a34a', icon: UserCheck },
+  { value: 'tardy',        label: '遅刻', description: '遅れて参加します',         color: '#d97706', icon: Clock },
+  { value: 'absent_normal',label: '欠席', description: '理由を選択してください',   color: '#dc2626', icon: UserX },
+]
+
+const MEMBER_REASON_OPTIONS: {
+  value: AbsenceReason; label: string; icon: React.ElementType; description: string; color: string
+}[] = [
+  { value: 'practice', label: '別練習・大会', icon: Dumbbell,   description: '他チームとの練習、大会参加など',    color: '#4338ca' },
+  { value: 'class',    label: '授業',         icon: BookOpen,   description: '講義、補講、試験など',              color: '#0891b2' },
+  { value: 'sick',     label: '体調不良',     icon: HeartPulse, description: '翌日の練習が自動でロックされます',  color: '#dc2626' },
+  { value: 'personal', label: '私用',         icon: User,       description: '家族の事情、冠婚葬祭など',          color: '#d97706' },
+  { value: 'other',    label: 'その他',       icon: HelpCircle, description: '詳細を自由記述で入力してください',  color: '#6b7280' },
+]
+
+const SELF_STATUS_LABELS: Partial<Record<AttendanceStatus, string>> = {
+  present:           '出席',
+  tardy:             '遅刻',
+  absent_normal:     '欠席',
+  absent_emergency:  '当日欠席',
+  absent_unreported: '無断欠席',
+}
+
 const RESULT_STATUS_OPTIONS: { value: AttendanceStatus; label: string; color: string }[] = [
   { value: 'present',           label: '出席',      color: '#16a34a' },
   { value: 'tardy',             label: '遅刻',      color: '#d97706' },
   { value: 'absent_normal',     label: '欠席',      color: '#dc2626' },
-  { value: 'absent_emergency',  label: '緊急欠席',  color: '#9333ea' },
+  { value: 'absent_emergency',  label: '当日欠席',  color: '#9333ea' },
   { value: 'absent_unreported', label: '無連絡欠席', color: '#64748b' },
 ]
 
@@ -100,11 +124,13 @@ export default function CalendarView() {
   const [userId,       setUserId]      = useState<string | null>(null)
   const [current,      setCurrent]     = useState(new Date(today.getFullYear(), today.getMonth(), 1))
   const [sessions,     setSessions]    = useState<SessionMap>({})
+  const [gcalEvents,   setGcalEvents]  = useState<Record<string, GoogleCalendarEvent[]>>({})
   const [selectedDate, setSelectedDate] = useState<string | null>(null)
   const [detail,       setDetail]      = useState<DayDetail | null>(null)
   const [loading,      setLoading]     = useState(false)
 
   const isManagerOrAdmin = viewRole === 'manager' || viewRole === 'admin'
+  const availableDates = useMemo(() => getWeeklyRegistrationInfo().availableDates, [])
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data: { user } }) => {
@@ -113,16 +139,17 @@ export default function CalendarView() {
     })
   }, [])
 
-  // ── 月のセッション一覧取得 ─────────────────────────────────
+  // ── 月のセッション一覧取得 + Google カレンダー自動同期 ────────
   useEffect(() => {
     const y = current.getFullYear()
     const m = current.getMonth()
     const s = toDateStr(y, m, 1)
     const e = toDateStr(y, m, new Date(y, m + 1, 0).getDate())
 
+    // 1. Supabase から即座に既存セッションを表示（高速）
     supabase
       .from('practice_sessions')
-      .select('id, session_date, start_time, end_time, location, is_cancelled, is_results_confirmed, results_confirmed_at, note, created_at')
+      .select('id, session_date, start_time, end_time, location, is_cancelled, is_results_confirmed, results_confirmed_at, note, google_event_id, is_camp, created_at')
       .gte('session_date', s)
       .lte('session_date', e)
       .then(({ data }) => {
@@ -131,19 +158,47 @@ export default function CalendarView() {
         setSessions(map)
       })
 
+    // 2. GCal と自動同期（バックグラウンド）→ 終わったらセッションを上書き
+    fetch(`/api/google-calendar/sync?year=${y}&month=${m + 1}`)
+      .then(r => r.ok ? r.json() : { sessions: [] })
+      .then(({ sessions }: { sessions: PracticeSession[] }) => {
+        const map: SessionMap = {}
+        ;(sessions ?? []).forEach(s => { map[s.session_date] = s })
+        setSessions(map)
+      })
+      .catch(() => {})
+
+    // 3. 大会・合宿など（表示のみ）のGCalイベントを取得
+    fetch(`/api/google-calendar/events?year=${y}&month=${m + 1}`)
+      .then(r => r.ok ? r.json() : { events: [] })
+      .then(({ events }: { events: GoogleCalendarEvent[] }) => {
+        const map: Record<string, GoogleCalendarEvent[]> = {}
+        // 活動日は同期済みでセッションとして表示されるのでここでは除外
+        ;(events ?? []).filter(ev => !ev.isActivityDay).forEach(ev => {
+          if (!map[ev.date]) map[ev.date] = []
+          map[ev.date].push(ev)
+        })
+        setGcalEvents(map)
+      })
+      .catch(() => {})
+
     setSelectedDate(null)
     setDetail(null)
   }, [current])
 
   // ── 日付クリック → 詳細取得 ──────────────────────────────
   const handleDayClick = useCallback(async (dateStr: string) => {
-    const session = sessions[dateStr]
-    if (!session) return
+    const session   = sessions[dateStr]
+    const hasGcal   = (gcalEvents[dateStr]?.length ?? 0) > 0
+    if (!session && !hasGcal) return
     if (selectedDate === dateStr) { setSelectedDate(null); setDetail(null); return }
 
     setSelectedDate(dateStr)
-    setLoading(true)
     setDetail(null)
+    setLoading(false)
+    if (!session) return  // GCalイベントのみの日は詳細取得不要
+
+    setLoading(true)
 
     const [{ data: atRows }, { data: allProfiles }] = await Promise.all([
       supabase
@@ -170,7 +225,38 @@ export default function CalendarView() {
 
     setDetail({ session, attendance, unsubmitted, totalApproved: everyone.length })
     setLoading(false)
-  }, [sessions, selectedDate])
+  }, [sessions, selectedDate, gcalEvents])
+
+  // ── 未提出者に実績を新規登録（manager/admin専用） ─────────
+  const handleRegisterResultForUnsubmitted = useCallback(async (
+    memberId: string,
+    sessionId: string,
+    sessionDate: string,
+    newStatus: AttendanceStatus,
+    profile: MemberProfile,
+  ) => {
+    if (!userId) return
+    const { data, error } = await supabase
+      .from('attendance_records')
+      .upsert({
+        session_id: sessionId,
+        user_id: memberId,
+        status: 'absent_unreported',
+        result_status: newStatus,
+        verified_by: userId,
+      }, { onConflict: 'session_id,user_id' })
+      .select('id, status, result_status, reason, reason_detail, user_id')
+      .single()
+    if (error || !data) return
+    setDetail(prev => {
+      if (!prev) return prev
+      return {
+        ...prev,
+        attendance: [...prev.attendance, { ...(data as AttendanceRow), profile }],
+        unsubmitted: prev.unsubmitted.filter(p => p.id !== memberId),
+      }
+    })
+  }, [userId])
 
   // ── 実績ステータスを1件更新 ─────────────────────────────
   const handleUpdateResultStatus = useCallback(async (
@@ -322,6 +408,69 @@ export default function CalendarView() {
     }))
   }, [detail])
 
+  // ── 自分の出欠を登録（部員向け） ──────────────────────────
+  const handleSelfRegister = useCallback(async (
+    status: AttendanceStatus,
+    reason: AbsenceReason | null,
+    reasonDetail: string,
+  ): Promise<string | null> => {
+    if (!detail || !userId) return 'エラー'
+    const session = detail.session
+    const isAbsent = status === 'absent_normal'
+    const existingRecord = detail.attendance.find(a => a.user_id === userId) ?? null
+
+    const payload = {
+      session_id:    session.id,
+      user_id:       userId,
+      status,
+      reason:        isAbsent ? reason : null,
+      reason_detail: isAbsent ? (reasonDetail.trim() || null) : null,
+      reported_at:   new Date().toISOString(),
+    }
+
+    let resultData: AttendanceRow | null = null
+    let dbError: unknown = null
+
+    if (existingRecord) {
+      const { data, error } = await supabase
+        .from('attendance_records')
+        .update(payload)
+        .eq('id', existingRecord.id)
+        .select('id, status, result_status, reason, reason_detail, user_id')
+        .single()
+      resultData = data as AttendanceRow | null
+      dbError = error
+    } else {
+      const { data, error } = await supabase
+        .from('attendance_records')
+        .insert(payload)
+        .select('id, status, result_status, reason, reason_detail, user_id')
+        .single()
+      resultData = data as AttendanceRow | null
+      dbError = error
+    }
+
+    if (dbError || !resultData) return (dbError as { message?: string })?.message ?? 'エラーが発生しました'
+
+    setDetail(prev => {
+      if (!prev) return prev
+      const profile =
+        prev.attendance.find(a => a.user_id === userId)?.profile ??
+        (prev.unsubmitted.find(p => p.id === userId) as MemberProfile | undefined)
+      if (!profile) return prev
+      const newEntry: EnrichedAttendance = { ...resultData!, profile }
+      return {
+        ...prev,
+        attendance: existingRecord
+          ? prev.attendance.map(a => a.user_id === userId ? newEntry : a)
+          : [...prev.attendance, newEntry],
+        unsubmitted: prev.unsubmitted.filter(p => p.id !== userId),
+      }
+    })
+
+    return null
+  }, [detail, userId])
+
   // ── カレンダーグリッド ────────────────────────────────────
   const y = current.getFullYear()
   const m = current.getMonth()
@@ -386,11 +535,14 @@ export default function CalendarView() {
             const dow      = (firstDow + day - 1) % 7
             const dateStr  = toDateStr(y, m, day)
             const session  = sessions[dateStr]
+            const dayGcal  = gcalEvents[dateStr] ?? []
+            const hasGcal  = dayGcal.length > 0
             const isToday    = dateStr === todayStr
             const isSelected = dateStr === selectedDate
             const confirmed  = session?.is_results_confirmed
+            const isClickable = !!session || hasGcal
 
-            // ドット色：確定済み=緑、通常練習=青、休止=グレー
+            // 練習ドット色（合宿=オレンジ、通常練習=赤、確定済み=緑、休止=グレー）
             const dotColor = session
               ? isSelected
                 ? 'rgba(255,255,255,0.7)'
@@ -398,15 +550,22 @@ export default function CalendarView() {
                 ? 'var(--gray-300)'
                 : confirmed
                 ? '#16a34a'
-                : 'var(--club-blue)'
+                : session.is_camp
+                ? '#f97316'
+                : '#ef4444'
               : 'transparent'
+
+            // GCalドット色（大会など=青）
+            const gcalDotColor = isSelected
+              ? 'rgba(255,255,255,0.7)'
+              : 'var(--club-blue)'
 
             return (
               <div key={dateStr}
                 onClick={() => handleDayClick(dateStr)}
                 className="flex flex-col items-center py-1.5 rounded-xl transition-all duration-150 select-none"
                 style={{
-                  cursor:     session ? 'pointer' : 'default',
+                  cursor:     isClickable ? 'pointer' : 'default',
                   background: isSelected
                     ? 'var(--club-blue)'
                     : isToday
@@ -414,7 +573,7 @@ export default function CalendarView() {
                     : 'transparent',
                 }}
                 onMouseEnter={e => {
-                  if (session && !isSelected)
+                  if (isClickable && !isSelected)
                     (e.currentTarget as HTMLElement).style.background = 'var(--gray-100)'
                 }}
                 onMouseLeave={e => {
@@ -433,24 +592,36 @@ export default function CalendarView() {
                   }}>
                   {day}
                 </span>
-                {/* 練習ドット（確定済みはチェックアイコン） */}
-                {session && !session.is_cancelled && confirmed && !isSelected ? (
-                  <CheckCircle2 size={8} style={{ color: '#16a34a', marginTop: 1 }} />
-                ) : (
-                  <span className="w-1 h-1 rounded-full" style={{ background: dotColor }} />
-                )}
+                {/* ドット行 */}
+                <div className="flex items-center gap-0.5 mt-0.5" style={{ minHeight: 8 }}>
+                  {/* 練習ドット（確定済みはチェックアイコン） */}
+                  {session && !session.is_cancelled && confirmed && !isSelected
+                    ? <CheckCircle2 size={8} style={{ color: session.is_camp ? '#f97316' : '#16a34a' }} />
+                    : session
+                    ? <span className="w-1 h-1 rounded-full" style={{ background: dotColor }} />
+                    : null}
+                  {/* GCalドット */}
+                  {hasGcal && (
+                    <span className="w-1 h-1 rounded-full" style={{ background: gcalDotColor }} />
+                  )}
+                </div>
               </div>
             )
           })}
         </div>
 
         {/* 凡例 */}
-        <div className="flex items-center gap-4 mt-3 pt-3"
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 mt-3 pt-3"
           style={{ borderTop: '1px solid var(--gray-100)' }}>
           <div className="flex items-center gap-1.5">
             <span className="w-2 h-2 rounded-full shrink-0"
-              style={{ background: 'var(--club-blue)' }} />
-            <span className="text-xs" style={{ color: 'var(--gray-500)' }}>練習日（予定）</span>
+              style={{ background: '#ef4444' }} />
+            <span className="text-xs" style={{ color: 'var(--gray-500)' }}>練習日</span>
+          </div>
+          <div className="flex items-center gap-1.5">
+            <span className="w-2 h-2 rounded-full shrink-0"
+              style={{ background: '#f97316' }} />
+            <span className="text-xs" style={{ color: 'var(--gray-500)' }}>合宿</span>
           </div>
           <div className="flex items-center gap-1.5">
             <CheckCircle2 size={8} style={{ color: '#16a34a' }} />
@@ -458,8 +629,8 @@ export default function CalendarView() {
           </div>
           <div className="flex items-center gap-1.5">
             <span className="w-2 h-2 rounded-full shrink-0"
-              style={{ background: 'var(--gray-300)' }} />
-            <span className="text-xs" style={{ color: 'var(--gray-500)' }}>休止</span>
+              style={{ background: 'var(--club-blue)' }} />
+            <span className="text-xs" style={{ color: 'var(--gray-500)' }}>大会など</span>
           </div>
           <div className="flex items-center gap-1.5 ml-auto">
             <span className="text-xs font-bold px-1.5 py-0.5 rounded"
@@ -471,8 +642,8 @@ export default function CalendarView() {
         </div>
       </div>
 
-      {/* 詳細パネル */}
-      {selectedDate && (
+      {/* 詳細パネル（練習日） */}
+      {selectedDate && (detail || loading) && (
         <div className="card animate-slide-up" style={{ animationDelay: '0.04s' }}>
           {loading ? (
             <div className="flex items-center justify-center py-10">
@@ -483,6 +654,9 @@ export default function CalendarView() {
             <DetailPanel
               detail={detail}
               isManagerOrAdmin={isManagerOrAdmin}
+              userId={userId}
+              availableDates={availableDates}
+              onSelfRegister={handleSelfRegister}
               onUpdateResultStatus={(id, status) =>
                 handleUpdateResultStatus(id, status, detail.session.session_date)
               }
@@ -491,6 +665,11 @@ export default function CalendarView() {
                 handleClearResultStatus(id, detail.session.session_date)
               }
               onRevertAll={handleRevertAll}
+              onRegisterForUnsubmitted={(memberId, status, profile) =>
+                handleRegisterResultForUnsubmitted(
+                  memberId, detail.session.id, detail.session.session_date, status, profile
+                )
+              }
               onRemind={async (userIds) => {
                 await fetch('/api/line/notify', {
                   method: 'POST',
@@ -499,10 +678,61 @@ export default function CalendarView() {
                 })
               }}
             />
-
           ) : null}
         </div>
       )}
+
+      {/* GCalイベントパネル（大会・合宿など表示のみ） */}
+      {selectedDate && (gcalEvents[selectedDate]?.length ?? 0) > 0 && (
+        <GCalEventsPanel events={gcalEvents[selectedDate]} />
+      )}
+    </div>
+  )
+}
+
+// ── Google カレンダーイベントパネル（表示のみ）───────────────────
+function GCalEventsPanel({ events }: { events: GoogleCalendarEvent[] }) {
+  return (
+    <div className="card animate-slide-up" style={{ animationDelay: '0.08s' }}>
+      <div className="flex items-center gap-2 mb-3">
+        <ExternalLink size={14} style={{ color: 'var(--club-blue)' }} />
+        <span className="text-sm font-bold" style={{ color: 'var(--gray-900)' }}>
+          Googleカレンダーの予定
+        </span>
+      </div>
+      <div className="flex flex-col gap-2">
+        {events.map(ev => (
+          <div key={ev.id}
+            className="flex flex-col gap-1.5 px-3 py-2.5 rounded-xl"
+            style={{ background: 'var(--gray-50)', border: '1px solid var(--gray-100)' }}>
+            <div className="flex items-center gap-2">
+              <span className="w-2 h-2 rounded-full shrink-0" style={{ background: 'var(--club-blue)' }} />
+              <span className="text-sm font-semibold" style={{ color: 'var(--gray-900)' }}>
+                {ev.title}
+              </span>
+            </div>
+            <div className="flex flex-col gap-0.5 pl-4">
+              {ev.startTime && ev.endTime && (
+                <div className="flex items-center gap-1.5 text-xs" style={{ color: 'var(--gray-500)' }}>
+                  <Clock size={11} />
+                  {ev.startTime} 〜 {ev.endTime}
+                </div>
+              )}
+              {ev.location && (
+                <div className="flex items-center gap-1.5 text-xs" style={{ color: 'var(--gray-500)' }}>
+                  <MapPin size={11} />
+                  {ev.location}
+                </div>
+              )}
+              {ev.description && (
+                <p className="text-xs mt-0.5" style={{ color: 'var(--gray-500)' }}>
+                  {ev.description}
+                </p>
+              )}
+            </div>
+          </div>
+        ))}
+      </div>
     </div>
   )
 }
@@ -511,28 +741,109 @@ export default function CalendarView() {
 function DetailPanel({
   detail,
   isManagerOrAdmin,
+  userId,
+  availableDates,
+  onSelfRegister,
   onUpdateResultStatus,
   onBulkConfirm,
   onClearResultStatus,
   onRevertAll,
+  onRegisterForUnsubmitted,
   onRemind,
 }: {
   detail: DayDetail
   isManagerOrAdmin: boolean
+  userId: string | null
+  availableDates: string[]
+  onSelfRegister: (status: AttendanceStatus, reason: AbsenceReason | null, detail: string) => Promise<string | null>
   onUpdateResultStatus: (id: string, status: AttendanceStatus) => Promise<void>
   onBulkConfirm: () => Promise<void>
   onClearResultStatus: (id: string) => Promise<void>
   onRevertAll: () => Promise<void>
+  onRegisterForUnsubmitted: (memberId: string, status: AttendanceStatus, profile: MemberProfile) => Promise<void>
   onRemind: (userIds: string[]) => Promise<void>
 }) {
   const { session, attendance, unsubmitted, totalApproved } = detail
-  const [confirming,    setConfirming]    = useState(false)
-  const [reverting,     setReverting]     = useState(false)
-  const [updatingId,    setUpdatingId]    = useState<string | null>(null)
-  const [clearingId,    setClearingId]    = useState<string | null>(null)
-  const [pendingStatus, setPendingStatus] = useState<Record<string, AttendanceStatus>>({})
-  const [reminding,     setReminding]     = useState(false)
-  const [remindResult,  setRemindResult]  = useState<{ sent: number } | 'error' | null>(null)
+  const [confirming,              setConfirming]              = useState(false)
+  const [reverting,               setReverting]               = useState(false)
+  const [updatingId,              setUpdatingId]              = useState<string | null>(null)
+  const [clearingId,              setClearingId]              = useState<string | null>(null)
+  const [pendingStatus,           setPendingStatus]           = useState<Record<string, AttendanceStatus>>({})
+  const [registeringId,           setRegisteringId]           = useState<string | null>(null)
+  const [pendingUnsubmitted,      setPendingUnsubmitted]      = useState<Record<string, AttendanceStatus>>({})
+  const [reminding,               setReminding]               = useState(false)
+  const [remindResult,            setRemindResult]            = useState<{ sent: number } | 'error' | null>(null)
+
+  // 自己登録フォーム（部員向け）
+  const [selfFormOpen,    setSelfFormOpen]    = useState(false)
+  const [selfStatus,      setSelfStatus]      = useState<AttendanceStatus | null>(null)
+  const [selfReason,      setSelfReason]      = useState<AbsenceReason | null>(null)
+  const [selfDetail,      setSelfDetail]      = useState('')
+  const [selfSubmitting,  setSelfSubmitting]  = useState(false)
+  const [selfError,       setSelfError]       = useState<string | null>(null)
+  const [selfIsEditing,   setSelfIsEditing]   = useState(false)
+
+  // セッションが変わったらフォームをリセット
+  useEffect(() => {
+    setSelfFormOpen(false)
+    setSelfStatus(null)
+    setSelfReason(null)
+    setSelfDetail('')
+    setSelfError(null)
+    setSelfIsEditing(false)
+  }, [session.id])
+
+  const myRecord = attendance.find(a => a.user_id === userId) ?? null
+  // 合宿は公開後いつでも出欠登録可能、通常練習は登録可能期間のみ
+  const canRegister = !session.is_cancelled &&
+    (session.is_camp || availableDates.includes(session.session_date))
+
+  // 実績登録は練習開始時刻以降のみ（合宿は常に可能）
+  const sessionStartAt = new Date(`${session.session_date}T${session.start_time}`)
+  const canRegisterResult = session.is_camp || new Date() >= sessionStartAt
+  const selfIsAbsent = selfStatus === 'absent_normal'
+
+  function openSelfForm(editing = false) {
+    setSelfIsEditing(editing)
+    setSelfError(null)
+    if (editing && myRecord) {
+      const displayStatus = (
+        myRecord.status === 'absent_emergency' || myRecord.status === 'absent_unreported'
+          ? 'absent_normal'
+          : myRecord.status
+      ) as AttendanceStatus
+      setSelfStatus(displayStatus)
+      setSelfReason(myRecord.reason as AbsenceReason | null)
+      setSelfDetail(myRecord.reason_detail ?? '')
+    } else {
+      setSelfStatus(null)
+      setSelfReason(null)
+      setSelfDetail('')
+    }
+    setSelfFormOpen(true)
+  }
+
+  function closeSelfForm() {
+    setSelfFormOpen(false)
+    setSelfIsEditing(false)
+    setSelfStatus(null)
+    setSelfReason(null)
+    setSelfDetail('')
+    setSelfError(null)
+  }
+
+  async function handleSelfSubmit(e: React.FormEvent) {
+    e.preventDefault()
+    if (!selfStatus) return
+    if (selfIsAbsent && !selfReason) return
+    if (selfIsAbsent && selfReason === 'other' && !selfDetail.trim()) return
+    setSelfSubmitting(true)
+    setSelfError(null)
+    const err = await onSelfRegister(selfStatus, selfIsAbsent ? selfReason : null, selfDetail)
+    setSelfSubmitting(false)
+    if (err) { setSelfError(err); return }
+    closeSelfForm()
+  }
 
   const dateObj   = new Date(session.session_date + 'T00:00:00')
   const dateLabel = dateObj.toLocaleDateString('ja-JP', {
@@ -654,8 +965,166 @@ function DetailPanel({
         </span>
       </div>
 
-      {/* マネージャー/管理者向け：一括確定ボタン */}
-      {isManagerOrAdmin && attendance.length > 0 && !session.is_cancelled && (
+      {/* 自分の出欠連絡（部員向け・登録可能期間のみ） */}
+      {!isManagerOrAdmin && userId && canRegister && (
+        <div className="rounded-xl px-4 py-3.5 flex flex-col gap-3"
+          style={{ background: 'color-mix(in srgb, var(--club-blue) 6%, var(--card-bg))', border: '1.5px solid color-mix(in srgb, var(--club-blue) 25%, white)' }}>
+          <div className="flex items-center justify-between">
+            <h3 className="text-sm font-bold" style={{ color: 'var(--gray-900)' }}>
+              あなたの出欠連絡
+            </h3>
+            {myRecord && !selfFormOpen && (
+              <button
+                onClick={() => openSelfForm(true)}
+                className="flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-semibold"
+                style={{ background: 'var(--gray-100)', color: 'var(--gray-600)', border: '1px solid var(--gray-200)' }}
+              >
+                <Pencil size={11} /> 変更
+              </button>
+            )}
+          </div>
+
+          {!selfFormOpen && myRecord ? (
+            // 登録済み表示
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="flex items-center gap-1 text-sm font-semibold px-2.5 py-1 rounded-full"
+                style={{
+                  background: myRecord.status === 'present' ? '#dcfce7' : myRecord.status === 'tardy' ? '#fef3c7' : '#fee2e2',
+                  color: myRecord.status === 'present' ? '#16a34a' : myRecord.status === 'tardy' ? '#d97706' : '#dc2626',
+                }}>
+                <CheckCircle2 size={13} />
+                {SELF_STATUS_LABELS[myRecord.status as AttendanceStatus] ?? myRecord.status}
+              </span>
+              {myRecord.reason && (
+                <span className="text-xs px-2 py-0.5 rounded-full"
+                  style={{ background: 'var(--gray-100)', color: 'var(--gray-600)', border: '1px solid var(--gray-200)' }}>
+                  {REASON_LABELS[myRecord.reason] ?? myRecord.reason}
+                  {myRecord.reason_detail ? `：${myRecord.reason_detail}` : ''}
+                </span>
+              )}
+            </div>
+          ) : selfFormOpen ? (
+            // 登録フォーム
+            <form onSubmit={handleSelfSubmit} className="flex flex-col gap-3">
+              {selfError && (
+                <div className="flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-semibold"
+                  style={{ background: '#fee2e2', color: '#b91c1c' }}>
+                  <AlertCircle size={13} /> {selfError}
+                </div>
+              )}
+              {selfIsEditing && (
+                <span className="self-start text-xs font-semibold px-2.5 py-0.5 rounded-full"
+                  style={{ background: 'var(--club-amber-light)', color: 'var(--club-amber)' }}>
+                  編集中
+                </span>
+              )}
+
+              {/* ステータス選択 */}
+              <div className="grid grid-cols-3 gap-2">
+                {MEMBER_STATUS_OPTIONS.map(({ value, label, description, color, icon: Icon }) => {
+                  const active = selfStatus === value
+                    || (value === 'absent_normal' && (selfStatus === 'absent_emergency' || selfStatus === 'absent_unreported'))
+                  return (
+                    <button key={value} type="button"
+                      onClick={() => { setSelfStatus(value); if (value !== 'absent_normal') setSelfReason(null) }}
+                      className="flex flex-col items-center gap-2 py-3 rounded-xl text-center transition-all"
+                      style={{
+                        border: `1.5px solid ${active ? color : 'var(--gray-200)'}`,
+                        background: active ? `color-mix(in srgb, ${color} 15%, var(--gray-100))` : 'var(--gray-100)',
+                      }}
+                    >
+                      <Icon size={18} style={{ color: active ? color : 'var(--gray-500)' }} />
+                      <span className="text-xs font-bold" style={{ color: active ? color : 'var(--gray-700)' }}>{label}</span>
+                      <span className="text-xs leading-tight" style={{ color: active ? color : 'var(--gray-500)', opacity: 0.85 }}>
+                        {description}
+                      </span>
+                    </button>
+                  )
+                })}
+              </div>
+
+              {/* 欠席理由 */}
+              {selfIsAbsent && (
+                <>
+                  <div className="flex flex-col gap-1.5">
+                    {MEMBER_REASON_OPTIONS.map(({ value, label, icon: Icon, description, color }) => {
+                      const active = selfReason === value
+                      return (
+                        <button key={value} type="button"
+                          onClick={() => setSelfReason(value)}
+                          className="flex items-center gap-3 p-3 rounded-xl text-left transition-all"
+                          style={{
+                            border: `1.5px solid ${active ? color : 'var(--gray-200)'}`,
+                            background: active ? `color-mix(in srgb, ${color} 15%, var(--gray-100))` : 'var(--gray-100)',
+                          }}
+                        >
+                          <div className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0"
+                            style={{ background: active ? `color-mix(in srgb, ${color} 20%, var(--gray-200))` : 'var(--gray-200)' }}>
+                            <Icon size={16} style={{ color: active ? color : 'var(--gray-600)' }} />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-xs font-semibold" style={{ color: active ? color : 'var(--gray-700)' }}>{label}</p>
+                            <p className="text-xs mt-0.5" style={{ color: 'var(--gray-500)' }}>{description}</p>
+                          </div>
+                          {active && <CheckCircle2 size={15} style={{ color, flexShrink: 0 }} />}
+                        </button>
+                      )
+                    })}
+                  </div>
+                  <textarea
+                    value={selfDetail}
+                    onChange={e => setSelfDetail(e.target.value)}
+                    className="input-field resize-none"
+                    rows={2}
+                    placeholder={selfReason === 'other' ? '欠席理由を入力してください（必須）' : '補足事項があれば入力してください'}
+                    maxLength={200}
+                  />
+                </>
+              )}
+
+              <div className="flex gap-2">
+                <button type="submit"
+                  className="btn-primary flex-1"
+                  disabled={
+                    !selfStatus
+                    || (selfIsAbsent && !selfReason)
+                    || (selfIsAbsent && selfReason === 'other' && !selfDetail.trim())
+                    || selfSubmitting
+                  }
+                >
+                  {selfSubmitting ? (
+                    <span className="flex items-center justify-center gap-2">
+                      <span className="inline-block w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                      {selfIsEditing ? '更新中...' : '送信中...'}
+                    </span>
+                  ) : (
+                    <span className="flex items-center justify-center gap-1.5">
+                      <CalendarCheck size={14} />
+                      {selfIsEditing ? '内容を更新する' : '連絡する'}
+                    </span>
+                  )}
+                </button>
+                <button type="button" onClick={closeSelfForm} className="btn-secondary"
+                  style={{ flex: '0 0 auto', padding: '0 16px' }}>
+                  キャンセル
+                </button>
+              </div>
+            </form>
+          ) : (
+            // 未登録 + フォーム未開放
+            <button
+              onClick={() => openSelfForm(false)}
+              className="flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-semibold transition-all"
+              style={{ background: 'var(--club-blue)', color: 'white' }}
+            >
+              <CalendarCheck size={15} /> 出欠を連絡する
+            </button>
+          )}
+        </div>
+      )}
+
+      {/* マネージャー/管理者向け：一括確定ボタン（練習開始時刻以降のみ） */}
+      {isManagerOrAdmin && attendance.length > 0 && !session.is_cancelled && canRegisterResult && (
         <div className="flex flex-col gap-2 px-3 py-3 rounded-xl"
           style={{ background: '#f0fdf4', border: '1px solid #bbf7d0' }}>
           <div className="flex items-center gap-2">
@@ -754,7 +1223,7 @@ function DetailPanel({
 
                   {/* 予定 + 実績 */}
                   <div className="flex items-center gap-2 flex-wrap mt-1.5">
-                    {/* 未確定: 予定バッジ＋実績プルダウン＋確定ボタン */}
+                    {/* 未確定: 予定バッジ（＋開始時刻以降なら実績プルダウン＋確定ボタン） */}
                     {!a.result_status ? (
                       <>
                         <div className="flex items-center gap-1">
@@ -767,36 +1236,40 @@ function DetailPanel({
                             {RESULT_STATUS_OPTIONS.find(o => o.value === a.status)?.label ?? a.status}
                           </span>
                         </div>
-                        <div className="flex items-center gap-1">
-                          <span className="text-xs" style={{ color: 'var(--gray-400)' }}>実績:</span>
-                          <select
-                            value={pendingStatus[a.id] ?? a.status}
-                            disabled={updatingId === a.id}
-                            onChange={e => setPendingStatus(prev => ({ ...prev, [a.id]: e.target.value as AttendanceStatus }))}
-                            className="text-xs rounded-lg border px-1.5 py-0.5 cursor-pointer"
-                            style={{
-                              borderColor: 'var(--gray-200)',
-                              background: 'var(--card-bg)',
-                              color: RESULT_STATUS_OPTIONS.find(o => o.value === (pendingStatus[a.id] ?? a.status))?.color ?? 'var(--gray-700)',
-                              fontSize: '12px',
-                            }}
-                          >
-                            {RESULT_STATUS_OPTIONS.map(o => (
-                              <option key={o.value} value={o.value}>{o.label}</option>
-                            ))}
-                          </select>
-                        </div>
-                        <button
-                          onClick={() => handleConfirmOne(a.id, (pendingStatus[a.id] ?? a.status) as AttendanceStatus)}
-                          disabled={updatingId === a.id}
-                          className="flex items-center gap-1 text-xs px-2 py-0.5 rounded-lg font-semibold cursor-pointer transition-opacity hover:opacity-80"
-                          style={{ background: '#dcfce7', color: '#15803d', border: '1px solid #86efac' }}
-                        >
-                          {updatingId === a.id
-                            ? <span className="w-2.5 h-2.5 border border-current border-t-transparent rounded-full animate-spin" />
-                            : <CheckCircle2 size={11} />}
-                          確定
-                        </button>
+                        {canRegisterResult && (
+                          <>
+                            <div className="flex items-center gap-1">
+                              <span className="text-xs" style={{ color: 'var(--gray-400)' }}>実績:</span>
+                              <select
+                                value={pendingStatus[a.id] ?? a.status}
+                                disabled={updatingId === a.id}
+                                onChange={e => setPendingStatus(prev => ({ ...prev, [a.id]: e.target.value as AttendanceStatus }))}
+                                className="text-xs rounded-lg border px-1.5 py-0.5 cursor-pointer"
+                                style={{
+                                  borderColor: 'var(--gray-200)',
+                                  background: 'var(--card-bg)',
+                                  color: RESULT_STATUS_OPTIONS.find(o => o.value === (pendingStatus[a.id] ?? a.status))?.color ?? 'var(--gray-700)',
+                                  fontSize: '12px',
+                                }}
+                              >
+                                {RESULT_STATUS_OPTIONS.map(o => (
+                                  <option key={o.value} value={o.value}>{o.label}</option>
+                                ))}
+                              </select>
+                            </div>
+                            <button
+                              onClick={() => handleConfirmOne(a.id, (pendingStatus[a.id] ?? a.status) as AttendanceStatus)}
+                              disabled={updatingId === a.id}
+                              className="flex items-center gap-1 text-xs px-2 py-0.5 rounded-lg font-semibold cursor-pointer transition-opacity hover:opacity-80"
+                              style={{ background: '#dcfce7', color: '#15803d', border: '1px solid #86efac' }}
+                            >
+                              {updatingId === a.id
+                                ? <span className="w-2.5 h-2.5 border border-current border-t-transparent rounded-full animate-spin" />
+                                : <CheckCircle2 size={11} />}
+                              確定
+                            </button>
+                          </>
+                        )}
                       </>
                     ) : (
                       /* 確定済み: 実績バッジ＋取消ボタン */
@@ -921,27 +1394,73 @@ function DetailPanel({
           <div className="flex flex-col gap-1.5">
             {[...unsubmitted]
               .sort((a, b) => (roleOrder[a.role] ?? 2) - (roleOrder[b.role] ?? 2))
-              .map(p => (
-              <div key={p.id}
-                className="flex items-center gap-2.5 px-3 py-2 rounded-xl"
-                style={{ background: '#fffbeb', border: '1px solid #fde68a' }}>
-                {p.avatar_url ? (
-                  <img src={p.avatar_url} alt=""
-                    className="w-7 h-7 rounded-full object-cover shrink-0" />
-                ) : (
-                  <div className="w-7 h-7 rounded-full flex items-center justify-center text-xs font-black shrink-0"
-                    style={{ background: '#fef3c7', color: '#b45309' }}>
-                    {(p.display_name ?? p.full_name).charAt(0)}
+              .map(p => {
+                const pendingVal = pendingUnsubmitted[p.id] ?? 'absent_unreported' as AttendanceStatus
+                return (
+                  <div key={p.id}
+                    className="flex items-center gap-2.5 px-3 py-2 rounded-xl flex-wrap"
+                    style={{
+                      background: '#fffbeb',
+                      border: '1px solid #fde68a',
+                      opacity: registeringId === p.id ? 0.6 : 1,
+                    }}>
+                    {p.avatar_url ? (
+                      <img src={p.avatar_url} alt=""
+                        className="w-7 h-7 rounded-full object-cover shrink-0" />
+                    ) : (
+                      <div className="w-7 h-7 rounded-full flex items-center justify-center text-xs font-black shrink-0"
+                        style={{ background: '#fef3c7', color: '#b45309' }}>
+                        {(p.display_name ?? p.full_name).charAt(0)}
+                      </div>
+                    )}
+                    <span className="text-sm font-medium" style={{ color: 'var(--gray-700)' }}>
+                      {p.display_name ?? p.full_name}
+                    </span>
+                    <span className="text-xs" style={{ color: 'var(--gray-400)' }}>
+                      {p.grade}年生
+                    </span>
+
+                    {isManagerOrAdmin && canRegisterResult && (
+                      <div className="flex items-center gap-1.5 ml-auto">
+                        <select
+                          value={pendingVal}
+                          disabled={registeringId === p.id}
+                          onChange={e => setPendingUnsubmitted(prev => ({
+                            ...prev, [p.id]: e.target.value as AttendanceStatus,
+                          }))}
+                          className="text-xs rounded-lg border px-1.5 py-0.5 cursor-pointer"
+                          style={{
+                            borderColor: 'var(--gray-200)',
+                            background: 'var(--card-bg)',
+                            color: RESULT_STATUS_OPTIONS.find(o => o.value === pendingVal)?.color ?? 'var(--gray-700)',
+                            fontSize: '12px',
+                          }}
+                        >
+                          {RESULT_STATUS_OPTIONS.map(o => (
+                            <option key={o.value} value={o.value}>{o.label}</option>
+                          ))}
+                        </select>
+                        <button
+                          disabled={registeringId === p.id}
+                          onClick={async () => {
+                            setRegisteringId(p.id)
+                            await onRegisterForUnsubmitted(p.id, pendingVal, p)
+                            setPendingUnsubmitted(prev => { const n = { ...prev }; delete n[p.id]; return n })
+                            setRegisteringId(null)
+                          }}
+                          className="flex items-center gap-1 text-xs px-2 py-0.5 rounded-lg font-semibold cursor-pointer transition-opacity hover:opacity-80"
+                          style={{ background: '#dcfce7', color: '#15803d', border: '1px solid #86efac' }}
+                        >
+                          {registeringId === p.id
+                            ? <span className="w-2.5 h-2.5 border border-current border-t-transparent rounded-full animate-spin" />
+                            : <CheckCircle2 size={11} />}
+                          実績登録
+                        </button>
+                      </div>
+                    )}
                   </div>
-                )}
-                <span className="text-sm font-medium" style={{ color: 'var(--gray-700)' }}>
-                  {p.display_name ?? p.full_name}
-                </span>
-                <span className="text-xs ml-auto" style={{ color: 'var(--gray-400)' }}>
-                  {p.grade}年生
-                </span>
-              </div>
-            ))}
+                )
+              })}
           </div>
         </div>
       )}
