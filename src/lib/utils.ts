@@ -41,17 +41,17 @@ export function isEmergencyReport(
   return diffMs >= 0 && diffMs <= 60 * 60 * 1000
 }
 
-/** 今週の出欠登録可能セッション情報を返す
+/** 出欠登録可能セッション情報を返す
  *
- * - 月・火(23:59前): 今週の水木金を事前登録可能
- * - 水・木・金: 当日分のみ
- * - 土・日 / 火23:59以降: 受付なし
+ * - 土・日: 来週の水木金を事前登録可能（締め切り：来週火曜23:59）
+ * - 月・火(23:59前): 今週の水木金を事前登録可能（締め切り：今週火曜23:59）
+ * - 水・木・金 / 火23:59以降: 受付なし（当日登録なし）
  */
 export function getWeeklyRegistrationInfo(now: Date = new Date()): {
   availableDates: string[]
   isRegistrationOpen: boolean   // 事前登録ウィンドウ中
-  deadline: Date | null         // 火曜23:59
-  isSameDayOnly: boolean        // 当日のみ(水〜金)
+  deadline: Date | null         // 対象週の火曜23:59
+  isSameDayOnly: boolean        // 常にfalse（当日登録廃止）
 } {
   const dow = now.getDay() // 0=日 1=月 2=火 3=水 4=木 5=金 6=土
 
@@ -64,33 +64,36 @@ export function getWeeklyRegistrationInfo(now: Date = new Date()): {
     return d
   }
 
-  // この週の月曜日
-  const monday = new Date(now)
-  monday.setDate(now.getDate() - (dow === 0 ? 6 : dow - 1))
-  monday.setHours(0, 0, 0, 0)
+  // 水〜金・火23:59以降: 受付なし
+  if (dow >= 3 && dow <= 5) {
+    return { availableDates: [], isRegistrationOpen: false, deadline: null, isSameDayOnly: false }
+  }
 
-  const wed = addDays(monday, 2)
-  const thu = addDays(monday, 3)
-  const fri = addDays(monday, 4)
+  // 対象週の月曜を計算
+  // 月(1)→0日後, 火(2)→-1日, 土(6)→+2日(来週月), 日(0)→+1日(来週月)
+  const daysToTargetMonday = dow === 1 ? 0 : dow === 2 ? -1 : dow === 6 ? 2 : 1
+  const targetMonday = addDays(now, daysToTargetMonday)
+  targetMonday.setHours(0, 0, 0, 0)
 
-  // 火曜23:59:59
-  const tueDL = addDays(monday, 1)
+  const wed = addDays(targetMonday, 2)
+  const thu = addDays(targetMonday, 3)
+  const fri = addDays(targetMonday, 4)
+
+  // 対象週の火曜23:59:59
+  const tueDL = addDays(targetMonday, 1)
   tueDL.setHours(23, 59, 59, 999)
 
-  if (dow >= 3 && dow <= 5) {
-    return { availableDates: [toDateStr(now)], isRegistrationOpen: false, deadline: null, isSameDayOnly: true }
+  // 火曜23:59以降は受付なし
+  if (dow === 2 && now > tueDL) {
+    return { availableDates: [], isRegistrationOpen: false, deadline: null, isSameDayOnly: false }
   }
 
-  if ((dow === 1 || dow === 2) && now <= tueDL) {
-    return {
-      availableDates: [toDateStr(wed), toDateStr(thu), toDateStr(fri)],
-      isRegistrationOpen: true,
-      deadline: tueDL,
-      isSameDayOnly: false,
-    }
+  return {
+    availableDates: [toDateStr(wed), toDateStr(thu), toDateStr(fri)],
+    isRegistrationOpen: true,
+    deadline: tueDL,
+    isSameDayOnly: false,
   }
-
-  return { availableDates: [], isRegistrationOpen: false, deadline: null, isSameDayOnly: false }
 }
 
 /** チーム戦闘力（全部員ポイント合計）に基づくレベル */

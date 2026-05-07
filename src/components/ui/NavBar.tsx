@@ -9,7 +9,6 @@ import { useViewRole } from '@/contexts/ViewRoleContext'
 import {
   Feather,
   LayoutDashboard,
-  CalendarCheck,
   CalendarDays,
   Users,
   LogOut,
@@ -24,11 +23,10 @@ import {
   Settings,
 } from 'lucide-react'
 
-// モバイル ボトムタブ定義（coach は出欠連絡を動的除外）
+// モバイル ボトムタブ定義
 const MOBILE_TABS = [
-  { href: '/dashboard',  icon: LayoutDashboard, label: 'ホーム' },
-  { href: '/attendance', icon: CalendarCheck,   label: '出欠連絡' },
-  { href: '/calendar',   icon: CalendarDays,    label: 'カレンダー' },
+  { href: '/dashboard', icon: LayoutDashboard, label: 'ホーム' },
+  { href: '/calendar',  icon: CalendarDays,    label: 'カレンダー' },
 ]
 
 export default function NavBar() {
@@ -59,16 +57,14 @@ export default function NavBar() {
     return () => document.removeEventListener('mousedown', handler)
   }, [])
 
-  const role      = viewRole
-  const isAdmin   = role === 'admin'
-  const isCoach   = role === 'coach'
-  const canReport = !isCoach  // member / manager / admin は出欠連絡可能
+  const role    = viewRole
+  const isAdmin = role === 'admin'
+  const isCoach = role === 'coach'
 
-  // ── PC 左ナビ（ホーム・[出欠連絡]・カレンダー・メンバー一覧/管理） ──
+  // ── PC 左ナビ（ホーム・カレンダー・メンバー一覧/管理） ──
   const desktopLeftItems = [
-    { href: '/dashboard',     icon: LayoutDashboard, label: 'ホーム' },
-    ...(canReport ? [{ href: '/attendance', icon: CalendarCheck, label: '出欠連絡' }] : []),
-    { href: '/calendar',      icon: CalendarDays,    label: 'カレンダー' },
+    { href: '/dashboard',  icon: LayoutDashboard, label: 'ホーム' },
+    { href: '/calendar',   icon: CalendarDays,    label: 'カレンダー' },
     {
       href: '/admin/members',
       icon: Users,
@@ -77,9 +73,7 @@ export default function NavBar() {
   ]
 
   // ── モバイルタブ ──
-  const mobileTabItems = isCoach
-    ? MOBILE_TABS.filter(i => i.href !== '/attendance')
-    : MOBILE_TABS
+  const mobileTabItems = MOBILE_TABS
 
   async function handleLogout() {
     await supabase.auth.signOut()

@@ -298,16 +298,23 @@ export default async function DashboardPage() {
 
           {/* 出席・遅刻・欠席 内訳 */}
           <div className="grid grid-cols-3 gap-2">
-            {[
-              { label: '出席', value: myScore?.present_count ?? 0, color: '#16a34a', bg: '#dcfce7' },
-              { label: '遅刻', value: myScore?.tardy_count ?? 0,   color: '#b45309', bg: '#fef3c7' },
-              { label: '欠席', value: myScore?.absent_count ?? 0,  color: '#b91c1c', bg: '#fee2e2' },
-            ].map(({ label, value, color, bg }) => (
-              <div key={label} className="flex flex-col items-center gap-1 py-3 rounded-xl" style={{ background: bg }}>
-                <span className="text-2xl font-black" style={{ color }}>{value}</span>
-                <span className="text-xs font-medium" style={{ color }}>{label}</span>
-              </div>
-            ))}
+            <div className="flex flex-col items-center gap-1 py-3 rounded-xl" style={{ background: '#dcfce7' }}>
+              <span className="text-2xl font-black" style={{ color: '#16a34a' }}>{myScore?.present_count ?? 0}</span>
+              <span className="text-xs font-medium" style={{ color: '#16a34a' }}>出席</span>
+            </div>
+            <div className="flex flex-col items-center gap-1 py-3 rounded-xl" style={{ background: '#fef3c7' }}>
+              <span className="text-2xl font-black" style={{ color: '#b45309' }}>{myScore?.tardy_count ?? 0}</span>
+              <span className="text-xs font-medium" style={{ color: '#b45309' }}>遅刻</span>
+            </div>
+            <div className="flex flex-col items-center gap-1 py-3 rounded-xl" style={{ background: '#fee2e2' }}>
+              <span className="text-2xl font-black" style={{ color: '#b91c1c' }}>{myScore?.absent_count ?? 0}</span>
+              <span className="text-xs font-medium" style={{ color: '#b91c1c' }}>欠席</span>
+              {(myScore?.unreported_count ?? 0) > 0 && (
+                <span className="text-xs font-semibold px-1.5 py-0.5 rounded-full" style={{ background: '#fca5a5', color: '#7f1d1d' }}>
+                  無断 {myScore!.unreported_count}回
+                </span>
+              )}
+            </div>
           </div>
 
           {/* 直近の出欠ドット */}

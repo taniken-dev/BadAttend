@@ -53,7 +53,7 @@ create table if not exists public.attendance_records (
                      'present',       -- 出席
                      'tardy',         -- 遅刻
                      'absent_normal', -- 通常欠席（1時間以上前の連絡）
-                     'absent_emergency', -- 緊急欠席（1時間以内の連絡）
+                     'absent_emergency', -- 当日欠席（出席予定で来なかった）
                      'absent_unreported' -- 無連絡欠席
                    )),
 

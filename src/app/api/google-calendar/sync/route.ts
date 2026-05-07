@@ -1,0 +1,197 @@
+import { google } from 'googleapis'
+import { createServerClient } from '@supabase/ssr'
+import { createClient as createAdminClient } from '@supabase/supabase-js'
+import { cookies } from 'next/headers'
+import { NextResponse } from 'next/server'
+import type { NextRequest } from 'next/server'
+
+function buildOAuthClient() {
+  const auth = new google.auth.OAuth2(
+    process.env.GOOGLE_CLIENT_ID,
+    process.env.GOOGLE_CLIENT_SECRET,
+  )
+  auth.setCredentials({ refresh_token: process.env.GOOGLE_REFRESH_TOKEN })
+  return auth
+}
+
+function parseCalendarIds(env: string | undefined): string[] {
+  return (env ?? '').split(',').map(s => s.trim()).filter(Boolean)
+}
+
+export async function GET(request: NextRequest) {
+  // 認証チェック（ログイン済みであれば誰でも同期可能）
+  const cookieStore = await cookies()
+  const supabase = createServerClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    {
+      cookies: {
+        getAll() { return cookieStore.getAll() },
+        setAll(cookiesToSet) {
+          cookiesToSet.forEach(({ name, value, options }) => {
+            try { cookieStore.set(name, value, options) } catch {}
+          })
+        },
+      },
+    }
+  )
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
+  const { searchParams } = new URL(request.url)
+  const year  = parseInt(searchParams.get('year')  ?? '', 10)
+  const month = parseInt(searchParams.get('month') ?? '', 10) // 1-indexed
+  if (isNaN(year) || isNaN(month)) {
+    return NextResponse.json({ error: 'year and month required' }, { status: 400 })
+  }
+
+  const activityCalendarIds = parseCalendarIds(process.env.GOOGLE_CALENDAR_ACTIVITY_IDS)
+  const campCalendarIds     = parseCalendarIds(process.env.GOOGLE_CALENDAR_CAMP_IDS)
+  const allActivityIds      = [...activityCalendarIds, ...campCalendarIds]
+
+  if (allActivityIds.length === 0) {
+    // 活動日カレンダー未設定の場合はSupabaseのセッションをそのまま返す
+    const startDate = `${year}-${String(month).padStart(2, '0')}-01`
+    const endDate   = `${year}-${String(month).padStart(2, '0')}-${new Date(year, month, 0).getDate()}`
+    const { data } = await supabase
+      .from('practice_sessions')
+      .select('id, session_date, start_time, end_time, location, is_cancelled, is_results_confirmed, results_confirmed_at, note, google_event_id, is_camp, created_at')
+      .gte('session_date', startDate)
+      .lte('session_date', endDate)
+    return NextResponse.json({ sessions: data ?? [] })
+  }
+
+  const campCalendarIdSet = new Set(campCalendarIds)
+
+  const timeMin   = new Date(year, month - 1, 1).toISOString()
+  const timeMax   = new Date(year, month, 0, 23, 59, 59).toISOString()
+  const startDate = `${year}-${String(month).padStart(2, '0')}-01`
+  const endDate   = `${year}-${String(month).padStart(2, '0')}-${new Date(year, month, 0).getDate()}`
+
+  try {
+    const auth     = buildOAuthClient()
+    const calendar = google.calendar({ version: 'v3', auth })
+
+    // 活動日・合宿カレンダーのイベントを全取得（カレンダーIDも保持）
+    const gcalResults = await Promise.all(
+      allActivityIds.map(calendarId =>
+        calendar.events.list({
+          calendarId,
+          timeMin,
+          timeMax,
+          singleEvents: true,
+          orderBy: 'startTime',
+          maxResults: 200,
+        }).then(res => (res.data.items ?? []).map(item => ({ item, calendarId })))
+      )
+    )
+    const gcalItems = gcalResults.flat()
+
+    // DB操作は service role で行う
+    const admin = createAdminClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.SUPABASE_SERVICE_ROLE_KEY!
+    )
+
+    // 終日イベントを日ごとに展開するヘルパー
+    function expandDates(startDate: string, endDateExclusive: string): string[] {
+      const dates: string[] = []
+      const cur = new Date(startDate + 'T12:00:00')
+      const end = new Date(endDateExclusive + 'T12:00:00')
+      while (cur < end) {
+        const y  = cur.getFullYear()
+        const mo = String(cur.getMonth() + 1).padStart(2, '0')
+        const d  = String(cur.getDate()).padStart(2, '0')
+        dates.push(`${y}-${mo}-${d}`)
+        cur.setDate(cur.getDate() + 1)
+      }
+      return dates
+    }
+
+    // GCal イベントを practice_sessions に upsert（複数日イベントは日ごとに展開）
+    const gcalEventIdSet = new Set<string>()
+
+    for (const { item, calendarId } of gcalItems) {
+      if (!item.id) continue
+      const startStr = item.start?.date ?? item.start?.dateTime
+      if (!startStr) continue
+      const isAllDay = !!item.start?.date
+      const isCamp   = campCalendarIdSet.has(calendarId)
+
+      if (isAllDay && item.end?.date) {
+        // 終日イベント（1日 or 複数日）
+        const dates      = expandDates(startStr, item.end.date)
+        const isMultiDay = dates.length > 1
+
+        for (const date of dates) {
+          // 複数日の場合は "{eventId}_{date}" で各日をユニークに識別
+          const googleEventId = isMultiDay ? `${item.id}_${date}` : item.id
+          gcalEventIdSet.add(googleEventId)
+
+          await admin.from('practice_sessions').upsert({
+            session_date:    date,
+            start_time:      '17:00:00',
+            end_time:        '20:00:00',
+            location:        item.location ?? '新習志野体育館',
+            note:            item.summary ?? null,
+            google_event_id: googleEventId,
+            is_camp:         isCamp,
+          }, { onConflict: 'session_date' })
+        }
+      } else {
+        // 時刻指定イベント（単日）
+        const date      = startStr.slice(0, 10)
+        const startTime = item.start?.dateTime?.slice(11, 19) ?? '17:00:00'
+        const endTime   = item.end?.dateTime?.slice(11, 19)   ?? '20:00:00'
+        gcalEventIdSet.add(item.id)
+
+        await admin.from('practice_sessions').upsert({
+          session_date:    date,
+          start_time:      startTime,
+          end_time:        endTime,
+          location:        item.location ?? '新習志野体育館',
+          note:            item.description ?? item.summary ?? null,
+          google_event_id: item.id,
+          is_camp:         isCamp,
+        }, { onConflict: 'session_date' })
+      }
+    }
+    const { data: gcalSessions } = await admin
+      .from('practice_sessions')
+      .select('id, google_event_id')
+      .gte('session_date', startDate)
+      .lte('session_date', endDate)
+      .not('google_event_id', 'is', null)
+
+    for (const session of gcalSessions ?? []) {
+      if (gcalEventIdSet.has(session.google_event_id)) continue
+      // 出欠記録がなければ削除
+      const { count } = await admin
+        .from('attendance_records')
+        .select('id', { count: 'exact', head: true })
+        .eq('session_id', session.id)
+      if ((count ?? 0) === 0) {
+        await admin.from('practice_sessions').delete().eq('id', session.id)
+      }
+    }
+
+    // 月の全セッション（手動作成分も含む）を返す
+    const { data: sessions } = await admin
+      .from('practice_sessions')
+      .select('id, session_date, start_time, end_time, location, is_cancelled, is_results_confirmed, results_confirmed_at, note, google_event_id, is_camp, created_at')
+      .gte('session_date', startDate)
+      .lte('session_date', endDate)
+      .order('session_date')
+
+    return NextResponse.json({ sessions: sessions ?? [] })
+  } catch (err) {
+    console.error('Google Calendar sync error:', err)
+    // 同期失敗時はSupabaseのデータをそのまま返してUIを壊さない
+    const { data } = await supabase
+      .from('practice_sessions')
+      .select('id, session_date, start_time, end_time, location, is_cancelled, is_results_confirmed, results_confirmed_at, note, google_event_id, is_camp, created_at')
+      .gte('session_date', startDate)
+      .lte('session_date', endDate)
+    return NextResponse.json({ sessions: data ?? [] })
+  }
+}
