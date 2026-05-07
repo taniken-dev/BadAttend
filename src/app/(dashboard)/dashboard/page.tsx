@@ -56,7 +56,7 @@ export default async function DashboardPage() {
   const warnedUserIds = ((warningData ?? []) as WarningFlag[]).map(w => w.user_id)
 
   // 今日のセッション
-  const today = new Date().toISOString().split('T')[0]
+  const today = new Intl.DateTimeFormat('sv-SE', { timeZone: 'Asia/Tokyo' }).format(new Date())
   const { data: todaySession } = await supabase
     .from('practice_sessions')
     .select('*')
@@ -92,11 +92,13 @@ export default async function DashboardPage() {
     myTodayRecord = data
   }
 
-  // 直近10回の自分の出欠履歴（coach は不要）
+  // 直近10回の自分の出欠実績（result_status 確定済みのみ・coach は不要）
   const { data: recentRecords } = isCoach ? { data: null } : await supabase
     .from('attendance_records')
-    .select('status, reason, practice_sessions(session_date)')
+    .select('result_status, practice_sessions!inner(session_date)')
     .eq('user_id', user.id)
+    .not('result_status', 'is', null)
+    .lte('practice_sessions.session_date', today)
     .order('created_at', { ascending: false })
     .limit(10)
 
@@ -326,12 +328,12 @@ export default async function DashboardPage() {
               <div className="flex gap-1.5 flex-wrap">
                 {recentRecords!.map((r: any, i: number) => {
                   const dotColor =
-                    r.status === 'present' ? '#16a34a' :
-                    r.status === 'tardy'   ? '#d97706' : '#dc2626'
+                    r.result_status === 'present' ? '#16a34a' :
+                    r.result_status === 'tardy'   ? '#d97706' : '#dc2626'
                   return (
                     <div
                       key={i}
-                      title={`${r.practice_sessions?.session_date ?? ''} ${ATTENDANCE_STATUS_LABELS[r.status as keyof typeof ATTENDANCE_STATUS_LABELS]}`}
+                      title={`${r.practice_sessions?.session_date ?? ''} ${ATTENDANCE_STATUS_LABELS[r.result_status as keyof typeof ATTENDANCE_STATUS_LABELS] ?? ''}`}
                       className="w-5 h-5 rounded-full"
                       style={{ background: dotColor, opacity: 1 - i * 0.06 }}
                     />

@@ -654,6 +654,7 @@ export default function CalendarView() {
             <DetailPanel
               detail={detail}
               isManagerOrAdmin={isManagerOrAdmin}
+              canSelfRegister={viewRole !== 'coach'}
               userId={userId}
               availableDates={availableDates}
               onSelfRegister={handleSelfRegister}
@@ -741,6 +742,7 @@ function GCalEventsPanel({ events }: { events: GoogleCalendarEvent[] }) {
 function DetailPanel({
   detail,
   isManagerOrAdmin,
+  canSelfRegister,
   userId,
   availableDates,
   onSelfRegister,
@@ -753,6 +755,7 @@ function DetailPanel({
 }: {
   detail: DayDetail
   isManagerOrAdmin: boolean
+  canSelfRegister: boolean
   userId: string | null
   availableDates: string[]
   onSelfRegister: (status: AttendanceStatus, reason: AbsenceReason | null, detail: string) => Promise<string | null>
@@ -965,8 +968,8 @@ function DetailPanel({
         </span>
       </div>
 
-      {/* 自分の出欠連絡（部員向け・登録可能期間のみ） */}
-      {!isManagerOrAdmin && userId && canRegister && (
+      {/* 自分の出欠連絡（顧問以外・登録可能期間のみ） */}
+      {canSelfRegister && userId && canRegister && (
         <div className="rounded-xl px-4 py-3.5 flex flex-col gap-3"
           style={{ background: 'color-mix(in srgb, var(--club-blue) 6%, var(--card-bg))', border: '1.5px solid color-mix(in srgb, var(--club-blue) 25%, white)' }}>
           <div className="flex items-center justify-between">
