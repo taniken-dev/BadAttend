@@ -160,10 +160,11 @@ export default function CalendarView() {
 
     // 2. GCal と自動同期（バックグラウンド）→ 終わったらセッションを上書き
     fetch(`/api/google-calendar/sync?year=${y}&month=${m + 1}`)
-      .then(r => r.ok ? r.json() : { sessions: [] })
-      .then(({ sessions }: { sessions: PracticeSession[] }) => {
+      .then(r => r.ok ? r.json() : null)
+      .then((body: { sessions: PracticeSession[] } | null) => {
+        if (!body) return
         const map: SessionMap = {}
-        ;(sessions ?? []).forEach(s => { map[s.session_date] = s })
+        ;(body.sessions ?? []).forEach(s => { map[s.session_date] = s })
         setSessions(map)
       })
       .catch(() => {})
@@ -1108,7 +1109,7 @@ function DetailPanel({
                   )}
                 </button>
                 <button type="button" onClick={closeSelfForm} className="btn-secondary"
-                  style={{ flex: '0 0 auto', padding: '0 16px' }}>
+                  style={{ flex: '0 0 auto', padding: '0 16px', width: 'auto' }}>
                   キャンセル
                 </button>
               </div>
