@@ -64,6 +64,21 @@ export function getWeeklyRegistrationInfo(now: Date = new Date()): {
     return d
   }
 
+  // 特例: 2026-05-13〜05-15 の週は 05-15 23:59 まで登録可能
+  const SPECIAL_DATES = ['2026-05-13', '2026-05-14', '2026-05-15']
+  const specialDeadline = new Date('2026-05-15T23:59:59.999')
+  if (now <= specialDeadline) {
+    const todayStr = toDateStr(now)
+    if (SPECIAL_DATES.includes(todayStr)) {
+      return {
+        availableDates: SPECIAL_DATES,
+        isRegistrationOpen: true,
+        deadline: specialDeadline,
+        isSameDayOnly: false,
+      }
+    }
+  }
+
   // 水〜金・火23:59以降: 受付なし
   if (dow >= 3 && dow <= 5) {
     return { availableDates: [], isRegistrationOpen: false, deadline: null, isSameDayOnly: false }
