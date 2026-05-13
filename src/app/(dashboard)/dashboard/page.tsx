@@ -75,9 +75,16 @@ export default async function DashboardPage() {
       .select('status, reason, reason_detail, profiles!inner(full_name, display_name, grade)')
       .eq('session_id', todaySession.id)
 
+    const sortByGradeName = (a: AttendeeRow, b: AttendeeRow) => {
+      const gradeDiff = (b.profiles.grade ?? 0) - (a.profiles.grade ?? 0)
+      if (gradeDiff !== 0) return gradeDiff
+      const nameA = a.profiles.display_name ?? a.profiles.full_name
+      const nameB = b.profiles.display_name ?? b.profiles.full_name
+      return nameA.localeCompare(nameB, 'ja')
+    }
     const all = (records ?? []) as unknown as AttendeeRow[]
-    attendees = all.filter(r => r.status === 'present' || r.status === 'tardy')
-    absentees = all.filter(r => r.status !== 'present' && r.status !== 'tardy')
+    attendees = all.filter(r => r.status === 'present' || r.status === 'tardy').sort(sortByGradeName)
+    absentees = all.filter(r => r.status !== 'present' && r.status !== 'tardy').sort(sortByGradeName)
   }
 
   // 自分の今日の出欠（coach は不要）

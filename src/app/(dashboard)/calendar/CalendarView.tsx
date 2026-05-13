@@ -120,7 +120,7 @@ export default function CalendarView() {
   const today    = new Date()
   const todayStr = toDateStr(today.getFullYear(), today.getMonth(), today.getDate())
 
-  const { viewRole } = useViewRole()
+  const { viewRole, realRole } = useViewRole()
   const [userId,       setUserId]      = useState<string | null>(null)
   const [current,      setCurrent]     = useState(new Date(today.getFullYear(), today.getMonth(), 1))
   const [sessions,     setSessions]    = useState<SessionMap>({})
@@ -222,9 +222,10 @@ export default function CalendarView() {
       .filter(r => profileMap[r.user_id])
       .map(r => ({ ...r, profile: profileMap[r.user_id] }))
 
-    const unsubmitted = everyone.filter(p => !submittedIds.has(p.id))
+    const nonCoachMembers = everyone.filter(p => p.role !== 'coach')
+    const unsubmitted = nonCoachMembers.filter(p => !submittedIds.has(p.id))
 
-    setDetail({ session, attendance, unsubmitted, totalApproved: everyone.length })
+    setDetail({ session, attendance, unsubmitted, totalApproved: nonCoachMembers.length })
     setLoading(false)
   }, [sessions, selectedDate, gcalEvents])
 
@@ -655,7 +656,7 @@ export default function CalendarView() {
             <DetailPanel
               detail={detail}
               isManagerOrAdmin={isManagerOrAdmin}
-              canSelfRegister={viewRole !== 'coach'}
+              canSelfRegister={realRole !== 'coach'}
               userId={userId}
               availableDates={availableDates}
               onSelfRegister={handleSelfRegister}
@@ -858,7 +859,15 @@ function DetailPanel({
 
   const roleOrder: Record<string, number> = { admin: 0, manager: 1, member: 2, coach: 3 }
   const sortMembers = (list: EnrichedAttendance[]) =>
-    [...list].sort((a, b) => (roleOrder[a.profile.role] ?? 2) - (roleOrder[b.profile.role] ?? 2))
+    [...list].sort((a, b) => {
+      const roleDiff = (roleOrder[a.profile.role] ?? 2) - (roleOrder[b.profile.role] ?? 2)
+      if (roleDiff !== 0) return roleDiff
+      const gradeDiff = (b.profile.grade ?? 0) - (a.profile.grade ?? 0)
+      if (gradeDiff !== 0) return gradeDiff
+      const nameA = a.profile.display_name ?? a.profile.full_name
+      const nameB = b.profile.display_name ?? b.profile.full_name
+      return nameA.localeCompare(nameB, 'ja')
+    })
 
   const allMembers = sortMembers(attendance)
   const unconfirmedCount = attendance.filter(a => !a.result_status).length
@@ -1397,7 +1406,15 @@ function DetailPanel({
           )}
           <div className="flex flex-col gap-1.5">
             {[...unsubmitted]
-              .sort((a, b) => (roleOrder[a.role] ?? 2) - (roleOrder[b.role] ?? 2))
+              .sort((a, b) => {
+                const roleDiff = (roleOrder[a.role] ?? 2) - (roleOrder[b.role] ?? 2)
+                if (roleDiff !== 0) return roleDiff
+                const gradeDiff = (b.grade ?? 0) - (a.grade ?? 0)
+                if (gradeDiff !== 0) return gradeDiff
+                const nameA = a.display_name ?? a.full_name
+                const nameB = b.display_name ?? b.full_name
+                return nameA.localeCompare(nameB, 'ja')
+              })
               .map(p => {
                 const pendingVal = pendingUnsubmitted[p.id] ?? 'absent_unreported' as AttendanceStatus
                 return (

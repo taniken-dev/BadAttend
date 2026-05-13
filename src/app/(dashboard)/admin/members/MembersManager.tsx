@@ -66,8 +66,18 @@ export default function MembersManager({
   const [editName, setEditName]     = useState('')
   const [saving, setSaving]         = useState(false)
 
+  const roleOrder: Record<string, number> = { admin: 0, manager: 1, member: 2, coach: 3 }
+  const sortByRoleGradeName = (a: Profile, b: Profile) => {
+    const roleDiff = (roleOrder[a.role] ?? 2) - (roleOrder[b.role] ?? 2)
+    if (roleDiff !== 0) return roleDiff
+    const gradeDiff = (b.grade ?? 0) - (a.grade ?? 0)
+    if (gradeDiff !== 0) return gradeDiff
+    const nameA = a.display_name ?? a.full_name
+    const nameB = b.display_name ?? b.full_name
+    return nameA.localeCompare(nameB, 'ja')
+  }
   const pending  = useMemo(() => members.filter(m => !m.is_approved), [members])
-  const approved = useMemo(() => members.filter(m => m.is_approved),  [members])
+  const approved = useMemo(() => [...members.filter(m => m.is_approved)].sort(sortByRoleGradeName), [members])
 
   function showToast(msg: string, ok: boolean) {
     setToast({ msg, ok })
