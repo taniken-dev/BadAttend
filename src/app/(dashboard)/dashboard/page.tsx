@@ -65,15 +65,28 @@ export default async function DashboardPage() {
     .single<PracticeSession>()
 
   // 今日の全出欠レコード
+  type RawRecord = { user_id: string; status: string; reason: string | null; reason_detail: string | null }
   type AttendeeRow = { status: string; reason: string | null; reason_detail: string | null; profiles: { full_name: string; display_name: string | null; grade: number } }
   let attendees: AttendeeRow[] = []
   let absentees: AttendeeRow[] = []
 
   if (todaySession) {
-    const { data: records } = await supabase
-      .from('attendance_records')
-      .select('status, reason, reason_detail, profiles!inner(full_name, display_name, grade)')
-      .eq('session_id', todaySession.id)
+    // profiles!inner の RLS 問題を避けるため別クエリで取得してコード結合
+    const [{ data: records }, { data: profileList }] = await Promise.all([
+      supabase
+        .from('attendance_records')
+        .select('user_id, status, reason, reason_detail')
+        .eq('session_id', todaySession.id),
+      supabase
+        .from('profiles')
+        .select('id, full_name, display_name, grade')
+        .eq('is_approved', true),
+    ])
+
+    const profileMap = Object.fromEntries(
+      ((profileList ?? []) as { id: string; full_name: string; display_name: string | null; grade: number }[])
+        .map(p => [p.id, p])
+    )
 
     const sortByGradeName = (a: AttendeeRow, b: AttendeeRow) => {
       const gradeDiff = (b.profiles.grade ?? 0) - (a.profiles.grade ?? 0)
@@ -82,7 +95,11 @@ export default async function DashboardPage() {
       const nameB = b.profiles.display_name ?? b.profiles.full_name
       return nameA.localeCompare(nameB, 'ja')
     }
-    const all = (records ?? []) as unknown as AttendeeRow[]
+
+    const all: AttendeeRow[] = ((records ?? []) as RawRecord[])
+      .filter(r => profileMap[r.user_id])
+      .map(r => ({ ...r, profiles: profileMap[r.user_id] }))
+
     attendees = all.filter(r => r.status === 'present' || r.status === 'tardy').sort(sortByGradeName)
     absentees = all.filter(r => r.status !== 'present' && r.status !== 'tardy').sort(sortByGradeName)
   }
@@ -227,7 +244,7 @@ export default async function DashboardPage() {
               </div>
               <div className="flex flex-col">
                 {absentees.map((a, i) => (
-                  <div key={i} className="list-item">
+                  <div key={i} className="flex items-center gap-3 py-2">
                     <div
                       className="w-8 h-8 rounded-lg flex items-center justify-center text-xs font-black shrink-0"
                       style={{ background: '#fee2e2', color: '#b91c1c' }}
