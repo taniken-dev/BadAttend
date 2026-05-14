@@ -266,29 +266,42 @@ export default function CalendarView() {
     newStatus: AttendanceStatus,
     sessionDate: string,
   ) => {
-    if (!userId) return
+    if (!userId || !detail) return
     const { error } = await supabase
       .from('attendance_records')
       .update({ result_status: newStatus, verified_by: userId })
       .eq('id', recordId)
     if (error) return
+
+    // セッションが未確定なら is_results_confirmed を DB でも true にする
+    if (!detail.session.is_results_confirmed) {
+      await supabase
+        .from('practice_sessions')
+        .update({
+          is_results_confirmed: true,
+          results_confirmed_at: new Date().toISOString(),
+          results_confirmed_by: userId,
+        })
+        .eq('id', detail.session.id)
+    }
+
     // detail を楽観的に更新
     setDetail(prev => {
       if (!prev) return prev
       return {
         ...prev,
+        session: { ...prev.session, is_results_confirmed: true },
         attendance: prev.attendance.map(a =>
           a.id === recordId ? { ...a, result_status: newStatus } : a
         ),
       }
     })
-    // sessions の確定フラグを更新（未確定→確定済みに）
     setSessions(prev => {
       const session = prev[sessionDate]
       if (!session || session.is_results_confirmed) return prev
       return { ...prev, [sessionDate]: { ...session, is_results_confirmed: true } }
     })
-  }, [userId])
+  }, [userId, detail])
 
   // ── セッション全員の実績を一括確定 ──────────────────────
   const handleBulkConfirm = useCallback(async () => {

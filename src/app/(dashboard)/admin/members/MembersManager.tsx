@@ -172,6 +172,18 @@ export default function MembersManager({
     router.refresh()
   }
 
+  async function updateJoinedAt(id: string, date: string) {
+    setUpdating(id)
+    const { error } = await supabase
+      .from('profiles')
+      .update({ joined_at: date || null })
+      .eq('id', id)
+    setUpdating(null)
+    if (error) { showToast('更新失敗', false); return }
+    showToast('入部日を更新しました', true)
+    router.refresh()
+  }
+
   return (
     <div className="flex flex-col gap-5">
       {/* ヘッダー */}
@@ -517,6 +529,7 @@ export default function MembersManager({
                       )}
                     </div>
                   ) : (
+                  <>
                   <div className={m.role === 'manager' ? 'flex justify-center gap-2' : 'grid grid-cols-3 gap-2'}>
                     {/* 学年（顧問には非表示） */}
                     {m.role !== 'coach' && (
@@ -591,6 +604,31 @@ export default function MembersManager({
                       </div>
                     </div>
                   </div>
+
+                  {/* 入部日（admin のみ・coach 以外） */}
+                  {m.role !== 'coach' && (
+                    <div className="mt-2">
+                      <label className="label" style={{ fontSize: '11px' }}>
+                        入部日
+                        <span className="ml-1 font-normal" style={{ color: 'var(--gray-400)' }}>
+                          （未設定時は学年から自動計算）
+                        </span>
+                      </label>
+                      <input
+                        type="date"
+                        defaultValue={m.joined_at ?? ''}
+                        disabled={updating === m.id}
+                        onBlur={e => {
+                          if (e.target.value !== (m.joined_at ?? '')) {
+                            updateJoinedAt(m.id, e.target.value)
+                          }
+                        }}
+                        className="input-field"
+                        style={{ padding: '7px 10px', fontSize: '13px', maxWidth: '160px' }}
+                      />
+                    </div>
+                  )}
+                  </>
                   )}
                 </div>
               )

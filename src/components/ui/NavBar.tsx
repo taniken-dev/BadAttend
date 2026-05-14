@@ -42,6 +42,7 @@ export default function NavBar() {
   const [sugBody,        setSugBody]       = useState('')
   const [submitting,     setSubmitting]    = useState(false)
   const [submitted,      setSubmitted]     = useState(false)
+  const [submitError,    setSubmitError]   = useState(false)
 
   const gearRef = useRef<HTMLDivElement>(null)
   const moreRef = useRef<HTMLDivElement>(null)
@@ -84,8 +85,13 @@ export default function NavBar() {
   async function submitSuggestion() {
     if (!sugTitle.trim() || !sugBody.trim()) return
     setSubmitting(true)
-    await supabase.from('suggestions').insert({ title: sugTitle.trim(), body: sugBody.trim() })
+    setSubmitError(false)
+    const { error } = await supabase.from('suggestions').insert({ title: sugTitle.trim(), body: sugBody.trim() })
     setSubmitting(false)
+    if (error) {
+      setSubmitError(true)
+      return
+    }
     setSubmitted(true)
     setTimeout(() => {
       setSubmitted(false); setSugTitle(''); setSugBody(''); setShowSuggestion(false)
@@ -484,6 +490,12 @@ export default function NavBar() {
                     {sugBody.length} / 1000
                   </p>
                 </div>
+                {submitError && (
+                  <div className="px-3 py-2 rounded-xl text-xs font-semibold"
+                    style={{ background: '#fee2e2', color: '#b91c1c' }}>
+                    送信に失敗しました。時間をおいて再度お試しください。
+                  </div>
+                )}
                 <div className="flex gap-2 pb-2">
                   <button
                     onClick={() => setShowSuggestion(false)} disabled={submitting}

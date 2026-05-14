@@ -28,6 +28,7 @@ export interface Profile {
   lockout_until: string | null
   avatar_url: string | null
   is_approved: boolean
+  joined_at: string | null
   created_at: string
   updated_at: string
 }
