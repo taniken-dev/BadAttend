@@ -15,7 +15,11 @@
       "Read(//c/msys64/ucrt64/bin/**)",
       "Bash(pacman -S mingw-w64-ucrt-x86_64-python-docx --noconfirm)",
       "PowerShell($pyPath = \"C:\\\\Users\\\\kenta\\\\AppData\\\\Local\\\\Microsoft\\\\WindowsApps\\\\python.exe\"; & $pyPath -m pip install python-docx --quiet; & $pyPath docs/generate_manuals.py)",
-      "PowerShell($env:PYTHONIOENCODING = \"utf-8\"; $pyPath = \"C:\\\\Users\\\\kenta\\\\AppData\\\\Local\\\\Microsoft\\\\WindowsApps\\\\python.exe\"; & $pyPath docs/generate_manuals.py 2>&1)"
+      "PowerShell($env:PYTHONIOENCODING = \"utf-8\"; $pyPath = \"C:\\\\Users\\\\kenta\\\\AppData\\\\Local\\\\Microsoft\\\\WindowsApps\\\\python.exe\"; & $pyPath docs/generate_manuals.py 2>&1)",
+      "PowerShell($supaPath = \"$env:USERPROFILE\\\\.supabase\"; if \\(Test-Path $supaPath\\) { Get-ChildItem $supaPath } else { \"Not found\" })",
+      "PowerShell($env:SUPABASE_ACCESS_TOKEN)",
+      "PowerShell(Get-ChildItem -Path \"c:\\\\Users\\\\kenta\\\\projects\\\\Attend-app\" -Directory | Where-Object { $_.Name -notmatch \"^\\\\.next|node_modules\" })",
+      "Bash(grep -E \"\\\\.sql$\")"
     ],
     "additionalDirectories": [
       "c:\\Users\\kenta\\projects\\Attend-app"
