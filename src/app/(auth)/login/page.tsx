@@ -41,7 +41,9 @@ export default function LoginPage() {
   function handleLineLogin() {
     setLineLoading(true)
     setError(null)
-    window.location.href = '/api/auth/line'
+    const isPwa = window.matchMedia('(display-mode: standalone)').matches
+      || (navigator as Navigator & { standalone?: boolean }).standalone === true
+    window.location.href = isPwa ? '/api/auth/line?pwa=1' : '/api/auth/line'
   }
 
   return (
