@@ -1,4 +1,4 @@
-import { google } from 'googleapis'
+import { google, type calendar_v3 } from 'googleapis'
 import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
 import { NextResponse } from 'next/server'
@@ -70,7 +70,12 @@ export async function GET(request: NextRequest) {
             singleEvents: true,
             orderBy: 'startTime',
             maxResults: 100,
-          }).then(res => ({ calendarId, items: res.data.items ?? [] }))
+          })
+            .then(res => ({ calendarId, items: res.data.items ?? [] }))
+            .catch((err: unknown) => {
+              console.error(`Google Calendar fetch failed for ${calendarId}:`, err)
+              return { calendarId, items: [] as calendar_v3.Schema$Event[] }
+            })
         )
       ),
       supabase
