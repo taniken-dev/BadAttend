@@ -145,6 +145,8 @@ export default function CalendarView() {
     const m = current.getMonth()
     const s = toDateStr(y, m, 1)
     const e = toDateStr(y, m, new Date(y, m + 1, 0).getDate())
+    const abort = new AbortController()
+    const { signal } = abort
 
     // 1. Supabase から即座に既存セッションを表示（高速）
     supabase
@@ -152,14 +154,16 @@ export default function CalendarView() {
       .select('id, session_date, start_time, end_time, location, is_cancelled, is_results_confirmed, results_confirmed_at, note, google_event_id, is_camp, created_at')
       .gte('session_date', s)
       .lte('session_date', e)
+      .abortSignal(signal)
       .then(({ data }) => {
+        if (signal.aborted) return
         const map: SessionMap = {}
         ;(data ?? []).forEach(s => { map[s.session_date] = s as PracticeSession })
         setSessions(map)
       })
 
     // 2. GCal と自動同期（バックグラウンド）→ 終わったらセッションを上書き
-    fetch(`/api/google-calendar/sync?year=${y}&month=${m + 1}`)
+    fetch(`/api/google-calendar/sync?year=${y}&month=${m + 1}`, { signal })
       .then(r => r.ok ? r.json() : null)
       .then((body: { sessions: PracticeSession[] } | null) => {
         if (!body) return
@@ -170,7 +174,7 @@ export default function CalendarView() {
       .catch(() => {})
 
     // 3. 大会・合宿など（表示のみ）のGCalイベントを取得
-    fetch(`/api/google-calendar/events?year=${y}&month=${m + 1}`)
+    fetch(`/api/google-calendar/events?year=${y}&month=${m + 1}`, { signal })
       .then(r => r.ok ? r.json() : { events: [] })
       .then(({ events }: { events: GoogleCalendarEvent[] }) => {
         const map: Record<string, GoogleCalendarEvent[]> = {}
@@ -185,6 +189,7 @@ export default function CalendarView() {
 
     setSelectedDate(null)
     setDetail(null)
+    return () => abort.abort()
   }, [current])
 
   // ── 日付クリック → 詳細取得 ──────────────────────────────

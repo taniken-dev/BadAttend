@@ -108,6 +108,23 @@ export async function GET(request: NextRequest) {
       return dates
     }
 
+    // マルチデイIDからベースイベントIDを取り出す（"eventId_YYYY-MM-DD" → "eventId"）
+    function baseEventId(id: string): string {
+      const m = id.match(/^(.+)_\d{4}-\d{2}-\d{2}$/)
+      return m ? m[1] : id
+    }
+
+    // 既存セッションの日付→google_event_id マップを事前取得（上書き衝突防止用）
+    const { data: existingMonthSessions } = await admin
+      .from('practice_sessions')
+      .select('session_date, google_event_id')
+      .gte('session_date', startDate)
+      .lte('session_date', endDate)
+
+    const claimedDates = new Map<string, string | null>(
+      (existingMonthSessions ?? []).map(s => [s.session_date, s.google_event_id as string | null])
+    )
+
     // GCal イベントを practice_sessions に upsert（複数日イベントは日ごとに展開）
     const gcalEventIdSet = new Set<string>()
 
@@ -128,6 +145,10 @@ export async function GET(request: NextRequest) {
           const googleEventId = isMultiDay ? `${item.id}_${date}` : item.id
           gcalEventIdSet.add(googleEventId)
 
+          // 別のGCalイベントがこの日付を先に確保していればスキップ（上書き防止）
+          const existing = claimedDates.get(date)
+          if (existing != null && baseEventId(existing) !== item.id) continue
+
           await admin.from('practice_sessions').upsert({
             session_date:    date,
             start_time:      '17:00:00',
@@ -137,6 +158,7 @@ export async function GET(request: NextRequest) {
             google_event_id: googleEventId,
             is_camp:         isCamp,
           }, { onConflict: 'session_date' })
+          claimedDates.set(date, googleEventId)
         }
       } else {
         // 時刻指定イベント（単日）
@@ -144,6 +166,10 @@ export async function GET(request: NextRequest) {
         const startTime = item.start?.dateTime?.slice(11, 19) ?? '17:00:00'
         const endTime   = item.end?.dateTime?.slice(11, 19)   ?? '20:00:00'
         gcalEventIdSet.add(item.id)
+
+        // 別のGCalイベントがこの日付を先に確保していればスキップ（上書き防止）
+        const existing = claimedDates.get(date)
+        if (existing != null && baseEventId(existing) !== item.id) continue
 
         await admin.from('practice_sessions').upsert({
           session_date:    date,
@@ -154,6 +180,7 @@ export async function GET(request: NextRequest) {
           google_event_id: item.id,
           is_camp:         isCamp,
         }, { onConflict: 'session_date' })
+        claimedDates.set(date, item.id)
       }
     }
     const { data: gcalSessions } = await admin
