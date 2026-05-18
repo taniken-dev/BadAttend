@@ -31,10 +31,5 @@ export async function GET(request: NextRequest) {
   response.cookies.set('line_state', state, cookieOpts)
   response.cookies.set('line_nonce', nonce, cookieOpts)
 
-  // PWA から開始されたログインを記録（コールバック後の案内ページ表示に使用）
-  if (request.nextUrl.searchParams.get('pwa') === '1') {
-    response.cookies.set('line_from_pwa', '1', cookieOpts)
-  }
-
   return response
 }

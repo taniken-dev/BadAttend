@@ -14,12 +14,10 @@ export async function GET(request: NextRequest) {
   const next       = searchParams.get('next') ?? '/dashboard'
 
   const savedState  = request.cookies.get('line_state')?.value
-  const fromPwa     = request.cookies.get('line_from_pwa')?.value === '1'
-  const resolvedNext = fromPwa ? '/auth/back-to-app' : next
 
   // ① LINE コールバック（state クッキーと一致）
   if (state && savedState && state === savedState && code) {
-    return handleLineCallback(code, origin, resolvedNext, fromPwa)
+    return handleLineCallback(code, origin, next)
   }
 
   // ② magic link 経由のセッション確立（LINE callback から内部リダイレクト）
@@ -37,7 +35,7 @@ export async function GET(request: NextRequest) {
 
 // ─── LINE OAuth コールバック ───────────────────────────────────────────────
 
-async function handleLineCallback(code: string, origin: string, next: string, fromPwa = false) {
+async function handleLineCallback(code: string, origin: string, next: string) {
   // 1. LINE トークン取得
   const tokenRes = await fetch('https://api.line.me/oauth2/v2.1/token', {
     method:  'POST',
@@ -159,7 +157,6 @@ async function handleLineCallback(code: string, origin: string, next: string, fr
   const response = NextResponse.redirect(callbackUrl)
   response.cookies.delete('line_state')
   response.cookies.delete('line_nonce')
-  if (fromPwa) response.cookies.delete('line_from_pwa')
   return response
 }
 

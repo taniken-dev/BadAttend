@@ -43,7 +43,8 @@ export default function LoginPage() {
     setError(null)
     const isPwa = window.matchMedia('(display-mode: standalone)').matches
       || (navigator as Navigator & { standalone?: boolean }).standalone === true
-    window.location.href = isPwa ? '/api/auth/line?pwa=1' : '/api/auth/line'
+    if (isPwa) localStorage.setItem('pwa_auth_pending', '1')
+    window.location.href = '/api/auth/line'
   }
 
   return (
