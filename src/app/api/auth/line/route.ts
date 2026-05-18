@@ -21,7 +21,6 @@ export async function GET(request: NextRequest) {
     `https://access.line.me/oauth2/v2.1/authorize?${params}`
   )
 
-  // state を httpOnly クッキーに保存（CSRF対策）
   const cookieOpts = {
     httpOnly: true,
     secure:   process.env.NODE_ENV === 'production',
@@ -31,6 +30,11 @@ export async function GET(request: NextRequest) {
   }
   response.cookies.set('line_state', state, cookieOpts)
   response.cookies.set('line_nonce', nonce, cookieOpts)
+
+  // PWA から開始されたログインを記録（コールバック後の案内ページ表示に使用）
+  if (request.nextUrl.searchParams.get('pwa') === '1') {
+    response.cookies.set('line_from_pwa', '1', cookieOpts)
+  }
 
   return response
 }
