@@ -436,16 +436,18 @@ export default function CalendarView() {
   ): Promise<string | null> => {
     if (!detail || !userId) return 'エラー'
     const session = detail.session
-    const isAbsent = status === 'absent_normal'
+    const isAbsent = status === 'absent_normal' || status === 'absent_emergency'
     const existingRecord = detail.attendance.find(a => a.user_id === userId) ?? null
 
-    const payload = {
+    const payload: Record<string, unknown> = {
       session_id:    session.id,
       user_id:       userId,
       status,
       reason:        isAbsent ? reason : null,
       reason_detail: isAbsent ? (reasonDetail.trim() || null) : null,
       reported_at:   new Date().toISOString(),
+      // 当日欠席は管理者確認を待たず即実績確定
+      ...(status === 'absent_emergency' ? { result_status: 'absent_emergency' } : {}),
     }
 
     let resultData: AttendanceRow | null = null
@@ -817,9 +819,17 @@ function DetailPanel({
   }, [session.id])
 
   const myRecord = attendance.find(a => a.user_id === userId) ?? null
-  // 合宿は公開後いつでも出欠登録可能、通常練習は登録可能期間のみ
+
+  // 当日欠席ウィンドウ: 練習日当日の開始時刻前のみ（合宿は対象外）
+  const nowForWindow = new Date()
+  const todayForWindow = `${nowForWindow.getFullYear()}-${String(nowForWindow.getMonth()+1).padStart(2,'0')}-${String(nowForWindow.getDate()).padStart(2,'0')}`
+  const sessionStartAt2 = new Date(`${session.session_date}T${session.start_time}`)
+  const isSameDayAbsenceWindow = !session.is_cancelled && !session.is_camp &&
+    session.session_date === todayForWindow && nowForWindow < sessionStartAt2
+
+  // 合宿は公開後いつでも出欠登録可能、通常練習は登録可能期間 or 当日欠席ウィンドウ
   const canRegister = !session.is_cancelled &&
-    (session.is_camp || availableDates.includes(session.session_date))
+    (session.is_camp || availableDates.includes(session.session_date) || isSameDayAbsenceWindow)
 
   // 実績登録は練習開始時刻以降のみ（合宿は常に可能）
   const sessionStartAt = new Date(`${session.session_date}T${session.start_time}`)
@@ -862,7 +872,10 @@ function DetailPanel({
     if (selfIsAbsent && selfReason === 'other' && !selfDetail.trim()) return
     setSelfSubmitting(true)
     setSelfError(null)
-    const err = await onSelfRegister(selfStatus, selfIsAbsent ? selfReason : null, selfDetail)
+    // 当日欠席ウィンドウ中は absent_normal → absent_emergency に変換
+    const actualStatus: AttendanceStatus =
+      isSameDayAbsenceWindow && selfStatus === 'absent_normal' ? 'absent_emergency' : selfStatus
+    const err = await onSelfRegister(actualStatus, selfIsAbsent ? selfReason : null, selfDetail)
     setSelfSubmitting(false)
     if (err) { setSelfError(err); return }
     closeSelfForm()
@@ -1050,18 +1063,31 @@ function DetailPanel({
                 </span>
               )}
 
+              {/* 当日欠席警告バナー */}
+              {isSameDayAbsenceWindow && (
+                <div className="flex items-center gap-2 px-3 py-2.5 rounded-xl text-xs font-semibold"
+                  style={{ background: '#fef3c7', color: '#92400e', border: '1px solid #fcd34d' }}>
+                  <AlertCircle size={13} className="shrink-0" />
+                  当日欠席として送信されます。実績が即座に確定します。
+                </div>
+              )}
+
               {/* ステータス選択 */}
               <div className="grid grid-cols-3 gap-2">
                 {MEMBER_STATUS_OPTIONS.map(({ value, label, description, color, icon: Icon }) => {
-                  const active = selfStatus === value
-                    || (value === 'absent_normal' && (selfStatus === 'absent_emergency' || selfStatus === 'absent_unreported'))
+                  const disabled = isSameDayAbsenceWindow && value !== 'absent_normal'
+                  const active = !disabled && (selfStatus === value
+                    || (value === 'absent_normal' && (selfStatus === 'absent_emergency' || selfStatus === 'absent_unreported')))
                   return (
                     <button key={value} type="button"
-                      onClick={() => { setSelfStatus(value); if (value !== 'absent_normal') setSelfReason(null) }}
+                      onClick={() => { if (!disabled) { setSelfStatus(value); if (value !== 'absent_normal') setSelfReason(null) } }}
+                      disabled={disabled}
                       className="flex flex-col items-center gap-2 py-3 rounded-xl text-center transition-all"
                       style={{
                         border: `1.5px solid ${active ? color : 'var(--gray-200)'}`,
                         background: active ? `color-mix(in srgb, ${color} 15%, var(--gray-100))` : 'var(--gray-100)',
+                        opacity: disabled ? 0.35 : 1,
+                        cursor: disabled ? 'not-allowed' : 'pointer',
                       }}
                     >
                       <Icon size={18} style={{ color: active ? color : 'var(--gray-500)' }} />
@@ -1131,7 +1157,7 @@ function DetailPanel({
                   ) : (
                     <span className="flex items-center justify-center gap-1.5">
                       <CalendarCheck size={14} />
-                      {selfIsEditing ? '内容を更新する' : '連絡する'}
+                      {selfIsEditing ? '内容を更新する' : isSameDayAbsenceWindow ? '当日欠席として提出する' : '連絡する'}
                     </span>
                   )}
                 </button>

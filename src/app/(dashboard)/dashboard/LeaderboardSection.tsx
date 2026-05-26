@@ -203,10 +203,15 @@ export default function LeaderboardSection({ scores, currentUserId, isAdmin, war
                           {s.attendance_rate}%
                         </span>
                       </div>
-                      <div className="flex gap-3 mt-0.5">
+                      <div className="flex gap-3 mt-0.5 flex-wrap">
                         <span className="text-xs" style={{ color: '#16a34a' }}>出席 {s.present_count}</span>
                         <span className="text-xs" style={{ color: '#d97706' }}>遅刻 {s.tardy_count}</span>
-                        <span className="text-xs" style={{ color: '#dc2626' }}>欠席 {s.absent_count}</span>
+                        <span className="text-xs" style={{ color: '#dc2626' }}>
+                          欠席 {s.absent_count}
+                          {s.emergency_count > 0 && (
+                            <span style={{ color: '#9333ea' }}>（当日{s.emergency_count}）</span>
+                          )}
+                        </span>
                         <span className="text-xs ml-auto" style={{ color: 'var(--gray-400)' }}>/ {s.total_sessions}回</span>
                       </div>
                     </div>
