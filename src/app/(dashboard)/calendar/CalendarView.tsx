@@ -98,9 +98,8 @@ const MEMBER_REASON_OPTIONS: {
 const TARDY_REASON_OPTIONS: {
   value: AbsenceReason; label: string; icon: React.ElementType; color: string
 }[] = [
-  { value: 'class',    label: '授業',     icon: BookOpen,   color: '#0891b2' },
-  { value: 'practice', label: '部活・大会', icon: Dumbbell,   color: '#4338ca' },
-  { value: 'other',    label: 'その他',   icon: HelpCircle, color: '#6b7280' },
+  { value: 'class', label: '授業',   icon: BookOpen,   color: '#0891b2' },
+  { value: 'other', label: 'その他', icon: HelpCircle, color: '#6b7280' },
 ]
 
 const CLASS_PERIODS = [
@@ -1162,7 +1161,7 @@ function DetailPanel({
               {/* 遅刻理由 */}
               {selfIsTardy && (
                 <>
-                  <div className="grid grid-cols-3 gap-2">
+                  <div className="grid grid-cols-2 gap-2">
                     {TARDY_REASON_OPTIONS.map(({ value, label, icon: Icon, color }) => {
                       const active = selfReason === value
                       return (
