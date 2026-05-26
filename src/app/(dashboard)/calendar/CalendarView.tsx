@@ -487,6 +487,15 @@ export default function CalendarView() {
 
     if (dbError || !resultData) return (dbError as { message?: string })?.message ?? 'エラーが発生しました'
 
+    // 当日欠席はグループLINEに通知（fire-and-forget）
+    if (status === 'absent_emergency') {
+      fetch('/api/line/group-notify', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sessionDate: session.session_date }),
+      }).catch(() => {})
+    }
+
     setDetail(prev => {
       if (!prev) return prev
       const profile =
