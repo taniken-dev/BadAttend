@@ -849,9 +849,13 @@ function DetailPanel({
   const isSameDayAbsenceWindow = !session.is_cancelled && !session.is_camp &&
     session.session_date === todayForWindow && nowForWindow < sessionStartAt2
 
-  // 合宿は公開後いつでも出欠登録可能、通常練習は登録可能期間 or 当日欠席ウィンドウ
+  // 練習開始後も当日中は登録可能
+  const isSameDayWindow = !session.is_cancelled && !session.is_camp &&
+    session.session_date === todayForWindow
+
+  // 合宿は公開後いつでも出欠登録可能、通常練習は登録可能期間 or 当日ウィンドウ
   const canRegister = !session.is_cancelled &&
-    (session.is_camp || availableDates.includes(session.session_date) || isSameDayAbsenceWindow)
+    (session.is_camp || availableDates.includes(session.session_date) || isSameDayWindow)
 
   // 実績登録は練習開始時刻以降のみ（合宿は常に可能）
   const sessionStartAt = new Date(`${session.session_date}T${session.start_time}`)
