@@ -95,6 +95,20 @@ const MEMBER_REASON_OPTIONS: {
   { value: 'other',    label: 'その他',       icon: HelpCircle, description: '詳細を自由記述で入力してください',  color: '#6b7280' },
 ]
 
+const TARDY_REASON_OPTIONS: {
+  value: AbsenceReason; label: string; icon: React.ElementType; color: string
+}[] = [
+  { value: 'class',    label: '授業',     icon: BookOpen,   color: '#0891b2' },
+  { value: 'practice', label: '部活・大会', icon: Dumbbell,   color: '#4338ca' },
+  { value: 'other',    label: 'その他',   icon: HelpCircle, color: '#6b7280' },
+]
+
+const CLASS_PERIODS = [
+  { value: '8',  label: '8限',  endTime: '17:00' },
+  { value: '9',  label: '9限',  endTime: '18:00' },
+  { value: '10', label: '10限', endTime: '19:00' },
+]
+
 const SELF_STATUS_LABELS: Partial<Record<AttendanceStatus, string>> = {
   present:           '出席',
   tardy:             '遅刻',
@@ -436,15 +450,15 @@ export default function CalendarView() {
   ): Promise<string | null> => {
     if (!detail || !userId) return 'エラー'
     const session = detail.session
-    const isAbsent = status === 'absent_normal' || status === 'absent_emergency'
+    const needsReason = status === 'absent_normal' || status === 'absent_emergency' || status === 'tardy'
     const existingRecord = detail.attendance.find(a => a.user_id === userId) ?? null
 
     const payload: Record<string, unknown> = {
       session_id:    session.id,
       user_id:       userId,
       status,
-      reason:        isAbsent ? reason : null,
-      reason_detail: isAbsent ? (reasonDetail.trim() || null) : null,
+      reason:        needsReason ? reason : null,
+      reason_detail: needsReason ? (reasonDetail.trim() || null) : null,
       reported_at:   new Date().toISOString(),
       // 当日欠席は管理者確認を待たず即実績確定
       ...(status === 'absent_emergency' ? { result_status: 'absent_emergency' } : {}),
@@ -835,6 +849,7 @@ function DetailPanel({
   const sessionStartAt = new Date(`${session.session_date}T${session.start_time}`)
   const canRegisterResult = session.is_camp || new Date() >= sessionStartAt
   const selfIsAbsent = selfStatus === 'absent_normal'
+  const selfIsTardy  = selfStatus === 'tardy'
 
   function openSelfForm(editing = false) {
     setSelfIsEditing(editing)
@@ -846,8 +861,11 @@ function DetailPanel({
           : myRecord.status
       ) as AttendanceStatus
       setSelfStatus(displayStatus)
-      setSelfReason(myRecord.reason as AbsenceReason | null)
-      setSelfDetail(myRecord.reason_detail ?? '')
+      // 欠席・遅刻の理由を復元
+      const needsReason = myRecord.status === 'absent_normal' || myRecord.status === 'absent_emergency'
+        || myRecord.status === 'tardy'
+      setSelfReason(needsReason ? (myRecord.reason as AbsenceReason | null) : null)
+      setSelfDetail(needsReason ? (myRecord.reason_detail ?? '') : '')
     } else {
       setSelfStatus(null)
       setSelfReason(null)
@@ -868,14 +886,16 @@ function DetailPanel({
   async function handleSelfSubmit(e: React.FormEvent) {
     e.preventDefault()
     if (!selfStatus) return
-    if (selfIsAbsent && !selfReason) return
+    if ((selfIsAbsent || selfIsTardy) && !selfReason) return
     if (selfIsAbsent && selfReason === 'other' && !selfDetail.trim()) return
+    if (selfIsTardy && selfReason === 'class' && !selfDetail.trim()) return
+    if (selfIsTardy && selfReason === 'other' && !selfDetail.trim()) return
     setSelfSubmitting(true)
     setSelfError(null)
     // 当日欠席ウィンドウ中は absent_normal → absent_emergency に変換
     const actualStatus: AttendanceStatus =
       isSameDayAbsenceWindow && selfStatus === 'absent_normal' ? 'absent_emergency' : selfStatus
-    const err = await onSelfRegister(actualStatus, selfIsAbsent ? selfReason : null, selfDetail)
+    const err = await onSelfRegister(actualStatus, (selfIsAbsent || selfIsTardy) ? selfReason : null, selfDetail)
     setSelfSubmitting(false)
     if (err) { setSelfError(err); return }
     closeSelfForm()
@@ -1108,7 +1128,7 @@ function DetailPanel({
                       const active = selfReason === value
                       return (
                         <button key={value} type="button"
-                          onClick={() => setSelfReason(value)}
+                          onClick={() => { setSelfReason(value); setSelfDetail('') }}
                           className="flex items-center gap-3 p-3 rounded-xl text-left transition-all"
                           style={{
                             border: `1.5px solid ${active ? color : 'var(--gray-200)'}`,
@@ -1139,13 +1159,77 @@ function DetailPanel({
                 </>
               )}
 
+              {/* 遅刻理由 */}
+              {selfIsTardy && (
+                <>
+                  <div className="grid grid-cols-3 gap-2">
+                    {TARDY_REASON_OPTIONS.map(({ value, label, icon: Icon, color }) => {
+                      const active = selfReason === value
+                      return (
+                        <button key={value} type="button"
+                          onClick={() => { setSelfReason(value); setSelfDetail('') }}
+                          className="flex flex-col items-center gap-2 py-3 rounded-xl text-center transition-all"
+                          style={{
+                            border: `1.5px solid ${active ? color : 'var(--gray-200)'}`,
+                            background: active ? `color-mix(in srgb, ${color} 15%, var(--gray-100))` : 'var(--gray-100)',
+                          }}
+                        >
+                          <Icon size={18} style={{ color: active ? color : 'var(--gray-500)' }} />
+                          <span className="text-xs font-bold" style={{ color: active ? color : 'var(--gray-700)' }}>{label}</span>
+                        </button>
+                      )
+                    })}
+                  </div>
+
+                  {/* 授業 → 何限まで選択 */}
+                  {selfReason === 'class' && (
+                    <div className="flex flex-col gap-1.5">
+                      <p className="text-xs font-semibold" style={{ color: 'var(--gray-500)' }}>何限まで？（必須）</p>
+                      <div className="grid grid-cols-3 gap-2">
+                        {CLASS_PERIODS.map(({ label, endTime }) => {
+                          const val = `${label}（〜${endTime}）`
+                          const active = selfDetail === val
+                          return (
+                            <button key={label} type="button"
+                              onClick={() => setSelfDetail(val)}
+                              className="flex flex-col items-center gap-1 py-2.5 rounded-xl transition-all"
+                              style={{
+                                border: `1.5px solid ${active ? '#0891b2' : 'var(--gray-200)'}`,
+                                background: active ? 'color-mix(in srgb, #0891b2 15%, var(--gray-100))' : 'var(--gray-100)',
+                              }}
+                            >
+                              <span className="text-sm font-bold" style={{ color: active ? '#0891b2' : 'var(--gray-700)' }}>{label}</span>
+                              <span className="text-xs" style={{ color: active ? '#0891b2' : 'var(--gray-400)' }}>〜{endTime}</span>
+                            </button>
+                          )
+                        })}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* その他 → フリーテキスト */}
+                  {selfReason === 'other' && (
+                    <textarea
+                      value={selfDetail}
+                      onChange={e => setSelfDetail(e.target.value)}
+                      className="input-field resize-none"
+                      rows={2}
+                      placeholder="遅刻理由を入力してください（必須）"
+                      maxLength={200}
+                    />
+                  )}
+                </>
+              )}
+
               <div className="flex gap-2">
                 <button type="submit"
                   className="btn-primary flex-1"
                   disabled={
                     !selfStatus
-                    || (selfIsAbsent && !selfReason)
+                    || ((selfIsAbsent || selfIsTardy) && !selfReason)
                     || (selfIsAbsent && selfReason === 'other' && !selfDetail.trim())
+                    || (selfIsTardy && selfReason === 'class' && !selfDetail.trim())
+                    || (selfIsTardy && selfReason === 'other' && !selfDetail.trim())
                     || selfSubmitting
                   }
                 >
