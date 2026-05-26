@@ -3,8 +3,16 @@ import { cookies } from 'next/headers'
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 
+const REASON_LABELS: Record<string, string> = {
+  practice: '別練習・大会',
+  class: '授業',
+  sick: '体調不良',
+  personal: '私用',
+  other: 'その他',
+}
+
 export async function POST(request: NextRequest) {
-  const { sessionDate } = await request.json()
+  const { sessionDate, status, reason, reasonDetail } = await request.json()
   if (!sessionDate) {
     return NextResponse.json({ error: 'sessionDate required' }, { status: 400 })
   }
@@ -38,7 +46,20 @@ export async function POST(request: NextRequest) {
 
   const date = new Date(sessionDate + 'T00:00:00')
   const dateLabel = date.toLocaleDateString('ja-JP', { month: 'long', day: 'numeric', weekday: 'short' })
-  const text = `【出欠通知】\n${name}が${dateLabel}の練習を当日欠席に変更しました。`
+
+  const reasonLabel = reason ? REASON_LABELS[reason] ?? reason : null
+  const reasonStr = reasonLabel
+    ? reasonDetail ? `${reasonLabel}（${reasonDetail}）` : reasonLabel
+    : null
+
+  let text: string
+  if (status === 'tardy') {
+    text = `【出欠通知】\n${name}が${dateLabel}の練習に当日遅刻します。`
+    if (reasonStr) text += `\n理由：${reasonStr}`
+  } else {
+    text = `【出欠通知】\n${name}が${dateLabel}の練習を当日欠席します。`
+    if (reasonStr) text += `\n理由：${reasonStr}`
+  }
 
   const groupId = process.env.LINE_GROUP_ID
   if (!groupId) {
