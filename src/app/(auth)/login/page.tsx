@@ -1,9 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { useRouter } from 'next/navigation'
-import { createClient } from '@/lib/supabase/client'
-import { ShieldCheck, Mail, Lock, AlertCircle, Feather, ChevronDown } from 'lucide-react'
+import { AlertCircle, Feather } from 'lucide-react'
 
 function LineIcon({ size = 24 }: { size?: number }) {
   return (
@@ -14,29 +12,8 @@ function LineIcon({ size = 24 }: { size?: number }) {
 }
 
 export default function LoginPage() {
-  const router = useRouter()
-  const supabase = createClient()
-
-  const [email,       setEmail]       = useState('')
-  const [password,    setPassword]    = useState('')
-  const [loading,     setLoading]     = useState(false)
   const [lineLoading, setLineLoading] = useState(false)
   const [error,       setError]       = useState<string | null>(null)
-  const [showAdmin,   setShowAdmin]   = useState(false)
-
-  async function handleLogin(e: React.FormEvent<HTMLFormElement>) {
-    e.preventDefault()
-    setLoading(true)
-    setError(null)
-    const { error } = await supabase.auth.signInWithPassword({ email, password })
-    if (error) {
-      setError('メールアドレスまたはパスワードが間違っています')
-      setLoading(false)
-      return
-    }
-    router.push('/dashboard')
-    router.refresh()
-  }
 
   function handleLineLogin() {
     setLineLoading(true)
@@ -118,7 +95,7 @@ export default function LoginPage() {
         <button
           type="button"
           onClick={handleLineLogin}
-          disabled={lineLoading || loading}
+          disabled={lineLoading}
           className="w-full flex items-center justify-center gap-3 py-4 rounded-2xl font-bold text-white text-base transition-all duration-200"
           style={{
             background: lineLoading ? '#04a348' : '#06C755',
@@ -148,151 +125,8 @@ export default function LoginPage() {
 
         {/* LINE説明テキスト */}
         <p className="text-center text-xs" style={{ color: 'rgba(255,255,255,0.4)', marginTop: '-8px' }}>
-          部員の方は上のボタンからログインしてください
+          上のボタンからログインしてください
         </p>
-
-        {/* ── 管理者トグル ── */}
-        <div className="flex flex-col items-center gap-0" style={{ marginTop: '4px' }}>
-          <button
-            type="button"
-            onClick={() => setShowAdmin(v => !v)}
-            className="flex items-center gap-1.5 text-xs font-medium transition-all duration-200 px-3 py-1.5 rounded-lg"
-            style={{ color: 'rgba(255,255,255,0.35)' }}
-            onMouseEnter={e => {
-              (e.currentTarget as HTMLElement).style.color = 'rgba(255,255,255,0.65)'
-              ;(e.currentTarget as HTMLElement).style.background = 'rgba(255,255,255,0.06)'
-            }}
-            onMouseLeave={e => {
-              (e.currentTarget as HTMLElement).style.color = 'rgba(255,255,255,0.35)'
-              ;(e.currentTarget as HTMLElement).style.background = 'transparent'
-            }}
-          >
-            管理者の方はこちら
-            <ChevronDown
-              size={13}
-              style={{
-                transition: 'transform 0.25s ease',
-                transform: showAdmin ? 'rotate(180deg)' : 'rotate(0deg)',
-              }}
-            />
-          </button>
-
-          {/* ── 管理者フォーム（展開） ── */}
-          <div
-            style={{
-              maxHeight: showAdmin ? '320px' : '0',
-              overflow: 'hidden',
-              transition: 'max-height 0.35s cubic-bezier(0.4,0,0.2,1)',
-              width: '100%',
-            }}
-          >
-            <form
-              onSubmit={handleLogin}
-              className="flex flex-col gap-3 pt-4"
-              style={{ borderTop: '1px solid rgba(255,255,255,0.08)', marginTop: '12px' }}
-            >
-              {/* メール */}
-              <div>
-                <label className="text-xs font-semibold mb-1.5 block" style={{ color: 'rgba(255,255,255,0.5)' }}>
-                  メールアドレス
-                </label>
-                <div className="relative">
-                  <Mail
-                    size={14}
-                    className="absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none"
-                    style={{ color: 'rgba(255,255,255,0.3)' }}
-                  />
-                  <input
-                    type="email"
-                    value={email}
-                    onChange={e => setEmail(e.target.value)}
-                    placeholder="admin@example.com"
-                    required
-                    autoComplete="email"
-                    className="w-full rounded-xl text-sm"
-                    style={{
-                      paddingLeft: '36px',
-                      paddingRight: '12px',
-                      paddingTop: '10px',
-                      paddingBottom: '10px',
-                      background: 'rgba(255,255,255,0.07)',
-                      border: '1px solid rgba(255,255,255,0.12)',
-                      color: 'white',
-                      outline: 'none',
-                    }}
-                    onFocus={e => (e.currentTarget.style.border = '1px solid rgba(99,102,241,0.6)')}
-                    onBlur={e => (e.currentTarget.style.border = '1px solid rgba(255,255,255,0.12)')}
-                  />
-                </div>
-              </div>
-
-              {/* パスワード */}
-              <div>
-                <label className="text-xs font-semibold mb-1.5 block" style={{ color: 'rgba(255,255,255,0.5)' }}>
-                  パスワード
-                </label>
-                <div className="relative">
-                  <Lock
-                    size={14}
-                    className="absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none"
-                    style={{ color: 'rgba(255,255,255,0.3)' }}
-                  />
-                  <input
-                    type="password"
-                    value={password}
-                    onChange={e => setPassword(e.target.value)}
-                    placeholder="••••••••"
-                    required
-                    autoComplete="current-password"
-                    className="w-full rounded-xl text-sm"
-                    style={{
-                      paddingLeft: '36px',
-                      paddingRight: '12px',
-                      paddingTop: '10px',
-                      paddingBottom: '10px',
-                      background: 'rgba(255,255,255,0.07)',
-                      border: '1px solid rgba(255,255,255,0.12)',
-                      color: 'white',
-                      outline: 'none',
-                    }}
-                    onFocus={e => (e.currentTarget.style.border = '1px solid rgba(99,102,241,0.6)')}
-                    onBlur={e => (e.currentTarget.style.border = '1px solid rgba(255,255,255,0.12)')}
-                  />
-                </div>
-              </div>
-
-              {/* 送信 */}
-              <button
-                type="submit"
-                disabled={loading || lineLoading}
-                className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-semibold transition-all"
-                style={{
-                  background: loading ? 'rgba(99,102,241,0.4)' : 'rgba(99,102,241,0.25)',
-                  border: '1px solid rgba(99,102,241,0.4)',
-                  color: loading ? 'rgba(255,255,255,0.6)' : 'rgba(255,255,255,0.85)',
-                }}
-                onMouseEnter={e => {
-                  if (!loading) (e.currentTarget as HTMLElement).style.background = 'rgba(99,102,241,0.4)'
-                }}
-                onMouseLeave={e => {
-                  if (!loading) (e.currentTarget as HTMLElement).style.background = 'rgba(99,102,241,0.25)'
-                }}
-              >
-                {loading ? (
-                  <>
-                    <span className="inline-block w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                    ログイン中...
-                  </>
-                ) : (
-                  <>
-                    <ShieldCheck size={14} />
-                    管理者としてログイン
-                  </>
-                )}
-              </button>
-            </form>
-          </div>
-        </div>
       </div>
 
       {/* フッター */}
@@ -300,7 +134,7 @@ export default function LoginPage() {
         className="text-xs mt-8 z-10"
         style={{ color: 'rgba(255,255,255,0.2)', animation: 'slideUp 0.4s ease 0.1s both' }}
       >
-        © 2026 千葉工業大学 バドミントン部
+        © 2026 Kentaro Tani
       </p>
 
       <style>{`

@@ -25,11 +25,6 @@ export async function GET(request: NextRequest) {
     return handleMagicLink(tokenHash, type as EmailOtpType, origin, next)
   }
 
-  // ③ 通常の Supabase PKCE フロー（メール認証など）
-  if (code) {
-    return handleSupabasePkce(code, origin, next)
-  }
-
   return NextResponse.redirect(new URL('/login?error=missing_params', origin))
 }
 
@@ -198,27 +193,3 @@ async function handleMagicLink(
   return response
 }
 
-// ─── 通常の Supabase PKCE フロー ──────────────────────────────────────────
-
-async function handleSupabasePkce(code: string, origin: string, next: string) {
-  const cookieStore = await cookies()
-  const supabase = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    {
-      cookies: {
-        getAll() { return cookieStore.getAll() },
-        setAll(cookiesToSet) {
-          cookiesToSet.forEach(({ name, value, options }) =>
-            cookieStore.set(name, value, options)
-          )
-        },
-      },
-    }
-  )
-  const { error } = await supabase.auth.exchangeCodeForSession(code)
-  if (!error) {
-    return NextResponse.redirect(new URL(next, origin))
-  }
-  return NextResponse.redirect(new URL('/login?error=auth_failed', origin))
-}
