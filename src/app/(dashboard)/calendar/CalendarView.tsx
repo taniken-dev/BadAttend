@@ -487,8 +487,10 @@ export default function CalendarView() {
 
     if (dbError || !resultData) return (dbError as { message?: string })?.message ?? 'エラーが発生しました'
 
-    // 当日欠席・当日遅刻はグループLINEに通知（fire-and-forget）
-    if (status === 'absent_emergency' || (status === 'tardy' && isSameDayWindow)) {
+    // 当日欠席・当日遅刻はグループLINEに通知（変更時のみ・初回登録は除外）
+    const todayStr = new Date().toISOString().split('T')[0]
+    const isToday = !session.is_cancelled && !session.is_camp && session.session_date === todayStr
+    if (existingRecord && (status === 'absent_emergency' || (status === 'tardy' && isToday))) {
       fetch('/api/line/group-notify', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
