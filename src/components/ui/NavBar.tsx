@@ -26,9 +26,9 @@ import {
 
 // モバイル ボトムタブ定義
 const MOBILE_TABS = [
-  { href: '/dashboard', icon: LayoutDashboard, label: 'ホーム' },
-  { href: '/calendar',  icon: CalendarDays,    label: 'カレンダー' },
-  { href: '/rules',     icon: BookOpen,        label: 'ガイド' },
+  { href: '/dashboard',     icon: LayoutDashboard, label: 'ホーム' },
+  { href: '/calendar',      icon: CalendarDays,    label: 'カレンダー' },
+  { href: '/admin/members', icon: Users,           label: 'メンバー' },
 ]
 
 export default function NavBar() {
@@ -67,12 +67,12 @@ export default function NavBar() {
   const desktopLeftItems = [
     { href: '/dashboard',  icon: LayoutDashboard, label: 'ホーム' },
     { href: '/calendar',   icon: CalendarDays,    label: 'カレンダー' },
-    { href: '/rules',      icon: BookOpen,        label: '出欠ガイド' },
     {
       href: '/admin/members',
       icon: Users,
       label: isAdmin ? 'メンバー管理' : 'メンバー一覧',
     },
+    { href: '/rules',      icon: BookOpen,        label: '出欠ガイド' },
   ]
 
   // ── モバイルタブ ──
@@ -188,12 +188,11 @@ export default function NavBar() {
   function MobileMenuContent() {
     return (
       <>
-        {/* メンバー一覧（モバイルのみ：PCは左ナビに表示済み） */}
+        {/* 出欠ガイド（モバイルのみ：PCは左ナビに表示済み） */}
         <MenuItem
-          href="/admin/members" onClick={() => setShowMore(false)}
-          icon={<Users size={17} />}
-          label={isAdmin ? 'メンバー管理' : 'メンバー一覧'}
-          color="#0891b2" bg="#ecfeff"
+          href="/rules" onClick={() => setShowMore(false)}
+          icon={<BookOpen size={17} />} label="出欠ガイド"
+          color="#2563eb" bg="#eff6ff"
         />
 
         {/* 届いた意見を確認（admin のみ） */}
