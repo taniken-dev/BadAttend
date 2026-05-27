@@ -21,12 +21,14 @@ import {
   Send,
   CheckCircle2,
   Settings,
+  BookOpen,
 } from 'lucide-react'
 
 // モバイル ボトムタブ定義
 const MOBILE_TABS = [
   { href: '/dashboard', icon: LayoutDashboard, label: 'ホーム' },
   { href: '/calendar',  icon: CalendarDays,    label: 'カレンダー' },
+  { href: '/rules',     icon: BookOpen,        label: 'ガイド' },
 ]
 
 export default function NavBar() {
@@ -60,12 +62,12 @@ export default function NavBar() {
 
   const role    = viewRole
   const isAdmin = role === 'admin'
-  const isCoach = role === 'coach'
 
   // ── PC 左ナビ（ホーム・カレンダー・メンバー一覧/管理） ──
   const desktopLeftItems = [
     { href: '/dashboard',  icon: LayoutDashboard, label: 'ホーム' },
     { href: '/calendar',   icon: CalendarDays,    label: 'カレンダー' },
+    { href: '/rules',      icon: BookOpen,        label: '出欠ガイド' },
     {
       href: '/admin/members',
       icon: Users,
