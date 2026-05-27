@@ -15,6 +15,7 @@ import {
   X,
   Check,
   UserPlus,
+  Search,
 } from 'lucide-react'
 import type { Profile, SkillRank } from '@/lib/types'
 import { getSkillRankLabel } from '@/lib/utils'
@@ -65,6 +66,7 @@ export default function MembersManager({
   const [editTarget, setEditTarget] = useState<string | null>(null)
   const [editName, setEditName]     = useState('')
   const [saving, setSaving]         = useState(false)
+  const [searchQuery, setSearchQuery] = useState('')
 
   const roleOrder: Record<string, number> = { admin: 0, manager: 1, member: 2, coach: 3 }
   const sortByRoleGradeName = (a: Profile, b: Profile) => {
@@ -78,6 +80,14 @@ export default function MembersManager({
   }
   const pending  = useMemo(() => members.filter(m => !m.is_approved), [members])
   const approved = useMemo(() => [...members.filter(m => m.is_approved)].sort(sortByRoleGradeName), [members])
+  const filteredApproved = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase()
+    if (!q) return approved
+    return approved.filter(m =>
+      (m.display_name ?? m.full_name).toLowerCase().includes(q) ||
+      m.full_name.toLowerCase().includes(q)
+    )
+  }, [approved, searchQuery])
 
   function showToast(msg: string, ok: boolean) {
     setToast({ msg, ok })
@@ -339,7 +349,7 @@ export default function MembersManager({
 
       {/* 承認済み部員 */}
       <div className="card animate-slide-up" style={{ animationDelay: '0.1s' }}>
-        <div className="flex items-center justify-between mb-4">
+        <div className="flex items-center justify-between mb-3">
           <h2
             className="text-base font-bold"
             style={{ color: 'var(--gray-900)', letterSpacing: '-0.02em' }}
@@ -350,8 +360,30 @@ export default function MembersManager({
             className="text-xs px-2 py-0.5 rounded-full"
             style={{ background: 'var(--gray-100)', color: 'var(--gray-500)' }}
           >
-            {approved.length} 名
+            {searchQuery.trim() ? `${filteredApproved.length} / ${approved.length} 名` : `${approved.length} 名`}
           </span>
+        </div>
+
+        {/* 検索バー */}
+        <div className="relative mb-4">
+          <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" style={{ color: 'var(--gray-400)' }} />
+          <input
+            type="text"
+            value={searchQuery}
+            onChange={e => setSearchQuery(e.target.value)}
+            placeholder="名前で検索..."
+            className="input-field"
+            style={{ paddingLeft: '2.25rem', paddingRight: searchQuery ? '2.25rem' : undefined, fontSize: '14px' }}
+          />
+          {searchQuery && (
+            <button
+              onClick={() => setSearchQuery('')}
+              className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center justify-center w-4 h-4 rounded-full cursor-pointer"
+              style={{ color: 'var(--gray-400)' }}
+            >
+              <X size={13} />
+            </button>
+          )}
         </div>
 
         {approved.length === 0 ? (
@@ -361,9 +393,16 @@ export default function MembersManager({
               承認済みの部員がいません
             </p>
           </div>
+        ) : filteredApproved.length === 0 ? (
+          <div className="flex flex-col items-center gap-2 py-8">
+            <Search size={28} style={{ color: 'var(--gray-300)' }} />
+            <p className="text-sm" style={{ color: 'var(--gray-400)' }}>
+              「{searchQuery}」に一致する部員がいません
+            </p>
+          </div>
         ) : (
           <div className="flex flex-col gap-3">
-            {approved.map(m => {
+            {filteredApproved.map(m => {
               const RoleIcon = ROLE_OPTIONS.find(r => r.value === m.role)?.icon ?? Users
               const isMe = m.id === currentUserId
               const hasDisplayName = !!m.display_name
