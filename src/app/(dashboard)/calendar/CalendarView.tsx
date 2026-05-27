@@ -7,7 +7,7 @@ import {
   CheckCircle2, ClipboardCheck, AlertCircle, RotateCcw, Bell,
   Pencil, CalendarCheck, UserCheck, UserX,
   BookOpen, HeartPulse, User, HelpCircle, Dumbbell,
-  ExternalLink,
+  ExternalLink, Search, X,
 } from 'lucide-react'
 import { useViewRole } from '@/contexts/ViewRoleContext'
 import { getWeeklyRegistrationInfo } from '@/lib/utils'
@@ -836,6 +836,7 @@ function DetailPanel({
   const [selfSubmitting,  setSelfSubmitting]  = useState(false)
   const [selfError,       setSelfError]       = useState<string | null>(null)
   const [selfIsEditing,   setSelfIsEditing]   = useState(false)
+  const [memberSearchQuery, setMemberSearchQuery] = useState('')
 
   // セッションが変わったらフォームをリセット
   useEffect(() => {
@@ -845,6 +846,7 @@ function DetailPanel({
     setSelfDetail('')
     setSelfError(null)
     setSelfIsEditing(false)
+    setMemberSearchQuery('')
   }, [session.id])
 
   const myRecord = attendance.find(a => a.user_id === userId) ?? null
@@ -936,6 +938,17 @@ function DetailPanel({
 
   const allMembers = sortMembers(attendance)
   const unconfirmedCount = attendance.filter(a => !a.result_status).length
+
+  const memberSearchLower = memberSearchQuery.trim().toLowerCase()
+  const filteredAllMembers = memberSearchLower
+    ? allMembers.filter(a => (a.profile.display_name ?? a.profile.full_name).toLowerCase().includes(memberSearchLower))
+    : allMembers
+  const filteredUnsubmitted = memberSearchLower
+    ? unsubmitted.filter(p => (p.display_name ?? p.full_name).toLowerCase().includes(memberSearchLower))
+    : unsubmitted
+  const filteredAttendance = memberSearchLower
+    ? attendance.filter(a => (a.profile.display_name ?? a.profile.full_name).toLowerCase().includes(memberSearchLower))
+    : attendance
 
   async function handleBulk() {
     setConfirming(true)
@@ -1330,6 +1343,30 @@ function DetailPanel({
         </div>
       )}
 
+      {/* 出欠リスト検索バー */}
+      {(attendance.length > 0 || unsubmitted.length > 0) && (
+        <div className="relative">
+          <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" style={{ color: 'var(--gray-400)' }} />
+          <input
+            type="text"
+            value={memberSearchQuery}
+            onChange={e => setMemberSearchQuery(e.target.value)}
+            placeholder="名前で絞り込み..."
+            className="input-field"
+            style={{ paddingLeft: '2.1rem', paddingRight: memberSearchQuery ? '2.1rem' : undefined, fontSize: '13px' }}
+          />
+          {memberSearchQuery && (
+            <button
+              onClick={() => setMemberSearchQuery('')}
+              className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center justify-center cursor-pointer"
+              style={{ color: 'var(--gray-400)' }}
+            >
+              <X size={13} />
+            </button>
+          )}
+        </div>
+      )}
+
       {/* 出欠リスト */}
       {attendance.length === 0 ? (
         <div className="flex flex-col items-center py-6 gap-1">
@@ -1338,7 +1375,7 @@ function DetailPanel({
       ) : isManagerOrAdmin ? (
         // マネージャー/管理者：個別実績編集UI
         <div className="flex flex-col gap-2">
-          {allMembers.map(a => {
+          {filteredAllMembers.map(a => {
             const statusGroup = STATUS_GROUPS.find(g =>
               g.key === (a.status.startsWith('absent') ? 'absent' : a.status)
             )
@@ -1474,7 +1511,7 @@ function DetailPanel({
         // 一般ユーザー：従来の読み取り専用グループ表示
         STATUS_GROUPS.map(g => {
           const members = sortMembers(
-            attendance.filter(a => (a.status.startsWith('absent') ? 'absent' : a.status) === g.key)
+            filteredAttendance.filter(a => (a.status.startsWith('absent') ? 'absent' : a.status) === g.key)
           )
           if (members.length === 0) return null
           return (
@@ -1533,7 +1570,7 @@ function DetailPanel({
           <div className="flex items-center gap-2 mb-2">
             <span className="text-xs font-bold px-2 py-0.5 rounded-full"
               style={{ background: '#fef3c7', color: '#b45309' }}>
-              未提出 {unsubmitted.length}名
+              未提出 {memberSearchLower ? `${filteredUnsubmitted.length} / ` : ''}{unsubmitted.length}名
             </span>
             {isManagerOrAdmin && (
               <button
@@ -1562,7 +1599,7 @@ function DetailPanel({
             </div>
           )}
           <div className="flex flex-col gap-1.5">
-            {[...unsubmitted]
+            {[...filteredUnsubmitted]
               .sort((a, b) => {
                 const roleDiff = (roleOrder[a.role] ?? 2) - (roleOrder[b.role] ?? 2)
                 if (roleDiff !== 0) return roleDiff
