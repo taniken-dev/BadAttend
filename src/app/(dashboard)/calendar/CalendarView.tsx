@@ -487,10 +487,16 @@ export default function CalendarView() {
 
     if (dbError || !resultData) return (dbError as { message?: string })?.message ?? 'エラーが発生しました'
 
-    // 当日欠席・当日遅刻はグループLINEに通知（変更時のみ・初回登録は除外）
+    // 当日欠席・当日遅刻・事前欠席変更はグループLINEに通知（変更時のみ・初回登録は除外）
     const todayStr = new Date().toISOString().split('T')[0]
     const isToday = !session.is_cancelled && !session.is_camp && session.session_date === todayStr
-    if (existingRecord && (status === 'absent_emergency' || (status === 'tardy' && isToday))) {
+    const isAdvanceAbsent = !!existingRecord && status === 'absent_normal' && !isToday &&
+      !availableDates.includes(session.session_date)
+    if (existingRecord && (
+      status === 'absent_emergency' ||
+      (status === 'tardy' && isToday) ||
+      isAdvanceAbsent
+    )) {
       fetch('/api/line/group-notify', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -499,6 +505,7 @@ export default function CalendarView() {
           status,
           reason,
           reasonDetail,
+          isAdvance: isAdvanceAbsent,
         }),
       }).catch(() => {})
     }
@@ -520,7 +527,7 @@ export default function CalendarView() {
     })
 
     return null
-  }, [detail, userId])
+  }, [detail, userId, availableDates])
 
   // ── カレンダーグリッド ────────────────────────────────────
   const y = current.getFullYear()
@@ -817,6 +824,36 @@ function DetailPanel({
   onRegisterForUnsubmitted: (memberId: string, status: AttendanceStatus, profile: MemberProfile) => Promise<void>
   onRemind: (userIds: string[]) => Promise<void>
 }) {
+  type SortKey = 'status' | 'grade' | 'name'
+  const SORT_OPTIONS: { key: SortKey; label: string }[] = [
+    { key: 'status', label: '出欠状況' },
+    { key: 'grade',  label: '学年' },
+    { key: 'name',   label: '名前' },
+  ]
+  const STATUS_SORT_ORDER: Partial<Record<string, number>> = { present: 0, tardy: 1 }
+
+  function sortByKeys(list: EnrichedAttendance[], keys: SortKey[]): EnrichedAttendance[] {
+    if (keys.length === 0) return list
+    return [...list].sort((a, b) => {
+      for (const key of keys) {
+        let diff = 0
+        if (key === 'status') {
+          const ao = STATUS_SORT_ORDER[a.status] ?? 2
+          const bo = STATUS_SORT_ORDER[b.status] ?? 2
+          diff = ao - bo
+        } else if (key === 'grade') {
+          diff = (b.profile.grade ?? 0) - (a.profile.grade ?? 0)
+        } else {
+          const na = a.profile.display_name ?? a.profile.full_name
+          const nb = b.profile.display_name ?? b.profile.full_name
+          diff = na.localeCompare(nb, 'ja')
+        }
+        if (diff !== 0) return diff
+      }
+      return 0
+    })
+  }
+
   const { session, attendance, unsubmitted, totalApproved } = detail
   const [confirming,              setConfirming]              = useState(false)
   const [reverting,               setReverting]               = useState(false)
@@ -827,6 +864,7 @@ function DetailPanel({
   const [pendingUnsubmitted,      setPendingUnsubmitted]      = useState<Record<string, AttendanceStatus>>({})
   const [reminding,               setReminding]               = useState(false)
   const [remindResult,            setRemindResult]            = useState<{ sent: number } | 'error' | null>(null)
+  const [sortKeys,                setSortKeys]                = useState<SortKey[]>(['status'])
 
   // 自己登録フォーム（部員向け）
   const [selfFormOpen,    setSelfFormOpen]    = useState(false)
@@ -861,6 +899,11 @@ function DetailPanel({
   const canRegister = !session.is_cancelled &&
     (session.is_camp || availableDates.includes(session.session_date) || isSameDayWindow)
 
+  // 登録期間外でも既登録ユーザーが欠席へ変更できる（当日より前の未来セッション）
+  const canEarlyAbsent = !session.is_cancelled && !session.is_camp &&
+    !!myRecord && session.session_date > todayForWindow &&
+    !availableDates.includes(session.session_date)
+
   // 実績登録は練習開始時刻以降のみ（合宿は常に可能）
   const sessionStartAt = new Date(`${session.session_date}T${session.start_time}`)
   const canRegisterResult = session.is_camp || new Date() >= sessionStartAt
@@ -870,7 +913,12 @@ function DetailPanel({
   function openSelfForm(editing = false) {
     setSelfIsEditing(editing)
     setSelfError(null)
-    if (editing && myRecord) {
+    if (canEarlyAbsent && !canRegister) {
+      // 事前欠席モードは欠席固定でリセット
+      setSelfStatus('absent_normal')
+      setSelfReason(null)
+      setSelfDetail('')
+    } else if (editing && myRecord) {
       const displayStatus = (
         myRecord.status === 'absent_emergency' || myRecord.status === 'absent_unreported'
           ? 'absent_normal'
@@ -936,8 +984,14 @@ function DetailPanel({
       return nameA.localeCompare(nameB, 'ja')
     })
 
-  const allMembers = sortMembers(attendance)
+  const allMembers = sortByKeys(sortMembers(attendance), sortKeys)
   const unconfirmedCount = attendance.filter(a => !a.result_status).length
+
+  function toggleSort(key: SortKey) {
+    setSortKeys(prev =>
+      prev.includes(key) ? prev.filter(k => k !== key) : [...prev, key]
+    )
+  }
 
   const memberSearchLower = memberSearchQuery.trim().toLowerCase()
   const filteredAllMembers = memberSearchLower
@@ -947,8 +1001,8 @@ function DetailPanel({
     ? unsubmitted.filter(p => (p.display_name ?? p.full_name).toLowerCase().includes(memberSearchLower))
     : unsubmitted
   const filteredAttendance = memberSearchLower
-    ? attendance.filter(a => (a.profile.display_name ?? a.profile.full_name).toLowerCase().includes(memberSearchLower))
-    : attendance
+    ? allMembers.filter(a => (a.profile.display_name ?? a.profile.full_name).toLowerCase().includes(memberSearchLower))
+    : allMembers
 
   async function handleBulk() {
     setConfirming(true)
@@ -1056,8 +1110,8 @@ function DetailPanel({
         </span>
       </div>
 
-      {/* 自分の出欠連絡（顧問以外・登録可能期間のみ） */}
-      {canSelfRegister && userId && canRegister && (
+      {/* 自分の出欠連絡（顧問以外・登録可能期間 or 事前欠席変更） */}
+      {canSelfRegister && userId && (canRegister || canEarlyAbsent) && (
         <div className="rounded-xl px-4 py-3.5 flex flex-col gap-3"
           style={{ background: 'color-mix(in srgb, var(--club-blue) 6%, var(--card-bg))', border: '1.5px solid color-mix(in srgb, var(--club-blue) 25%, white)' }}>
           <div className="flex items-center justify-between">
@@ -1110,6 +1164,15 @@ function DetailPanel({
                 </span>
               )}
 
+              {/* 事前欠席変更バナー（登録期間外・当日前） */}
+              {canEarlyAbsent && !canRegister && (
+                <div className="flex items-center gap-2 px-3 py-2.5 rounded-xl text-xs font-semibold"
+                  style={{ background: '#fef3c7', color: '#92400e', border: '1px solid #fcd34d' }}>
+                  <AlertCircle size={13} className="shrink-0" />
+                  事前欠席連絡です。LINEグループに通知されます。
+                </div>
+              )}
+
               {/* 登録期間外の当日登録リマインダー */}
               {isSameDayWindow && !availableDates.includes(session.session_date) && (
                 <div className="flex items-center gap-2 px-3 py-2.5 rounded-xl text-xs font-semibold"
@@ -1138,8 +1201,11 @@ function DetailPanel({
               )}
 
               {/* ステータス選択 */}
-              <div className="grid grid-cols-3 gap-2">
-                {MEMBER_STATUS_OPTIONS.map(({ value, label, description, color, icon: Icon }) => {
+              <div className={`grid gap-2 ${canEarlyAbsent && !canRegister ? 'grid-cols-1' : 'grid-cols-3'}`}>
+                {(canEarlyAbsent && !canRegister
+                  ? MEMBER_STATUS_OPTIONS.filter(o => o.value === 'absent_normal')
+                  : MEMBER_STATUS_OPTIONS
+                ).map(({ value, label, description, color, icon: Icon }) => {
                   const active = selfStatus === value
                     || (value === 'absent_normal' && (selfStatus === 'absent_emergency' || selfStatus === 'absent_unreported'))
                   return (
@@ -1367,6 +1433,31 @@ function DetailPanel({
         </div>
       )}
 
+      {/* 並び替えチップ */}
+      {attendance.length > 0 && (
+        <div className="flex items-center gap-1.5 flex-wrap">
+          <span className="text-xs font-semibold shrink-0" style={{ color: 'var(--gray-400)' }}>並び替え</span>
+          {SORT_OPTIONS.map(opt => {
+            const idx = sortKeys.indexOf(opt.key)
+            const active = idx !== -1
+            const badge = ['①', '②', '③'][idx]
+            return (
+              <button key={opt.key} type="button" onClick={() => toggleSort(opt.key)}
+                className="flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold transition-all cursor-pointer"
+                style={{
+                  background: active ? 'var(--club-blue)' : 'var(--gray-100)',
+                  color:      active ? 'white'            : 'var(--gray-600)',
+                  border:     active ? '1.5px solid var(--club-blue)' : '1.5px solid var(--gray-200)',
+                }}>
+                {active && <span>{badge}</span>}
+                {opt.label}
+                {active && <X size={10} />}
+              </button>
+            )
+          })}
+        </div>
+      )}
+
       {/* 出欠リスト */}
       {attendance.length === 0 ? (
         <div className="flex flex-col items-center py-6 gap-1">
@@ -1386,8 +1477,8 @@ function DetailPanel({
               <div key={a.id}
                 className="flex items-start gap-2.5 px-3 py-2.5 rounded-xl"
                 style={{
-                  background: 'var(--gray-50)',
-                  border: `1px solid ${isDiverged ? '#fcd34d' : 'var(--gray-100)'}`,
+                  background: `color-mix(in srgb, ${statusGroup?.bg ?? 'var(--gray-100)'} 60%, white)`,
+                  border: `1px solid ${isDiverged ? '#fcd34d' : `color-mix(in srgb, ${statusGroup?.bg ?? 'var(--gray-100)'} 80%, white)`}`,
                   opacity: updatingId === a.id ? 0.6 : 1,
                 }}>
                 {/* アバター */}
@@ -1508,60 +1599,47 @@ function DetailPanel({
           })}
         </div>
       ) : (
-        // 一般ユーザー：従来の読み取り専用グループ表示
-        STATUS_GROUPS.map(g => {
-          const members = sortMembers(
-            filteredAttendance.filter(a => (a.status.startsWith('absent') ? 'absent' : a.status) === g.key)
-          )
-          if (members.length === 0) return null
-          return (
-            <div key={g.key}>
-              <div className="flex items-center gap-2 mb-2">
-                <span className="text-xs font-bold px-2 py-0.5 rounded-full"
-                  style={{ background: g.bg, color: g.color }}>
-                  {g.label} {members.length}名
-                </span>
-              </div>
-              <div className="flex flex-col gap-1.5">
-                {members.map((a, i) => (
-                  <div key={i}
-                    className="flex items-start gap-2.5 px-3 py-2.5 rounded-xl"
-                    style={{ background: 'var(--gray-50)', border: '1px solid var(--gray-100)' }}>
-                    {a.profile.avatar_url ? (
-                      <img src={a.profile.avatar_url} alt=""
-                        className="w-8 h-8 rounded-full object-cover shrink-0 mt-0.5" />
-                    ) : (
-                      <div className="w-8 h-8 rounded-full flex items-center justify-center text-sm font-black shrink-0 mt-0.5"
-                        style={{ background: g.bg, color: g.color }}>
-                        {(a.profile.display_name ?? a.profile.full_name).charAt(0)}
-                      </div>
-                    )}
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-1.5 flex-wrap">
-                        <span className="text-sm font-semibold" style={{ color: 'var(--gray-900)' }}>
-                          {a.profile.display_name ?? a.profile.full_name}
-                        </span>
-                        {a.profile.role !== 'member' && (
-                          <span className="text-xs font-semibold px-1.5 py-0.5 rounded"
-                            style={{ background: 'var(--club-blue-light)', color: 'var(--club-blue)', fontSize: '10px' }}>
-                            {a.profile.role === 'admin' ? '管理者'
-                              : a.profile.role === 'manager' ? 'MGR'
-                              : a.profile.role === 'coach' ? '顧問'
-                              : a.profile.role}
-                          </span>
-                        )}
-                      </div>
-                      <span className="text-xs" style={{ color: 'var(--gray-400)' }}>
-                        {a.profile.grade}年生
-                      </span>
-                      <ReasonBadge reason={a.reason} reasonDetail={a.reason_detail} />
-                    </div>
+        // 一般ユーザー：フラットリスト（ソート順に表示）
+        <div className="grid grid-cols-2 gap-1.5">
+          {filteredAttendance.map((a, i) => {
+            const sg = STATUS_GROUPS.find(g => g.key === (a.status.startsWith('absent') ? 'absent' : a.status))
+            return (
+              <div key={i}
+                className="flex items-start gap-2.5 px-3 py-2.5 rounded-xl"
+                style={{ background: `color-mix(in srgb, ${sg?.bg ?? 'var(--gray-100)'} 60%, white)`, border: `1px solid color-mix(in srgb, ${sg?.bg ?? 'var(--gray-100)'} 80%, white)` }}>
+                {a.profile.avatar_url ? (
+                  <img src={a.profile.avatar_url} alt=""
+                    className="w-8 h-8 rounded-full object-cover shrink-0 mt-0.5" />
+                ) : (
+                  <div className="w-8 h-8 rounded-full flex items-center justify-center text-sm font-black shrink-0 mt-0.5"
+                    style={{ background: sg?.bg ?? 'var(--gray-100)', color: sg?.color ?? 'var(--gray-500)' }}>
+                    {(a.profile.display_name ?? a.profile.full_name).charAt(0)}
                   </div>
-                ))}
+                )}
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    <span className="text-sm font-semibold" style={{ color: 'var(--gray-900)' }}>
+                      {a.profile.display_name ?? a.profile.full_name}
+                    </span>
+                    {a.profile.role !== 'member' && (
+                      <span className="text-xs font-semibold px-1.5 py-0.5 rounded"
+                        style={{ background: 'var(--club-blue-light)', color: 'var(--club-blue)', fontSize: '10px' }}>
+                        {a.profile.role === 'admin' ? '管理者'
+                          : a.profile.role === 'manager' ? 'MGR'
+                          : a.profile.role === 'coach' ? '顧問'
+                          : a.profile.role}
+                      </span>
+                    )}
+                  </div>
+                  <span className="text-xs" style={{ color: 'var(--gray-400)' }}>
+                    {a.profile.grade}年生
+                  </span>
+                  <ReasonBadge reason={a.reason} reasonDetail={a.reason_detail} />
+                </div>
               </div>
-            </div>
-          )
-        })
+            )
+          })}
+        </div>
       )}
 
       {/* 未提出者リスト（提出者リストの下） */}
