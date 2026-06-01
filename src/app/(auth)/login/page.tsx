@@ -11,8 +11,6 @@ function LineIcon({ size = 24 }: { size?: number }) {
   )
 }
 
-const appleFont = '-apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, sans-serif'
-
 export default function LoginPage() {
   const [lineLoading, setLineLoading] = useState(false)
   const [error,       setError]       = useState<string | null>(null)
@@ -27,21 +25,16 @@ export default function LoginPage() {
   }
 
   return (
-    <div
-      className="min-h-screen flex flex-col items-center justify-center px-5 py-16"
-      style={{ background: '#f5f5f7', fontFamily: appleFont }}
-    >
+    <div className="min-h-screen flex flex-col items-center justify-center px-5 py-16" style={{ background: 'var(--apple-bg)' }}>
+
       {/* ロゴ */}
       <div className="flex flex-col items-center gap-4 mb-10">
-        <Feather size={36} color="#1d1d1f" strokeWidth={1.5} />
+        <Feather size={36} strokeWidth={1.5} style={{ color: 'var(--ink)' }} />
         <div className="text-center">
-          <h1
-            className="text-3xl font-semibold"
-            style={{ color: '#1d1d1f', letterSpacing: '-0.03em' }}
-          >
+          <h1 className="text-3xl font-semibold" style={{ color: 'var(--ink)', letterSpacing: '-0.03em' }}>
             BadAttend
           </h1>
-          <p className="text-sm mt-1" style={{ color: '#7a7a7a', letterSpacing: '0' }}>
+          <p className="text-sm mt-1" style={{ color: 'var(--ink-muted)' }}>
             千葉工大バドミントン部 出欠管理
           </p>
         </div>
@@ -51,17 +44,14 @@ export default function LoginPage() {
       <div
         className="w-full max-w-sm flex flex-col gap-3"
         style={{
-          background: '#ffffff',
+          background: 'var(--card-bg)',
           borderRadius: '18px',
           padding: '28px 24px',
-          border: '1px solid #e0e0e0',
+          border: '1px solid var(--hairline)',
         }}
       >
         {error && (
-          <div
-            className="flex items-center gap-2 px-3 py-2.5 rounded-xl text-sm"
-            style={{ background: '#fff2f2', border: '1px solid #ffd0d0', color: '#c0392b' }}
-          >
+          <div className="alert-error rounded-xl text-sm">
             <AlertCircle size={14} className="shrink-0" />
             {error}
           </div>
@@ -79,7 +69,6 @@ export default function LoginPage() {
             padding: '13px 0',
             fontSize: '15px',
             letterSpacing: '-0.01em',
-            fontFamily: appleFont,
           }}
           onMouseEnter={e => { if (!lineLoading) (e.currentTarget as HTMLElement).style.transform = 'scale(1.02)' }}
           onMouseLeave={e => { (e.currentTarget as HTMLElement).style.transform = 'scale(1)' }}
@@ -97,16 +86,13 @@ export default function LoginPage() {
           )}
         </button>
 
-        <p
-          className="text-center text-xs mt-1"
-          style={{ color: '#7a7a7a', letterSpacing: '0', lineHeight: '1.5' }}
-        >
+        <p className="text-center text-xs mt-1" style={{ color: 'var(--ink-muted)', lineHeight: '1.5' }}>
           上のボタンからログインしてください
         </p>
       </div>
 
       {/* フッター */}
-      <p className="text-xs mt-10" style={{ color: '#cccccc', fontFamily: appleFont }}>
+      <p className="text-xs mt-10" style={{ color: 'var(--ink-muted)', opacity: 0.5 }}>
         © 2026 Kentaro Tani
       </p>
     </div>

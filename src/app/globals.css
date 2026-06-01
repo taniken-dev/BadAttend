@@ -39,6 +39,11 @@
     --gray-700:  #374151;
     --gray-900:  #111827;
 
+    /* --- Apple テキスト・ボーダートークン --- */
+    --ink:        #1d1d1f;
+    --ink-muted:  #7a7a7a;
+    --hairline:   #e0e0e0;
+
     /* --- 影 --- */
     --shadow-xs: 0 1px 2px rgba(0,0,0,0.04);
     --shadow-sm: 0 2px 8px rgba(0,0,0,0.06), 0 1px 3px rgba(0,0,0,0.04);
@@ -85,6 +90,9 @@
   --shadow-lg: 0 20px 60px rgba(0,0,0,0.5), 0 4px 12px rgba(0,0,0,0.4);
   --club-blue-light: rgba(67, 56, 202, 0.2);
   --club-blue-muted: rgba(67, 56, 202, 0.12);
+  --ink:       #f0f0f6;
+  --ink-muted: #9a9ab0;
+  --hairline:  rgba(255,255,255,0.08);
 }
 
 @layer base {
@@ -97,7 +105,8 @@
 
   body {
     background-color: var(--apple-bg);
-    color: var(--gray-900);
+    color: var(--ink);
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", var(--font-noto), sans-serif;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
   }
@@ -152,14 +161,14 @@
     background: var(--card-bg, white);
     border-radius: var(--radius-lg);
     padding: 20px;
-    box-shadow: var(--shadow);
+    border: 1px solid var(--hairline);
   }
 
   .card-elevated {
     background: var(--card-bg, white);
     border-radius: var(--radius-xl);
     padding: 24px;
-    box-shadow: var(--shadow-md);
+    border: 1px solid var(--hairline);
   }
 
   .card-lift {
@@ -396,7 +405,7 @@
   .progress-fill {
     height: 100%;
     border-radius: var(--radius-full);
-    background: linear-gradient(90deg, var(--club-blue) 0%, #818cf8 100%);
+    background: var(--club-blue);
     transition: width 0.8s var(--ease-out-expo);
   }
 
@@ -435,6 +444,12 @@
 }
 
 /* ダークモード — コンポーネント上書き */
+.dark .card,
+.dark .card-elevated {
+  border-color: transparent;
+  box-shadow: var(--shadow);
+}
+
 .dark .btn-secondary {
   background-color: var(--gray-200);
   border-color: var(--gray-300);
