@@ -199,7 +199,7 @@ export default function MembersManager({
       {/* ヘッダー */}
       <div className="animate-slide-up">
         <h1
-          className="text-2xl font-black tracking-tight"
+          className="text-2xl font-bold tracking-tight"
           style={{ color: 'var(--gray-900)', letterSpacing: '-0.04em' }}
         >
           {effectiveReadOnly ? 'メンバー一覧' : 'メンバー管理'}
@@ -241,7 +241,7 @@ export default function MembersManager({
             {orphanUsers.map(o => (
               <div key={o.id} className="flex items-center gap-3 p-3.5 rounded-xl"
                 style={{ background: '#fef2f2', border: '1px solid #fecaca', opacity: updating === o.id ? 0.6 : 1 }}>
-                <div className="w-10 h-10 rounded-xl flex items-center justify-center text-sm font-black shrink-0"
+                <div className="w-10 h-10 rounded-xl flex items-center justify-center text-sm font-bold shrink-0"
                   style={{ background: '#fee2e2', color: '#b91c1c' }}>
                   {o.full_name.charAt(0)}
                 </div>
@@ -301,7 +301,7 @@ export default function MembersManager({
                   <img src={m.avatar_url} alt="" width={40} height={40} className="w-10 h-10 rounded-xl object-cover shrink-0" />
                 ) : (
                   <div
-                    className="w-10 h-10 rounded-xl flex items-center justify-center text-sm font-black shrink-0"
+                    className="w-10 h-10 rounded-xl flex items-center justify-center text-sm font-bold shrink-0"
                     style={{ background: '#fef3c7', color: '#b45309' }}
                   >
                     {displayName(m).charAt(0)}
@@ -430,7 +430,7 @@ export default function MembersManager({
                       />
                     ) : (
                       <div
-                        className="w-10 h-10 rounded-xl flex items-center justify-center text-sm font-black shrink-0"
+                        className="w-10 h-10 rounded-xl flex items-center justify-center text-sm font-bold shrink-0"
                         style={{
                           background: isMe ? 'var(--club-blue-light)' : 'var(--gray-200)',
                           color: isMe ? 'var(--club-blue)' : 'var(--gray-600)',

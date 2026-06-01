@@ -163,7 +163,7 @@ export default async function DashboardPage() {
                   })}
                 </p>
                 <h1
-                  className="text-2xl font-black mt-0.5"
+                  className="text-2xl font-bold mt-0.5"
                   style={{ color: 'var(--gray-900)', letterSpacing: '-0.04em' }}
                 >
                   今日の練習
@@ -246,7 +246,7 @@ export default async function DashboardPage() {
                 {absentees.map((a, i) => (
                   <div key={i} className="flex items-center gap-3 py-2">
                     <div
-                      className="w-8 h-8 rounded-lg flex items-center justify-center text-xs font-black shrink-0"
+                      className="w-8 h-8 rounded-lg flex items-center justify-center text-xs font-bold shrink-0"
                       style={{ background: '#fee2e2', color: '#b91c1c' }}
                     >
                       {(a.profiles.display_name ?? a.profiles.full_name).charAt(0)}
@@ -275,7 +275,7 @@ export default async function DashboardPage() {
         /* 練習なし */
         <div className="animate-slide-up">
           <h1
-            className="text-2xl font-black"
+            className="text-2xl font-bold"
             style={{ color: 'var(--gray-900)', letterSpacing: '-0.04em' }}
           >
             ホーム
@@ -307,7 +307,7 @@ export default async function DashboardPage() {
             style={{ background: 'var(--gray-50)' }}>
             <span className="text-xs font-medium" style={{ color: 'var(--gray-500)' }}>出席率</span>
             <span
-              className="text-5xl font-black"
+              className="text-5xl font-bold"
               style={{ color: getAttendanceRateColor(attendanceRate), letterSpacing: '-0.04em' }}
             >
               {attendanceRate}<span className="text-2xl font-semibold">%</span>
@@ -325,15 +325,15 @@ export default async function DashboardPage() {
           {/* 出席・遅刻・欠席 内訳 */}
           <div className="grid grid-cols-3 gap-2">
             <div className="flex flex-col items-center gap-1 py-3 rounded-xl" style={{ background: '#dcfce7' }}>
-              <span className="text-2xl font-black" style={{ color: '#16a34a' }}>{myScore?.present_count ?? 0}</span>
+              <span className="text-2xl font-bold" style={{ color: '#16a34a' }}>{myScore?.present_count ?? 0}</span>
               <span className="text-xs font-medium" style={{ color: '#16a34a' }}>出席</span>
             </div>
             <div className="flex flex-col items-center gap-1 py-3 rounded-xl" style={{ background: '#fef3c7' }}>
-              <span className="text-2xl font-black" style={{ color: '#b45309' }}>{myScore?.tardy_count ?? 0}</span>
+              <span className="text-2xl font-bold" style={{ color: '#b45309' }}>{myScore?.tardy_count ?? 0}</span>
               <span className="text-xs font-medium" style={{ color: '#b45309' }}>遅刻</span>
             </div>
             <div className="flex flex-col items-center gap-1 py-3 rounded-xl" style={{ background: '#fee2e2' }}>
-              <span className="text-2xl font-black" style={{ color: '#b91c1c' }}>{myScore?.absent_count ?? 0}</span>
+              <span className="text-2xl font-bold" style={{ color: '#b91c1c' }}>{myScore?.absent_count ?? 0}</span>
               <span className="text-xs font-medium" style={{ color: '#b91c1c' }}>欠席</span>
               {(myScore?.unreported_count ?? 0) > 0 && (
                 <span className="text-xs font-semibold px-1.5 py-0.5 rounded-full" style={{ background: '#fca5a5', color: '#7f1d1d' }}>
