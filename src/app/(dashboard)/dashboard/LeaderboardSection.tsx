@@ -100,7 +100,7 @@ export default function LeaderboardSection({ scores, currentUserId, isAdmin, war
               <div className="card flex flex-col items-center gap-1.5 py-4" style={{ boxShadow: 'none', border: '1px solid var(--gray-200)' }}>
                 <span className="text-xl">🥈</span>
                 <p
-                  className="text-xl font-black"
+                  className="text-xl font-bold"
                   style={{ color: getAttendanceRateColor(top3[1].attendance_rate), letterSpacing: '-0.03em' }}
                 >
                   {top3[1].attendance_rate}%
@@ -113,11 +113,11 @@ export default function LeaderboardSection({ scores, currentUserId, isAdmin, war
               {/* 1位 */}
               <div
                 className="card flex flex-col items-center gap-1.5 py-4 relative"
-                style={{ background: 'linear-gradient(135deg, #312e81 0%, #4338ca 100%)', boxShadow: 'none' }}
+                style={{ background: 'var(--club-blue)', boxShadow: 'none', border: 'none' }}
               >
                 <Crown size={14} color="#fbbf24" className="absolute top-2 right-2" />
                 <span className="text-xl">🥇</span>
-                <p className="text-xl font-black text-white" style={{ letterSpacing: '-0.03em' }}>
+                <p className="text-xl font-bold text-white" style={{ letterSpacing: '-0.03em' }}>
                   {top3[0].attendance_rate}%
                 </p>
                 <p className="text-xs font-semibold text-center leading-tight text-white opacity-90">
@@ -129,7 +129,7 @@ export default function LeaderboardSection({ scores, currentUserId, isAdmin, war
               <div className="card flex flex-col items-center gap-1.5 py-4" style={{ boxShadow: 'none', border: '1px solid var(--gray-200)' }}>
                 <span className="text-xl">🥉</span>
                 <p
-                  className="text-xl font-black"
+                  className="text-xl font-bold"
                   style={{ color: getAttendanceRateColor(top3[2].attendance_rate), letterSpacing: '-0.03em' }}
                 >
                   {top3[2].attendance_rate}%
@@ -160,7 +160,7 @@ export default function LeaderboardSection({ scores, currentUserId, isAdmin, war
                   >
                     {/* 順位 */}
                     <span
-                      className="text-sm font-black w-6 text-center shrink-0"
+                      className="text-sm font-bold w-6 text-center shrink-0"
                       style={{ color: i < 3 ? 'var(--club-amber, #f59e0b)' : 'var(--gray-300)' }}
                     >
                       {i + 1}

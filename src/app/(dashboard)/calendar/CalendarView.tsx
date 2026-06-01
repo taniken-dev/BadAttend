@@ -544,7 +544,7 @@ export default function CalendarView() {
     <div className="flex flex-col gap-5">
       {/* ヘッダー */}
       <div className="animate-slide-up">
-        <h1 className="text-2xl font-black tracking-tight"
+        <h1 className="text-2xl font-bold tracking-tight"
           style={{ color: 'var(--gray-900)', letterSpacing: '-0.04em' }}>
           カレンダー
         </h1>
@@ -580,7 +580,7 @@ export default function CalendarView() {
         <div className="grid grid-cols-7 mb-1">
           {DOW.map((d, i) => (
             <div key={d} className="text-center py-1 text-xs font-semibold"
-              style={{ color: i === 0 ? '#ef4444' : i === 6 ? '#4338ca' : 'var(--gray-400)' }}>
+              style={{ color: i === 0 ? '#ef4444' : i === 6 ? 'var(--club-blue)' : 'var(--gray-400)' }}>
               {d}
             </div>
           ))}
@@ -644,7 +644,7 @@ export default function CalendarView() {
                   style={{
                     color: isSelected ? 'white'
                       : dow === 0 ? '#ef4444'
-                      : dow === 6 ? '#4338ca'
+                      : dow === 6 ? 'var(--club-blue)'
                       : 'var(--gray-900)',
                     fontWeight: isToday ? 800 : undefined,
                   }}>

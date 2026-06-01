@@ -249,11 +249,11 @@ export default function NavBar() {
           <Link href="/dashboard" className="flex items-center gap-2 shrink-0 select-none mr-1">
             <div
               className="w-7 h-7 rounded-lg flex items-center justify-center"
-              style={{ background: 'linear-gradient(135deg, #312e81 0%, #4338ca 100%)' }}
+              style={{ background: 'var(--club-blue)' }}
             >
               <Feather size={14} color="white" strokeWidth={2.5} />
             </div>
-            <span className="font-black text-sm tracking-tight" style={{ color: 'var(--gray-900)' }}>
+            <span className="font-semibold text-sm tracking-tight" style={{ color: 'var(--ink)' }}>
               BadAttend
             </span>
           </Link>
