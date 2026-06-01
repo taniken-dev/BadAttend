@@ -11,8 +11,6 @@ function LineIcon({ size = 24 }: { size?: number }) {
   )
 }
 
-const appleFont = '-apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, sans-serif'
-
 export default function LoginPage() {
   const [lineLoading, setLineLoading] = useState(false)
   const [error,       setError]       = useState<string | null>(null)
@@ -27,42 +25,28 @@ export default function LoginPage() {
   }
 
   return (
-    <div
-      className="min-h-screen flex flex-col items-center justify-center px-5 py-16"
-      style={{ background: '#f5f5f7', fontFamily: appleFont }}
-    >
+    <div className="min-h-screen flex flex-col items-center justify-center px-5 py-10 bg-[#f5f5f7]">
+
       {/* ロゴ */}
-      <div className="flex flex-col items-center gap-4 mb-10">
-        <Feather size={36} color="#1d1d1f" strokeWidth={1.5} />
+      <div className="flex flex-col items-center gap-3 mb-8">
+        <div
+          className="w-14 h-14 rounded-2xl flex items-center justify-center"
+          style={{ background: 'var(--club-blue)' }}
+        >
+          <Feather size={26} color="white" strokeWidth={2} />
+        </div>
         <div className="text-center">
-          <h1
-            className="text-3xl font-semibold"
-            style={{ color: '#1d1d1f', letterSpacing: '-0.03em' }}
-          >
-            BadAttend
-          </h1>
-          <p className="text-sm mt-1" style={{ color: '#7a7a7a', letterSpacing: '0' }}>
-            千葉工大バドミントン部 出欠管理
-          </p>
+          <h1 className="text-2xl font-bold tracking-tight text-gray-900">BadAttend</h1>
+          <p className="text-sm mt-0.5 text-gray-500">千葉工大バドミントン部 出欠管理</p>
         </div>
       </div>
 
       {/* カード */}
-      <div
-        className="w-full max-w-sm flex flex-col gap-3"
-        style={{
-          background: '#ffffff',
-          borderRadius: '18px',
-          padding: '28px 24px',
-          border: '1px solid #e0e0e0',
-        }}
-      >
+      <div className="w-full max-w-sm bg-white rounded-2xl p-6 flex flex-col gap-4 shadow-sm border border-gray-200">
+
         {error && (
-          <div
-            className="flex items-center gap-2 px-3 py-2.5 rounded-xl text-sm"
-            style={{ background: '#fff2f2', border: '1px solid #ffd0d0', color: '#c0392b' }}
-          >
-            <AlertCircle size={14} className="shrink-0" />
+          <div className="flex items-center gap-2.5 px-4 py-3 rounded-xl text-sm font-medium bg-red-50 border border-red-200 text-red-600">
+            <AlertCircle size={15} className="shrink-0" />
             {error}
           </div>
         )}
@@ -71,15 +55,11 @@ export default function LoginPage() {
           type="button"
           onClick={handleLineLogin}
           disabled={lineLoading}
-          className="w-full flex items-center justify-center gap-2.5 font-semibold text-white transition-all duration-150"
+          className="w-full flex items-center justify-center gap-2.5 py-3.5 rounded-xl font-bold text-white text-base transition-all duration-150"
           style={{
             background: '#06C755',
-            opacity: lineLoading ? 0.65 : 1,
-            borderRadius: '12px',
-            padding: '13px 0',
-            fontSize: '15px',
-            letterSpacing: '-0.01em',
-            fontFamily: appleFont,
+            opacity: lineLoading ? 0.7 : 1,
+            fontSize: '16px',
           }}
           onMouseEnter={e => { if (!lineLoading) (e.currentTarget as HTMLElement).style.transform = 'scale(1.02)' }}
           onMouseLeave={e => { (e.currentTarget as HTMLElement).style.transform = 'scale(1)' }}
@@ -91,24 +71,19 @@ export default function LoginPage() {
             </>
           ) : (
             <>
-              <LineIcon size={20} />
+              <LineIcon size={22} />
               LINEでログイン
             </>
           )}
         </button>
 
-        <p
-          className="text-center text-xs mt-1"
-          style={{ color: '#7a7a7a', letterSpacing: '0', lineHeight: '1.5' }}
-        >
+        <p className="text-center text-xs text-gray-400">
           上のボタンからログインしてください
         </p>
       </div>
 
       {/* フッター */}
-      <p className="text-xs mt-10" style={{ color: '#cccccc', fontFamily: appleFont }}>
-        © 2026 Kentaro Tani
-      </p>
+      <p className="text-xs mt-8 text-gray-400">© 2026 Kentaro Tani</p>
     </div>
   )
 }
