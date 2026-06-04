@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import Link from 'next/link'
 import { AlertCircle, Feather } from 'lucide-react'
 
 function LineIcon({ size = 24 }: { size?: number }) {
@@ -86,8 +87,21 @@ export default function LoginPage() {
           )}
         </button>
 
-        <p className="text-center text-xs mt-1" style={{ color: 'var(--ink-muted)', lineHeight: '1.5' }}>
+        <p className="text-center text-xs mt-1" style={{ color: 'var(--ink-muted)', lineHeight: '1.8' }}>
           上のボタンからログインしてください
+          <br />
+          <span>
+            ログインすることで
+            {' '}
+            <Link href="/terms" className="underline underline-offset-2" style={{ color: 'var(--ink-muted)' }}>
+              利用規約
+            </Link>
+            {' '}と{' '}
+            <Link href="/privacy" className="underline underline-offset-2" style={{ color: 'var(--ink-muted)' }}>
+              プライバシーポリシー
+            </Link>
+            {' '}に同意したものとみなします
+          </span>
         </p>
       </div>
 
