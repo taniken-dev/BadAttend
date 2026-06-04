@@ -55,7 +55,7 @@ export async function GET(request: NextRequest) {
     const endDate   = `${year}-${String(month).padStart(2, '0')}-${new Date(year, month, 0).getDate()}`
     const { data } = await supabase
       .from('practice_sessions')
-      .select('id, session_date, start_time, end_time, location, is_cancelled, is_results_confirmed, results_confirmed_at, note, google_event_id, is_camp, created_at')
+      .select('id, session_date, start_time, end_time, location, is_cancelled, cancellation_reason, is_results_confirmed, results_confirmed_at, note, google_event_id, is_camp, created_at')
       .gte('session_date', startDate)
       .lte('session_date', endDate)
     return NextResponse.json({ sessions: data ?? [] })
@@ -205,7 +205,7 @@ export async function GET(request: NextRequest) {
     // 月の全セッション（手動作成分も含む）を返す
     const { data: sessions } = await admin
       .from('practice_sessions')
-      .select('id, session_date, start_time, end_time, location, is_cancelled, is_results_confirmed, results_confirmed_at, note, google_event_id, is_camp, created_at')
+      .select('id, session_date, start_time, end_time, location, is_cancelled, cancellation_reason, is_results_confirmed, results_confirmed_at, note, google_event_id, is_camp, created_at')
       .gte('session_date', startDate)
       .lte('session_date', endDate)
       .order('session_date')
@@ -216,7 +216,7 @@ export async function GET(request: NextRequest) {
     // 同期失敗時はSupabaseのデータをそのまま返してUIを壊さない
     const { data } = await supabase
       .from('practice_sessions')
-      .select('id, session_date, start_time, end_time, location, is_cancelled, is_results_confirmed, results_confirmed_at, note, google_event_id, is_camp, created_at')
+      .select('id, session_date, start_time, end_time, location, is_cancelled, cancellation_reason, is_results_confirmed, results_confirmed_at, note, google_event_id, is_camp, created_at')
       .gte('session_date', startDate)
       .lte('session_date', endDate)
     return NextResponse.json({ sessions: data ?? [] })
