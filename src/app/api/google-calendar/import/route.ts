@@ -50,7 +50,7 @@ export async function POST(request: NextRequest) {
       note:            note      ?? null,
       google_event_id: googleEventId,
     })
-    .select('id, session_date, start_time, end_time, location, is_cancelled, is_results_confirmed, results_confirmed_at, note, google_event_id, is_camp, created_at')
+    .select('id, session_date, start_time, end_time, location, is_cancelled, cancellation_reason, is_results_confirmed, results_confirmed_at, note, google_event_id, is_camp, created_at')
     .single()
 
   if (error) {

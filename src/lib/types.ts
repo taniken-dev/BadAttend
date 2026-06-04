@@ -40,6 +40,7 @@ export interface PracticeSession {
   end_time: string
   location: string
   is_cancelled: boolean
+  cancellation_reason: string | null
   is_results_confirmed: boolean
   results_confirmed_at: string | null
   note: string | null

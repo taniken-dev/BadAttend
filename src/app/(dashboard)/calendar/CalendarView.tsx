@@ -142,7 +142,8 @@ export default function CalendarView() {
   const [detail,       setDetail]      = useState<DayDetail | null>(null)
   const [loading,      setLoading]     = useState(false)
 
-  const isManagerOrAdmin = viewRole === 'manager' || viewRole === 'admin'
+  const isManagerOrAdmin  = viewRole === 'manager' || viewRole === 'admin'
+  const canManageSessions = realRole === 'manager' || realRole === 'admin'
   const availableDates = useMemo(() => getWeeklyRegistrationInfo().availableDates, [])
 
   useEffect(() => {
@@ -164,7 +165,7 @@ export default function CalendarView() {
     // 1. Supabase から即座に既存セッションを表示（高速）
     supabase
       .from('practice_sessions')
-      .select('id, session_date, start_time, end_time, location, is_cancelled, is_results_confirmed, results_confirmed_at, note, google_event_id, is_camp, created_at')
+      .select('id, session_date, start_time, end_time, location, is_cancelled, cancellation_reason, is_results_confirmed, results_confirmed_at, note, google_event_id, is_camp, created_at')
       .gte('session_date', s)
       .lte('session_date', e)
       .abortSignal(signal)
@@ -441,6 +442,28 @@ export default function CalendarView() {
     }))
   }, [detail])
 
+  // ── 練習休止のトグル ─────────────────────────────────────
+  const handleToggleCancelled = useCallback(async (
+    cancelled: boolean,
+    reason: string | null,
+  ) => {
+    if (!detail) return
+    const sessionId   = detail.session.id
+    const sessionDate = detail.session.session_date
+
+    await supabase
+      .from('practice_sessions')
+      .update({
+        is_cancelled:        cancelled,
+        cancellation_reason: cancelled ? (reason?.trim() || null) : null,
+      })
+      .eq('id', sessionId)
+
+    const patch = { is_cancelled: cancelled, cancellation_reason: cancelled ? (reason?.trim() || null) : null }
+    setDetail(prev => prev ? { ...prev, session: { ...prev.session, ...patch } } : prev)
+    setSessions(prev => ({ ...prev, [sessionDate]: { ...prev[sessionDate], ...patch } }))
+  }, [detail])
+
   // ── 自分の出欠を登録（部員向け） ──────────────────────────
   const handleSelfRegister = useCallback(async (
     status: AttendanceStatus,
@@ -712,6 +735,7 @@ export default function CalendarView() {
             <DetailPanel
               detail={detail}
               isManagerOrAdmin={isManagerOrAdmin}
+              canManageSessions={canManageSessions}
               canSelfRegister={realRole !== 'coach'}
               userId={userId}
               availableDates={availableDates}
@@ -729,6 +753,7 @@ export default function CalendarView() {
                   memberId, detail.session.id, detail.session.session_date, status, profile
                 )
               }
+              onToggleCancelled={handleToggleCancelled}
               onRemind={async (userIds) => {
                 await fetch('/api/line/notify', {
                   method: 'POST',
@@ -800,6 +825,7 @@ function GCalEventsPanel({ events }: { events: GoogleCalendarEvent[] }) {
 function DetailPanel({
   detail,
   isManagerOrAdmin,
+  canManageSessions,
   canSelfRegister,
   userId,
   availableDates,
@@ -809,10 +835,12 @@ function DetailPanel({
   onClearResultStatus,
   onRevertAll,
   onRegisterForUnsubmitted,
+  onToggleCancelled,
   onRemind,
 }: {
   detail: DayDetail
   isManagerOrAdmin: boolean
+  canManageSessions: boolean
   canSelfRegister: boolean
   userId: string | null
   availableDates: string[]
@@ -822,6 +850,7 @@ function DetailPanel({
   onClearResultStatus: (id: string) => Promise<void>
   onRevertAll: () => Promise<void>
   onRegisterForUnsubmitted: (memberId: string, status: AttendanceStatus, profile: MemberProfile) => Promise<void>
+  onToggleCancelled: (cancelled: boolean, reason: string | null) => Promise<void>
   onRemind: (userIds: string[]) => Promise<void>
 }) {
   type SortKey = 'status' | 'grade' | 'name'
@@ -876,6 +905,10 @@ function DetailPanel({
   const [selfIsEditing,   setSelfIsEditing]   = useState(false)
   const [memberSearchQuery, setMemberSearchQuery] = useState('')
 
+  // 練習休止トグル用
+  const [cancelReasonInput, setCancelReasonInput] = useState('')
+  const [cancelSubmitting,  setCancelSubmitting]  = useState(false)
+
   // セッションが変わったらフォームをリセット
   useEffect(() => {
     setSelfFormOpen(false)
@@ -885,6 +918,7 @@ function DetailPanel({
     setSelfError(null)
     setSelfIsEditing(false)
     setMemberSearchQuery('')
+    setCancelReasonInput('')
   }, [session.id])
 
   const myRecord = attendance.find(a => a.user_id === userId) ?? null
@@ -1076,8 +1110,15 @@ function DetailPanel({
               </div>
             )}
             {session.is_cancelled && (
-              <span className="text-xs px-2 py-0.5 rounded-full font-semibold"
-                style={{ background: '#fee2e2', color: '#b91c1c' }}>休止</span>
+              <div className="flex items-center gap-1.5 flex-wrap">
+                <span className="text-xs px-2 py-0.5 rounded-full font-semibold"
+                  style={{ background: '#fee2e2', color: '#b91c1c' }}>休止</span>
+                {session.cancellation_reason && (
+                  <span className="text-xs" style={{ color: '#b91c1c' }}>
+                    {session.cancellation_reason}
+                  </span>
+                )}
+              </div>
             )}
           </div>
         </div>
@@ -1372,6 +1413,105 @@ function DetailPanel({
         </div>
       )}
 
+      {/* マネージャー/管理者向け：練習休止トグル */}
+      {canManageSessions && (
+        <div className="flex flex-col gap-2 px-3 py-3 rounded-xl"
+          style={{
+            background: session.is_cancelled ? '#fff1f2' : 'var(--gray-50)',
+            border: `1px solid ${session.is_cancelled ? '#fecdd3' : 'var(--gray-200)'}`,
+          }}>
+          <div className="flex items-center justify-between gap-2">
+            <span className="text-sm font-semibold" style={{ color: session.is_cancelled ? '#b91c1c' : 'var(--gray-700)' }}>
+              {session.is_cancelled ? '練習が休止中です' : '練習を休止にする'}
+            </span>
+            {/* トグルスイッチ */}
+            <button
+              type="button"
+              disabled={cancelSubmitting}
+              onClick={async () => {
+                if (session.is_cancelled) {
+                  setCancelSubmitting(true)
+                  await onToggleCancelled(false, null)
+                  setCancelSubmitting(false)
+                }
+              }}
+              className="relative inline-flex shrink-0 cursor-pointer rounded-full transition-colors duration-200"
+              style={{
+                width: 44, height: 24,
+                background: session.is_cancelled ? '#ef4444' : 'var(--gray-300)',
+                opacity: cancelSubmitting ? 0.6 : 1,
+                cursor: session.is_cancelled && !cancelSubmitting ? 'pointer' : 'default',
+              }}
+              title={session.is_cancelled ? '休止を解除する' : undefined}
+            >
+              <span
+                className="inline-block rounded-full bg-white shadow transition-transform duration-200"
+                style={{
+                  width: 18, height: 18,
+                  margin: 3,
+                  transform: session.is_cancelled ? 'translateX(20px)' : 'translateX(0)',
+                }}
+              />
+            </button>
+          </div>
+
+          {/* 休止中: 理由表示 + 解除ボタン */}
+          {session.is_cancelled ? (
+            <div className="flex flex-col gap-2">
+              {session.cancellation_reason && (
+                <p className="text-xs" style={{ color: '#9f1239' }}>
+                  理由: {session.cancellation_reason}
+                </p>
+              )}
+              <button
+                type="button"
+                disabled={cancelSubmitting}
+                onClick={async () => {
+                  setCancelSubmitting(true)
+                  await onToggleCancelled(false, null)
+                  setCancelSubmitting(false)
+                }}
+                className="flex items-center justify-center gap-2 py-2 rounded-xl text-sm font-semibold transition-all cursor-pointer active:scale-95 hover:opacity-80"
+                style={{ background: 'var(--gray-200)', color: 'var(--gray-700)', opacity: cancelSubmitting ? 0.6 : 1 }}
+              >
+                {cancelSubmitting
+                  ? <span className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin" />
+                  : null}
+                {cancelSubmitting ? '処理中...' : '休止を解除する'}
+              </button>
+            </div>
+          ) : (
+            /* 通常: 理由入力 + 休止ボタン */
+            <div className="flex flex-col gap-2">
+              <input
+                type="text"
+                value={cancelReasonInput}
+                onChange={e => setCancelReasonInput(e.target.value)}
+                placeholder="理由（例: 台風のため）"
+                className="input-field"
+                style={{ fontSize: '13px' }}
+              />
+              <button
+                type="button"
+                disabled={cancelSubmitting}
+                onClick={async () => {
+                  setCancelSubmitting(true)
+                  await onToggleCancelled(true, cancelReasonInput)
+                  setCancelSubmitting(false)
+                }}
+                className="flex items-center justify-center gap-2 py-2 rounded-xl text-sm font-semibold transition-all cursor-pointer active:scale-95 hover:opacity-80"
+                style={{ background: '#ef4444', color: 'white', opacity: cancelSubmitting ? 0.6 : 1 }}
+              >
+                {cancelSubmitting
+                  ? <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                  : null}
+                {cancelSubmitting ? '処理中...' : 'この練習を休止にする'}
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+
       {/* マネージャー/管理者向け：一括確定ボタン（練習開始時刻以降のみ） */}
       {isManagerOrAdmin && attendance.length > 0 && !session.is_cancelled && canRegisterResult && (
         <div className="flex flex-col gap-2 px-3 py-3 rounded-xl"
@@ -1650,7 +1790,7 @@ function DetailPanel({
               style={{ background: '#fef3c7', color: '#b45309' }}>
               未提出 {memberSearchLower ? `${filteredUnsubmitted.length} / ` : ''}{unsubmitted.length}名
             </span>
-            {isManagerOrAdmin && (
+            {isManagerOrAdmin && !session.is_cancelled && (
               <button
                 onClick={handleRemind}
                 disabled={reminding}
@@ -1713,7 +1853,7 @@ function DetailPanel({
                       {p.grade}年生
                     </span>
 
-                    {isManagerOrAdmin && canRegisterResult && (
+                    {isManagerOrAdmin && canRegisterResult && !session.is_cancelled && (
                       <div className="flex items-center gap-1.5 ml-auto">
                         <select
                           value={pendingVal}
