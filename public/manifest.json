@@ -8,5 +8,13 @@
   "background_color": "#f8fafc",
   "theme_color": "#4338ca",
   "orientation": "portrait-primary",
-  "lang": "ja"
+  "lang": "ja",
+  "icons": [
+    {
+      "src": "/icon.png",
+      "sizes": "any",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
 }
