@@ -13,7 +13,6 @@ const notoSansJP = Noto_Sans_JP({
 
 export const metadata: Metadata = {
   title: '千葉工大 バドミントン部 | 出欠管理',
-  description: '部活動の出欠連絡・選手選考支援システム',
   manifest: '/manifest.json',
   appleWebApp: {
     capable: true,
