@@ -166,7 +166,7 @@ export default function CalendarView() {
     // 1. Supabase から即座に既存セッションを表示（高速）
     supabase
       .from('practice_sessions')
-      .select('id, session_date, start_time, end_time, location, is_cancelled, cancellation_reason, is_results_confirmed, results_confirmed_at, note, google_event_id, is_camp, created_at')
+      .select('id, session_date, start_time, end_time, location, is_cancelled, cancellation_reason, is_results_confirmed, results_confirmed_at, note, google_event_id, is_camp, is_bukai, created_at')
       .gte('session_date', s)
       .lte('session_date', e)
       .abortSignal(signal)
@@ -535,6 +535,7 @@ export default function CalendarView() {
           reason,
           reasonDetail,
           isAdvance: isAdvanceAbsent,
+          isBukai: session.is_bukai,
         }),
       }).catch(() => {})
     }
@@ -624,12 +625,14 @@ export default function CalendarView() {
             const session  = sessions[dateStr]
             const dayGcal  = gcalEvents[dateStr] ?? []
             const hasGcal  = dayGcal.length > 0
+            const hasTournament = dayGcal.some(ev => !ev.isOther)
+            const hasMisc       = dayGcal.some(ev => ev.isOther)
             const isToday    = dateStr === todayStr
             const isSelected = dateStr === selectedDate
             const confirmed  = session?.is_results_confirmed
             const isClickable = !!session || hasGcal
 
-            // 練習ドット色（合宿=オレンジ、通常練習=赤、確定済み=緑、休止=グレー）
+            // 練習ドット色（合宿=オレンジ、部会=緑、通常練習=赤、確定済み=緑、休止=グレー）
             const dotColor = session
               ? isSelected
                 ? 'rgba(255,255,255,0.7)'
@@ -639,13 +642,14 @@ export default function CalendarView() {
                 ? '#16a34a'
                 : session.is_camp
                 ? '#f97316'
+                : session.is_bukai
+                ? '#15803d'
                 : '#ef4444'
               : 'transparent'
 
-            // GCalドット色（大会など=青）
-            const gcalDotColor = isSelected
-              ? 'rgba(255,255,255,0.7)'
-              : 'var(--club-blue)'
+            // GCalドット色（大会など=青、その他=グレー）
+            const gcalDotColor      = isSelected ? 'rgba(255,255,255,0.7)' : 'var(--club-blue)'
+            const miscDotColor      = isSelected ? 'rgba(255,255,255,0.7)' : '#6b7280'
 
             return (
               <div key={dateStr}
@@ -683,13 +687,17 @@ export default function CalendarView() {
                 <div className="flex items-center gap-0.5 mt-0.5" style={{ minHeight: 8 }}>
                   {/* 練習ドット（確定済みはチェックアイコン） */}
                   {session && !session.is_cancelled && confirmed && !isSelected
-                    ? <CheckCircle2 size={8} style={{ color: session.is_camp ? '#f97316' : '#16a34a' }} />
+                    ? <CheckCircle2 size={8} style={{ color: session.is_camp ? '#f97316' : '#16a34a' }} />  /* 部会も確定済みは同じ緑 */
                     : session
                     ? <span className="w-1 h-1 rounded-full" style={{ background: dotColor }} />
                     : null}
-                  {/* GCalドット */}
-                  {hasGcal && (
+                  {/* 大会などドット（青） */}
+                  {hasTournament && (
                     <span className="w-1 h-1 rounded-full" style={{ background: gcalDotColor }} />
+                  )}
+                  {/* その他ドット（グレー） */}
+                  {hasMisc && (
+                    <span className="w-1 h-1 rounded-full" style={{ background: miscDotColor }} />
                   )}
                 </div>
               </div>
@@ -711,6 +719,11 @@ export default function CalendarView() {
             <span className="text-xs" style={{ color: 'var(--gray-500)' }}>合宿</span>
           </div>
           <div className="flex items-center gap-1.5">
+            <span className="w-2 h-2 rounded-full shrink-0"
+              style={{ background: '#15803d' }} />
+            <span className="text-xs" style={{ color: 'var(--gray-500)' }}>部会</span>
+          </div>
+          <div className="flex items-center gap-1.5">
             <CheckCircle2 size={8} style={{ color: '#16a34a' }} />
             <span className="text-xs" style={{ color: 'var(--gray-500)' }}>実績確定済み</span>
           </div>
@@ -718,6 +731,11 @@ export default function CalendarView() {
             <span className="w-2 h-2 rounded-full shrink-0"
               style={{ background: 'var(--club-blue)' }} />
             <span className="text-xs" style={{ color: 'var(--gray-500)' }}>大会など</span>
+          </div>
+          <div className="flex items-center gap-1.5">
+            <span className="w-2 h-2 rounded-full shrink-0"
+              style={{ background: '#6b7280' }} />
+            <span className="text-xs" style={{ color: 'var(--gray-500)' }}>その他</span>
           </div>
           <div className="flex items-center gap-1.5 ml-auto">
             <span className="text-xs font-bold px-1.5 py-0.5 rounded"
@@ -796,7 +814,7 @@ function GCalEventsPanel({ events }: { events: GoogleCalendarEvent[] }) {
             className="flex flex-col gap-1.5 px-3 py-2.5 rounded-xl"
             style={{ background: 'var(--gray-50)', border: '1px solid var(--gray-100)' }}>
             <div className="flex items-center gap-2">
-              <span className="w-2 h-2 rounded-full shrink-0" style={{ background: 'var(--club-blue)' }} />
+              <span className="w-2 h-2 rounded-full shrink-0" style={{ background: ev.isOther ? '#6b7280' : 'var(--club-blue)' }} />
               <span className="text-sm font-semibold" style={{ color: 'var(--gray-900)' }}>
                 {ev.title}
               </span>
@@ -935,9 +953,9 @@ function DetailPanel({
   const isSameDayWindow = !session.is_cancelled && !session.is_camp &&
     session.session_date === todayForWindow
 
-  // 合宿は公開後いつでも出欠登録可能、通常練習は登録可能期間 or 当日ウィンドウ
+  // 合宿・部会は公開後いつでも出欠登録可能、通常練習は登録可能期間 or 当日ウィンドウ
   const canRegister = !session.is_cancelled &&
-    (session.is_camp || availableDates.includes(session.session_date) || isSameDayWindow)
+    (session.is_camp || session.is_bukai || availableDates.includes(session.session_date) || isSameDayWindow)
 
   // 登録期間外でも既登録ユーザーが欠席へ変更できる（当日より前の未来セッション）
   const canEarlyAbsent = !session.is_cancelled && !session.is_camp &&
@@ -946,7 +964,7 @@ function DetailPanel({
 
   // 実績登録は練習開始時刻以降のみ（合宿は常に可能）
   const sessionStartAt = new Date(`${session.session_date}T${session.start_time}`)
-  const canRegisterResult = session.is_camp || new Date() >= sessionStartAt
+  const canRegisterResult = session.is_camp || session.is_bukai || new Date() >= sessionStartAt
   const selfIsAbsent = selfStatus === 'absent_normal'
   const selfIsTardy  = selfStatus === 'tardy'
 
@@ -1089,7 +1107,7 @@ function DetailPanel({
       <div>
         <div className="flex items-center justify-between mb-2">
           <h2 className="text-base font-bold" style={{ color: 'var(--gray-900)' }}>
-            {dateLabel}の練習
+            {dateLabel}の{session.is_bukai ? '部会' : session.is_camp ? '合宿' : '練習'}
           </h2>
           <div className="flex items-center gap-2">
             {session.is_results_confirmed && (

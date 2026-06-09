@@ -44,10 +44,13 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: 'year and month required' }, { status: 400 })
   }
 
-  // 活動日カレンダー（出欠登録対象）と、その他カレンダー（表示のみ）を分けて管理
+  // 活動日カレンダー（出欠登録対象）、大会などカレンダー、その他カレンダー（表示のみ）を分けて管理
   const activityCalendarIds = parseCalendarIds(process.env.GOOGLE_CALENDAR_ACTIVITY_IDS)
+  const campCalendarIds     = parseCalendarIds(process.env.GOOGLE_CALENDAR_CAMP_IDS)
+  const bukaiCalendarIds    = parseCalendarIds(process.env.GOOGLE_CALENDAR_BUKAI_IDS)
   const otherCalendarIds    = parseCalendarIds(process.env.GOOGLE_CALENDAR_OTHER_IDS)
-  const allCalendarIds      = [...activityCalendarIds, ...otherCalendarIds]
+  const miscCalendarIds     = parseCalendarIds(process.env.GOOGLE_CALENDAR_MISC_IDS)
+  const allCalendarIds      = [...activityCalendarIds, ...campCalendarIds, ...bukaiCalendarIds, ...otherCalendarIds, ...miscCalendarIds]
 
   if (allCalendarIds.length === 0) {
     return NextResponse.json({ events: [] })
@@ -89,7 +92,9 @@ export async function GET(request: NextRequest) {
     const importedIds = new Set(
       (importedRes.data ?? []).map(r => r.google_event_id as string)
     )
-    const activityIdSet = new Set(activityCalendarIds)
+    // 部会・合宿も sync で practice_sessions に取り込まれるため isActivityDay 扱い
+    const activityIdSet = new Set([...activityCalendarIds, ...campCalendarIds, ...bukaiCalendarIds])
+    const miscIdSet     = new Set(miscCalendarIds)
 
     const events: GoogleCalendarEvent[] = calendarResults.flatMap(({ calendarId, items }) =>
       items.flatMap(item => {
@@ -113,6 +118,7 @@ export async function GET(request: NextRequest) {
           description:     item.description ?? undefined,
           isActivityDay:   activityIdSet.has(calendarId),
           alreadyImported: importedIds.has(item.id),
+          isOther:         miscIdSet.has(calendarId),
         }
 
         // 複数日にまたがる終日イベントを日ごとに展開

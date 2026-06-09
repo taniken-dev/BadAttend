@@ -46,6 +46,7 @@ export interface PracticeSession {
   note: string | null
   google_event_id: string | null
   is_camp: boolean
+  is_bukai: boolean
   created_at: string
 }
 
@@ -59,6 +60,7 @@ export interface GoogleCalendarEvent {
   description?: string
   isActivityDay: boolean   // title === '活動日'
   alreadyImported: boolean // practice_sessions に登録済み
+  isOther: boolean         // GOOGLE_CALENDAR_MISC_IDS からのイベント（その他）
 }
 
 export interface AttendanceRecord {
