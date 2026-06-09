@@ -28,6 +28,7 @@ type MemberProfile = {
   id: string
   full_name: string
   display_name: string | null
+  joined_at: string | null
   avatar_url: string | null
   grade: number
   role: string
@@ -227,7 +228,7 @@ export default function CalendarView() {
         .eq('session_id', session.id),
       supabase
         .from('profiles')
-        .select('id, full_name, display_name, avatar_url, grade, role')
+        .select('id, full_name, display_name, avatar_url, grade, role, joined_at')
         .eq('is_approved', true),
     ])
 
@@ -241,7 +242,12 @@ export default function CalendarView() {
       .filter(r => profileMap[r.user_id])
       .map(r => ({ ...r, profile: profileMap[r.user_id] }))
 
-    const nonCoachMembers = everyone.filter(p => p.role !== 'coach')
+    // 入部日が設定されている場合、セッション日より後に入部したメンバーを除外
+    const sessionDate = session.session_date
+    const activeMembers = everyone.filter(p =>
+      p.role !== 'coach' && (!p.joined_at || p.joined_at <= sessionDate)
+    )
+    const nonCoachMembers = activeMembers
     const unsubmitted = nonCoachMembers.filter(p => !submittedIds.has(p.id))
 
     setDetail({ session, attendance, unsubmitted, totalApproved: nonCoachMembers.length })
