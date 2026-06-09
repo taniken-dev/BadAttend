@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import {
-  ChevronLeft, ChevronRight, MapPin, Clock, Users,
+  ChevronLeft, ChevronRight, ChevronDown, ChevronUp, MapPin, Clock, Users,
   CheckCircle2, ClipboardCheck, AlertCircle, RotateCcw, Bell,
   Pencil, CalendarCheck, UserCheck, UserX,
   BookOpen, HeartPulse, User, HelpCircle, Dumbbell,
@@ -229,7 +229,8 @@ export default function CalendarView() {
       supabase
         .from('profiles')
         .select('id, full_name, display_name, avatar_url, grade, role, joined_at')
-        .eq('is_approved', true),
+        .eq('is_approved', true)
+        .eq('is_active', true),
     ])
 
     const rows     = (atRows ?? []) as AttendanceRow[]
@@ -918,6 +919,7 @@ function DetailPanel({
   const [reminding,               setReminding]               = useState(false)
   const [remindResult,            setRemindResult]            = useState<{ sent: number } | 'error' | null>(null)
   const [sortKeys,                setSortKeys]                = useState<SortKey[]>(['status'])
+  const [attendanceExpanded,      setAttendanceExpanded]      = useState(!session.is_cancelled)
 
   // 自己登録フォーム（部員向け）
   const [selfFormOpen,    setSelfFormOpen]    = useState(false)
@@ -944,6 +946,10 @@ function DetailPanel({
     setMemberSearchQuery('')
     setCancelReasonInput('')
   }, [session.id])
+
+  useEffect(() => {
+    setAttendanceExpanded(!session.is_cancelled)
+  }, [session.is_cancelled])
 
   const myRecord = attendance.find(a => a.user_id === userId) ?? null
 
@@ -1261,21 +1267,49 @@ function DetailPanel({
       </div>
 
       {/* 提出サマリーバー */}
-      <div className="flex items-center gap-2 px-3 py-2.5 rounded-xl"
-        style={{ background: 'var(--gray-50)', border: '1px solid var(--gray-200)' }}>
-        <Users size={14} className="shrink-0" style={{ color: 'var(--gray-400)' }} />
-        <span className="text-sm" style={{ color: 'var(--gray-600)' }}>
-          <span className="font-bold" style={{ color: 'var(--gray-900)' }}>
-            {attendance.length}
-          </span>
-          /{totalApproved}名 連絡済み
-          {notYet > 0 && (
-            <span className="ml-2 font-semibold" style={{ color: '#d97706' }}>
-              • 未提出 {notYet}名
+      {session.is_cancelled ? (
+        <button
+          onClick={() => setAttendanceExpanded(v => !v)}
+          className="flex items-center justify-between gap-2 px-3 py-2.5 rounded-xl w-full text-left cursor-pointer transition-opacity hover:opacity-80"
+          style={{ background: 'var(--gray-50)', border: '1px solid var(--gray-200)' }}
+        >
+          <div className="flex items-center gap-2">
+            <Users size={14} className="shrink-0" style={{ color: 'var(--gray-400)' }} />
+            <span className="text-sm" style={{ color: 'var(--gray-600)' }}>
+              <span className="font-bold" style={{ color: 'var(--gray-900)' }}>
+                {attendance.length}
+              </span>
+              /{totalApproved}名 連絡済み
+              {notYet > 0 && (
+                <span className="ml-2 font-semibold" style={{ color: '#d97706' }}>
+                  • 未提出 {notYet}名
+                </span>
+              )}
             </span>
-          )}
-        </span>
-      </div>
+          </div>
+          {attendanceExpanded
+            ? <ChevronUp size={15} className="shrink-0" style={{ color: 'var(--gray-400)' }} />
+            : <ChevronDown size={15} className="shrink-0" style={{ color: 'var(--gray-400)' }} />}
+        </button>
+      ) : (
+        <div className="flex items-center gap-2 px-3 py-2.5 rounded-xl"
+          style={{ background: 'var(--gray-50)', border: '1px solid var(--gray-200)' }}>
+          <Users size={14} className="shrink-0" style={{ color: 'var(--gray-400)' }} />
+          <span className="text-sm" style={{ color: 'var(--gray-600)' }}>
+            <span className="font-bold" style={{ color: 'var(--gray-900)' }}>
+              {attendance.length}
+            </span>
+            /{totalApproved}名 連絡済み
+            {notYet > 0 && (
+              <span className="ml-2 font-semibold" style={{ color: '#d97706' }}>
+                • 未提出 {notYet}名
+              </span>
+            )}
+          </span>
+        </div>
+      )}
+
+      {(!session.is_cancelled || attendanceExpanded) && <>
 
       {/* 自分の出欠連絡（顧問以外・登録可能期間 or 事前欠席変更） */}
       {canSelfRegister && userId && (canRegister || canEarlyAbsent) && (
@@ -1924,6 +1958,8 @@ function DetailPanel({
           </div>
         </div>
       )}
+
+      </>}
     </div>
   )
 }

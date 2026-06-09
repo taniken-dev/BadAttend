@@ -80,7 +80,8 @@ export default async function DashboardPage() {
       supabase
         .from('profiles')
         .select('id, full_name, display_name, grade')
-        .eq('is_approved', true),
+        .eq('is_approved', true)
+        .eq('is_active', true),
     ])
 
     const profileMap = Object.fromEntries(

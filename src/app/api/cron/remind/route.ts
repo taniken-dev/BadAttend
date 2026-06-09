@@ -49,6 +49,7 @@ export async function GET(request: NextRequest) {
     .from('profiles')
     .select('id')
     .eq('is_approved', true)
+    .eq('is_active', true)
     .neq('role', 'coach')
 
   if (!profiles || profiles.length === 0) {
