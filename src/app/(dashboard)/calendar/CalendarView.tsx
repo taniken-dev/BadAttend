@@ -833,7 +833,7 @@ function GCalEventsPanel({ events }: { events: GoogleCalendarEvent[] }) {
                 </div>
               )}
               {ev.description && (
-                <p className="text-xs mt-0.5" style={{ color: 'var(--gray-500)' }}>
+                <p className="text-xs mt-0.5" style={{ color: 'var(--gray-500)', whiteSpace: 'pre-wrap' }}>
                   {ev.description}
                 </p>
               )}
