@@ -70,6 +70,7 @@ async function main() {
     .from('profiles')
     .select('display_name, full_name, grade')
     .eq('is_approved', true)
+    .eq('is_active', true)
     .order('grade', { ascending: false })
     .order('display_name')
 

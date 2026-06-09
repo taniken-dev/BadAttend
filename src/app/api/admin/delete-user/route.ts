@@ -42,7 +42,11 @@ export async function POST(request: NextRequest) {
     process.env.SUPABASE_SERVICE_ROLE_KEY!
   )
 
-  const { error } = await admin.auth.admin.deleteUser(userId)
+  const { error } = await admin
+    .from('profiles')
+    .update({ is_active: false })
+    .eq('id', userId)
+
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
   return NextResponse.json({ success: true })

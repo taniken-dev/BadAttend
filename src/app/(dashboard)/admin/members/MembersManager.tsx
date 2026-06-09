@@ -16,6 +16,7 @@ import {
   Check,
   UserPlus,
   Search,
+  UserX,
 } from 'lucide-react'
 import type { Profile, SkillRank } from '@/lib/types'
 import { getSkillRankLabel } from '@/lib/utils'
@@ -61,12 +62,13 @@ export default function MembersManager({
   // デバッグスイッチャーでロールを変更した場合もreadOnlyを反映
   const effectiveReadOnly  = readOnly || viewRole !== 'admin'
   const canSeeSkillRank   = viewRole === 'admin' || viewRole === 'coach'
-  const [updating, setUpdating]     = useState<string | null>(null)
-  const [toast, setToast]           = useState<{ msg: string; ok: boolean } | null>(null)
-  const [editTarget, setEditTarget] = useState<string | null>(null)
-  const [editName, setEditName]     = useState('')
-  const [saving, setSaving]         = useState(false)
+  const [updating, setUpdating]       = useState<string | null>(null)
+  const [toast, setToast]             = useState<{ msg: string; ok: boolean } | null>(null)
+  const [editTarget, setEditTarget]   = useState<string | null>(null)
+  const [editName, setEditName]       = useState('')
+  const [saving, setSaving]           = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
+  const [showRetired, setShowRetired] = useState(false)
 
   const roleOrder: Record<string, number> = { admin: 0, manager: 1, member: 2, coach: 3 }
   const sortByRoleGradeName = (a: Profile, b: Profile) => {
@@ -78,8 +80,9 @@ export default function MembersManager({
     const nameB = b.display_name ?? b.full_name
     return nameA.localeCompare(nameB, 'ja')
   }
-  const pending  = useMemo(() => members.filter(m => !m.is_approved), [members])
-  const approved = useMemo(() => [...members.filter(m => m.is_approved)].sort(sortByRoleGradeName), [members])
+  const pending  = useMemo(() => members.filter(m => !m.is_approved && m.is_active !== false), [members])
+  const approved = useMemo(() => [...members.filter(m => m.is_approved && m.is_active !== false)].sort(sortByRoleGradeName), [members])
+  const retired  = useMemo(() => [...members.filter(m => m.is_active === false)].sort(sortByRoleGradeName), [members])
   const filteredApproved = useMemo(() => {
     const q = searchQuery.trim().toLowerCase()
     if (!q) return approved
@@ -142,7 +145,7 @@ export default function MembersManager({
   }
 
   async function deleteMember(id: string, name: string) {
-    if (!confirm(`「${name}」を退部処理しますか？\nアカウントと全データが削除されます。この操作は取り消せません。`)) return
+    if (!confirm(`「${name}」を退部処理しますか？\n出席記録等のデータは保存され、退部済みメンバーとして管理画面から確認できます。`)) return
     setUpdating(id)
     const res = await fetch('/api/admin/delete-user', {
       method: 'POST',
@@ -150,7 +153,7 @@ export default function MembersManager({
       body: JSON.stringify({ userId: id }),
     })
     setUpdating(null)
-    if (!res.ok) { showToast('削除に失敗しました', false); return }
+    if (!res.ok) { showToast('退部処理に失敗しました', false); return }
     showToast(`${name} を退部処理しました`, true)
     router.refresh()
   }
@@ -676,12 +679,84 @@ export default function MembersManager({
         )}
       </div>
 
+      {/* 退部済みメンバー */}
+      {retired.length > 0 && (
+        <div className="card animate-slide-up" style={{ animationDelay: '0.15s' }}>
+          <button
+            onClick={() => setShowRetired(v => !v)}
+            className="flex items-center justify-between w-full cursor-pointer"
+          >
+            <div className="flex items-center gap-2">
+              <UserX size={16} style={{ color: 'var(--gray-400)' }} />
+              <h2 className="text-base font-bold" style={{ color: 'var(--gray-500)', letterSpacing: '-0.02em' }}>
+                退部済みメンバー
+              </h2>
+              <span
+                className="text-xs px-2 py-0.5 rounded-full"
+                style={{ background: 'var(--gray-100)', color: 'var(--gray-500)' }}
+              >
+                {retired.length} 名
+              </span>
+            </div>
+            <ChevronDown
+              size={16}
+              style={{
+                color: 'var(--gray-400)',
+                transform: showRetired ? 'rotate(180deg)' : 'rotate(0deg)',
+                transition: 'transform 0.2s',
+              }}
+            />
+          </button>
+
+          {showRetired && (
+            <div className="flex flex-col gap-3 mt-4">
+              {retired.map(m => (
+                <div
+                  key={m.id}
+                  className="flex items-center gap-3 p-3.5 rounded-xl"
+                  style={{ background: 'var(--gray-50)', border: '1.5px solid var(--gray-200)', opacity: 0.7 }}
+                >
+                  {m.avatar_url ? (
+                    <img src={m.avatar_url} alt="" width={40} height={40} className="w-10 h-10 rounded-xl object-cover shrink-0 grayscale" />
+                  ) : (
+                    <div
+                      className="w-10 h-10 rounded-xl flex items-center justify-center text-sm font-bold shrink-0"
+                      style={{ background: 'var(--gray-200)', color: 'var(--gray-400)' }}
+                    >
+                      {displayName(m).charAt(0)}
+                    </div>
+                  )}
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      <span className="text-sm font-bold" style={{ color: 'var(--gray-500)' }}>
+                        {displayName(m)}
+                      </span>
+                      <span
+                        className="text-xs px-1.5 py-0.5 rounded-full font-semibold"
+                        style={{ background: 'var(--gray-200)', color: 'var(--gray-500)' }}
+                      >
+                        退部済み
+                      </span>
+                    </div>
+                    <p className="text-xs mt-0.5" style={{ color: 'var(--gray-400)' }}>
+                      LINE: {m.full_name}
+                      {m.role !== 'coach' && ` · ${m.grade}年生`}
+                      {m.joined_at && ` · 入部 ${m.joined_at}`}
+                    </p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
       {/* 注意書き（effectiveReadOnly では非表示） */}
       {!effectiveReadOnly && (
         <div
           className="text-xs leading-relaxed px-4 py-3 rounded-xl animate-slide-up"
           style={{
-            animationDelay: '0.15s',
+            animationDelay: '0.2s',
             background: 'color-mix(in srgb, #f59e0b 8%, var(--card-bg))',
             color: 'var(--gray-600)',
             border: '1px solid color-mix(in srgb, #f59e0b 30%, transparent)',
@@ -689,7 +764,7 @@ export default function MembersManager({
             boxShadow: 'var(--shadow-xs)',
           }}
         >
-          退部処理を行うとアカウントと全データが完全に削除されます。この操作は取り消せません。
+          退部処理を行うと出席記録等のデータは保持され、退部済みメンバーとして管理画面から確認できます。
         </div>
       )}
     </div>
