@@ -1103,50 +1103,52 @@ function DetailPanel({
 
   return (
     <div className="flex flex-col gap-4">
-      {/* セッション情報ヘッダー */}
-      <div>
-        <div className="flex items-center justify-between mb-2">
+      {/* セッション情報ヘッダー + 練習休止トグル */}
+      <div className="flex gap-3 items-start">
+        {/* 左: セッション情報 */}
+        <div className="flex-1 min-w-0 flex flex-col gap-1.5">
           <h2 className="text-base font-bold" style={{ color: 'var(--gray-900)' }}>
             {dateLabel}の{session.is_bukai ? '部会' : session.is_camp ? '合宿' : '練習'}
           </h2>
-          <div className="flex items-center gap-2">
-            {session.is_results_confirmed && (
-              <div className="flex items-center gap-1.5">
-                <span className="flex items-center gap-1 text-xs px-2 py-0.5 rounded-full font-semibold"
-                  style={{ background: '#dcfce7', color: '#15803d' }}>
-                  <CheckCircle2 size={11} />
-                  実績確定済み
-                </span>
-                {isManagerOrAdmin && (
-                  <button
-                    onClick={handleRevert}
-                    disabled={reverting}
-                    className="flex items-center gap-1 text-xs px-2 py-0.5 rounded-full font-semibold cursor-pointer transition-opacity hover:opacity-70"
-                    style={{ background: 'var(--gray-100)', color: 'var(--gray-500)', border: '1px solid var(--gray-200)' }}
-                    title="全員の実績確定を解除"
-                  >
-                    {reverting
-                      ? <span className="w-2.5 h-2.5 border border-current border-t-transparent rounded-full animate-spin" />
-                      : <RotateCcw size={10} />}
-                    全解除
-                  </button>
-                )}
-              </div>
-            )}
-            {session.is_cancelled && (
-              <div className="flex items-center gap-1.5 flex-wrap">
-                <span className="text-xs px-2 py-0.5 rounded-full font-semibold"
-                  style={{ background: '#fee2e2', color: '#b91c1c' }}>休止</span>
-                {session.cancellation_reason && (
-                  <span className="text-xs" style={{ color: '#b91c1c' }}>
-                    {session.cancellation_reason}
+          {/* バッジ行 */}
+          {(session.is_results_confirmed || (session.is_cancelled && !canManageSessions)) && (
+            <div className="flex items-center gap-1.5 flex-wrap">
+              {session.is_results_confirmed && (
+                <>
+                  <span className="flex items-center gap-1 text-xs px-2 py-0.5 rounded-full font-semibold"
+                    style={{ background: '#dcfce7', color: '#15803d' }}>
+                    <CheckCircle2 size={11} />
+                    実績確定済み
                   </span>
-                )}
-              </div>
-            )}
-          </div>
-        </div>
-        <div className="flex flex-col gap-1.5">
+                  {isManagerOrAdmin && (
+                    <button
+                      onClick={handleRevert}
+                      disabled={reverting}
+                      className="flex items-center gap-1 text-xs px-2 py-0.5 rounded-full font-semibold cursor-pointer transition-opacity hover:opacity-70"
+                      style={{ background: 'var(--gray-100)', color: 'var(--gray-500)', border: '1px solid var(--gray-200)' }}
+                      title="全員の実績確定を解除"
+                    >
+                      {reverting
+                        ? <span className="w-2.5 h-2.5 border border-current border-t-transparent rounded-full animate-spin" />
+                        : <RotateCcw size={10} />}
+                      全解除
+                    </button>
+                  )}
+                </>
+              )}
+              {session.is_cancelled && !canManageSessions && (
+                <>
+                  <span className="text-xs px-2 py-0.5 rounded-full font-semibold"
+                    style={{ background: '#fee2e2', color: '#b91c1c' }}>休止</span>
+                  {session.cancellation_reason && (
+                    <span className="text-xs" style={{ color: '#b91c1c' }}>
+                      {session.cancellation_reason}
+                    </span>
+                  )}
+                </>
+              )}
+            </div>
+          )}
           <div className="flex items-center gap-2 text-sm" style={{ color: 'var(--gray-600)' }}>
             <Clock size={14} className="shrink-0" style={{ color: 'var(--gray-400)' }} />
             {session.start_time.slice(0, 5)} 〜 {session.end_time.slice(0, 5)}
@@ -1156,6 +1158,106 @@ function DetailPanel({
             {session.location}
           </div>
         </div>
+
+        {/* 右: 練習休止トグル（マネージャー/管理者のみ） */}
+        {canManageSessions && (
+          <div className="shrink-0 flex flex-col gap-2 px-3 py-3 rounded-xl"
+            style={{
+              width: '220px',
+              background: session.is_cancelled ? '#fff1f2' : 'var(--gray-50)',
+              border: `1px solid ${session.is_cancelled ? '#fecdd3' : 'var(--gray-200)'}`,
+            }}>
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-xs font-semibold" style={{ color: session.is_cancelled ? '#b91c1c' : 'var(--gray-700)' }}>
+                {session.is_cancelled ? '休止中' : '練習を休止にする'}
+              </span>
+              {/* トグルスイッチ */}
+              <button
+                type="button"
+                disabled={cancelSubmitting}
+                onClick={async () => {
+                  if (session.is_cancelled) {
+                    setCancelSubmitting(true)
+                    await onToggleCancelled(false, null)
+                    setCancelSubmitting(false)
+                  }
+                }}
+                className="relative inline-flex shrink-0 rounded-full transition-colors duration-200"
+                style={{
+                  width: 44, height: 24,
+                  background: session.is_cancelled ? '#ef4444' : 'var(--gray-300)',
+                  opacity: cancelSubmitting ? 0.6 : 1,
+                  cursor: session.is_cancelled && !cancelSubmitting ? 'pointer' : 'default',
+                }}
+                title={session.is_cancelled ? '休止を解除する' : undefined}
+              >
+                <span
+                  className="inline-block rounded-full bg-white shadow transition-transform duration-200"
+                  style={{
+                    width: 18, height: 18,
+                    margin: 3,
+                    transform: session.is_cancelled ? 'translateX(20px)' : 'translateX(0)',
+                  }}
+                />
+              </button>
+            </div>
+
+            {/* 休止中: 理由表示 + 解除ボタン */}
+            {session.is_cancelled ? (
+              <div className="flex flex-col gap-2">
+                {session.cancellation_reason && (
+                  <p className="text-xs" style={{ color: '#9f1239' }}>
+                    理由: {session.cancellation_reason}
+                  </p>
+                )}
+                <button
+                  type="button"
+                  disabled={cancelSubmitting}
+                  onClick={async () => {
+                    setCancelSubmitting(true)
+                    await onToggleCancelled(false, null)
+                    setCancelSubmitting(false)
+                  }}
+                  className="flex items-center justify-center gap-1 py-2 rounded-xl text-xs font-semibold transition-all cursor-pointer active:scale-95 hover:opacity-80"
+                  style={{ background: 'var(--gray-200)', color: 'var(--gray-700)', opacity: cancelSubmitting ? 0.6 : 1 }}
+                >
+                  {cancelSubmitting
+                    ? <span className="w-3 h-3 border-2 border-current border-t-transparent rounded-full animate-spin" />
+                    : null}
+                  {cancelSubmitting ? '処理中...' : '休止を解除'}
+                </button>
+              </div>
+            ) : (
+              /* 通常: 理由入力 + 休止ボタン */
+              <div className="flex flex-col gap-2">
+                <input
+                  type="text"
+                  value={cancelReasonInput}
+                  onChange={e => setCancelReasonInput(e.target.value)}
+                  placeholder="理由（例: 台風）"
+                  className="input-field"
+                  style={{ fontSize: '12px' }}
+                />
+                <button
+                  type="button"
+                  disabled={cancelSubmitting}
+                  onClick={async () => {
+                    setCancelSubmitting(true)
+                    await onToggleCancelled(true, cancelReasonInput)
+                    setCancelSubmitting(false)
+                  }}
+                  className="flex items-center justify-center gap-1 py-2 rounded-xl text-xs font-semibold transition-all cursor-pointer active:scale-95 hover:opacity-80"
+                  style={{ background: '#ef4444', color: 'white', opacity: cancelSubmitting ? 0.6 : 1 }}
+                >
+                  {cancelSubmitting
+                    ? <span className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                    : null}
+                  {cancelSubmitting ? '処理中...' : '休止にする'}
+                </button>
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       {/* 提出サマリーバー */}
@@ -1433,105 +1535,6 @@ function DetailPanel({
             >
               <CalendarCheck size={15} /> 出欠を連絡する
             </button>
-          )}
-        </div>
-      )}
-
-      {/* マネージャー/管理者向け：練習休止トグル */}
-      {canManageSessions && (
-        <div className="flex flex-col gap-2 px-3 py-3 rounded-xl"
-          style={{
-            background: session.is_cancelled ? '#fff1f2' : 'var(--gray-50)',
-            border: `1px solid ${session.is_cancelled ? '#fecdd3' : 'var(--gray-200)'}`,
-          }}>
-          <div className="flex items-center justify-between gap-2">
-            <span className="text-sm font-semibold" style={{ color: session.is_cancelled ? '#b91c1c' : 'var(--gray-700)' }}>
-              {session.is_cancelled ? '練習が休止中です' : '練習を休止にする'}
-            </span>
-            {/* トグルスイッチ */}
-            <button
-              type="button"
-              disabled={cancelSubmitting}
-              onClick={async () => {
-                if (session.is_cancelled) {
-                  setCancelSubmitting(true)
-                  await onToggleCancelled(false, null)
-                  setCancelSubmitting(false)
-                }
-              }}
-              className="relative inline-flex shrink-0 cursor-pointer rounded-full transition-colors duration-200"
-              style={{
-                width: 44, height: 24,
-                background: session.is_cancelled ? '#ef4444' : 'var(--gray-300)',
-                opacity: cancelSubmitting ? 0.6 : 1,
-                cursor: session.is_cancelled && !cancelSubmitting ? 'pointer' : 'default',
-              }}
-              title={session.is_cancelled ? '休止を解除する' : undefined}
-            >
-              <span
-                className="inline-block rounded-full bg-white shadow transition-transform duration-200"
-                style={{
-                  width: 18, height: 18,
-                  margin: 3,
-                  transform: session.is_cancelled ? 'translateX(20px)' : 'translateX(0)',
-                }}
-              />
-            </button>
-          </div>
-
-          {/* 休止中: 理由表示 + 解除ボタン */}
-          {session.is_cancelled ? (
-            <div className="flex flex-col gap-2">
-              {session.cancellation_reason && (
-                <p className="text-xs" style={{ color: '#9f1239' }}>
-                  理由: {session.cancellation_reason}
-                </p>
-              )}
-              <button
-                type="button"
-                disabled={cancelSubmitting}
-                onClick={async () => {
-                  setCancelSubmitting(true)
-                  await onToggleCancelled(false, null)
-                  setCancelSubmitting(false)
-                }}
-                className="flex items-center justify-center gap-2 py-2 rounded-xl text-sm font-semibold transition-all cursor-pointer active:scale-95 hover:opacity-80"
-                style={{ background: 'var(--gray-200)', color: 'var(--gray-700)', opacity: cancelSubmitting ? 0.6 : 1 }}
-              >
-                {cancelSubmitting
-                  ? <span className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin" />
-                  : null}
-                {cancelSubmitting ? '処理中...' : '休止を解除する'}
-              </button>
-            </div>
-          ) : (
-            /* 通常: 理由入力 + 休止ボタン */
-            <div className="flex flex-col gap-2">
-              <input
-                type="text"
-                value={cancelReasonInput}
-                onChange={e => setCancelReasonInput(e.target.value)}
-                placeholder="理由（例: 台風のため）"
-                className="input-field"
-                style={{ fontSize: '13px' }}
-              />
-              <button
-                type="button"
-                disabled={cancelSubmitting}
-                onClick={async () => {
-                  setCancelSubmitting(true)
-                  await onToggleCancelled(true, cancelReasonInput)
-                  setCancelSubmitting(false)
-                }}
-                className="flex items-center justify-center gap-2 py-2 rounded-xl text-sm font-semibold transition-all cursor-pointer active:scale-95 hover:opacity-80"
-                style={{ background: '#ef4444', color: 'white', opacity: cancelSubmitting ? 0.6 : 1 }}
-              >
-                {cancelSubmitting
-                  ? <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                  : null}
-                {cancelSubmitting ? '処理中...' : 'この練習を休止にする'}
-              </button>
-            </div>
           )}
         </div>
       )}
