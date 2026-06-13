@@ -21,8 +21,9 @@ export default function LoginPage() {
     setError(null)
     const isPwa = window.matchMedia('(display-mode: standalone)').matches
       || (navigator as Navigator & { standalone?: boolean }).standalone === true
-    if (isPwa) localStorage.setItem('pwa_auth_pending', '1')
-    window.location.href = '/api/auth/line'
+    // isPwa のとき ?from=pwa を付けてサーバー側でクッキーに記録させる。
+    // localStorage は Safari コンテキストから読めないため使用しない。
+    window.location.href = isPwa ? '/api/auth/line?from=pwa' : '/api/auth/line'
   }
 
   return (

@@ -7,7 +7,7 @@ import {
   CheckCircle2, ClipboardCheck, AlertCircle, RotateCcw, Bell,
   Pencil, CalendarCheck, UserCheck, UserX,
   BookOpen, HeartPulse, User, HelpCircle, Dumbbell,
-  ExternalLink, Search, X,
+  ExternalLink, Search, X, LayoutGrid,
 } from 'lucide-react'
 import { useViewRole } from '@/contexts/ViewRoleContext'
 import { getWeeklyRegistrationInfo } from '@/lib/utils'
@@ -166,7 +166,7 @@ export default function CalendarView() {
     // 1. Supabase から即座に既存セッションを表示（高速）
     supabase
       .from('practice_sessions')
-      .select('id, session_date, start_time, end_time, location, is_cancelled, cancellation_reason, is_results_confirmed, results_confirmed_at, note, google_event_id, is_camp, is_bukai, created_at')
+      .select('id, session_date, start_time, end_time, location, is_cancelled, cancellation_reason, is_results_confirmed, results_confirmed_at, note, google_event_id, is_camp, is_bukai, courts, created_at')
       .gte('session_date', s)
       .lte('session_date', e)
       .abortSignal(signal)
@@ -1163,6 +1163,12 @@ function DetailPanel({
             <MapPin size={14} className="shrink-0" style={{ color: 'var(--gray-400)' }} />
             {session.location}
           </div>
+          {session.courts != null && (
+            <div className="flex items-center gap-2 text-sm" style={{ color: 'var(--gray-600)' }}>
+              <LayoutGrid size={14} className="shrink-0" style={{ color: 'var(--gray-400)' }} />
+              {session.courts}面
+            </div>
+          )}
         </div>
 
         {/* 右: 練習休止トグル（マネージャー/管理者のみ） */}
