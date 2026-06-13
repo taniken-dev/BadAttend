@@ -1,4 +1,39 @@
+'use client'
+
+import { useEffect, useState } from 'react'
+
 export default function BackToAppPage() {
+  const [secondsLeft, setSecondsLeft] = useState(3)
+
+  useEffect(() => {
+    // PWA standalone モードで開いた場合はそのままダッシュボードへ飛ばす
+    const isStandalone =
+      window.matchMedia('(display-mode: standalone)').matches ||
+      (navigator as Navigator & { standalone?: boolean }).standalone === true
+
+    if (isStandalone) {
+      window.location.replace('/dashboard')
+      return
+    }
+
+    // Safari で開いた場合: カウントダウン後に同 URL へ replace を試みる。
+    // iOS は Safari から PWA ウィンドウを開く手段がないため、
+    // ユーザーにホーム画面アイコンをタップするよう案内する。
+    const interval = setInterval(() => {
+      setSecondsLeft(prev => {
+        if (prev <= 1) {
+          clearInterval(interval)
+          // 試みとして replace するが iOS では Safari のまま
+          window.location.replace('/dashboard')
+          return 0
+        }
+        return prev - 1
+      })
+    }, 1000)
+
+    return () => clearInterval(interval)
+  }, [])
+
   return (
     <div
       className="min-h-screen flex flex-col items-center justify-center px-6 text-center"
@@ -32,7 +67,6 @@ export default function BackToAppPage() {
           className="w-16 h-16 rounded-2xl flex items-center justify-center"
           style={{ background: 'linear-gradient(135deg, #312e81 0%, #4338ca 100%)' }}
         >
-          {/* Feather icon */}
           <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <path d="M20.24 12.24a6 6 0 0 0-8.49-8.49L5 10.5V19h8.5z"/>
             <line x1="16" y1="8" x2="2" y2="22"/>
@@ -43,8 +77,12 @@ export default function BackToAppPage() {
         <span className="text-xs" style={{ color: 'rgba(255,255,255,0.4)' }}>↑ このアイコンをタップ</span>
       </div>
 
-      <p className="text-xs" style={{ color: 'rgba(255,255,255,0.25)' }}>
-        このページはそのまま閉じて構いません
+      <p className="text-xs" style={{ color: 'rgba(255,255,255,0.35)', lineHeight: 1.8 }}>
+        {secondsLeft > 0
+          ? `${secondsLeft} 秒後にブラウザ版へ移動します…`
+          : 'ブラウザ版で開いています'}
+        <br />
+        アプリ版を使うにはホーム画面のアイコンをタップしてください
       </p>
     </div>
   )

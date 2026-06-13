@@ -48,6 +48,7 @@ export interface PracticeSession {
   google_event_id: string | null
   is_camp: boolean
   is_bukai: boolean
+  courts: number | null
   created_at: string
 }
 

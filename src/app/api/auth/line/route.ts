@@ -3,7 +3,8 @@ import type { NextRequest } from 'next/server'
 import { randomBytes } from 'crypto'
 
 export async function GET(request: NextRequest) {
-  const origin = new URL(request.url).origin
+  const { origin, searchParams } = new URL(request.url)
+  const fromPwa = searchParams.get('from') === 'pwa'
 
   const state = randomBytes(16).toString('hex')
   const nonce = randomBytes(16).toString('hex')
@@ -30,6 +31,10 @@ export async function GET(request: NextRequest) {
   }
   response.cookies.set('line_state', state, cookieOpts)
   response.cookies.set('line_nonce', nonce, cookieOpts)
+  // PWA からの起動だった場合はクッキーで記録する（LocalStorage は Safari 側から読めない）
+  if (fromPwa) {
+    response.cookies.set('pwa_auth', '1', cookieOpts)
+  }
 
   return response
 }

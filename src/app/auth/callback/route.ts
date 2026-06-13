@@ -14,10 +14,13 @@ export async function GET(request: NextRequest) {
   const next       = searchParams.get('next') ?? '/dashboard'
 
   const savedState  = request.cookies.get('line_state')?.value
+  // PWA から起動されたログインかどうか（クッキー経由で受け取る）
+  const fromPwa     = request.cookies.get('pwa_auth')?.value === '1'
 
   // ① LINE コールバック（state クッキーと一致）
   if (state && savedState && state === savedState && code) {
-    return handleLineCallback(code, origin, next)
+    // PWA 起動時は back-to-app ページへ。ブラウザ起動時は next パラメータ通り。
+    return handleLineCallback(code, origin, fromPwa ? '/auth/back-to-app' : next)
   }
 
   // ② magic link 経由のセッション確立（LINE callback から内部リダイレクト）
@@ -152,6 +155,7 @@ async function handleLineCallback(code: string, origin: string, next: string) {
   const response = NextResponse.redirect(callbackUrl)
   response.cookies.delete('line_state')
   response.cookies.delete('line_nonce')
+  response.cookies.delete('pwa_auth')
   return response
 }
 
