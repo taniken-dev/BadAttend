@@ -71,7 +71,7 @@ export default function RulesPage() {
             color="#d97706"
             bg="#fef3c7"
             label="遅刻"
-            desc="遅れて参加する。理由と到着見込みの授業限を選択"
+            desc="遅れて参加する。参加予定時刻を30分刻みで選択"
           />
           <StatusRow
             icon={<XCircle size={15} />}
@@ -103,7 +103,7 @@ export default function RulesPage() {
         <div className="flex flex-col gap-2 text-sm" style={{ color: 'var(--gray-700)' }}>
           {[
             ['別練習・大会', '他の試合や練習参加'],
-            ['授業', '講義・実験など。遅刻の場合は何限かを選択'],
+            ['授業', '講義・実験など'],
             ['体調不良', '病気・怪我など。次回練習までロックがかかる場合あり'],
             ['私用', '家庭の事情など'],
             ['その他', '上記に当てはまらない場合。詳細の入力が必要'],
