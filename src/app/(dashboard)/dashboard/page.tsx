@@ -65,17 +65,20 @@ export default async function DashboardPage() {
     .single<PracticeSession>()
 
   // 今日の全出欠レコード
-  type RawRecord = { user_id: string; status: string; reason: string | null; reason_detail: string | null }
-  type AttendeeRow = { status: string; reason: string | null; reason_detail: string | null; profiles: { full_name: string; display_name: string | null; grade: number } }
+  type RawRecord = { user_id: string; status: string; reason: string | null; reason_detail: string | null; arrival_time: string | null }
+  type AttendeeRow = { status: string; reason: string | null; reason_detail: string | null; arrival_time: string | null; profiles: { full_name: string; display_name: string | null; grade: number } }
   let attendees: AttendeeRow[] = []
   let absentees: AttendeeRow[] = []
+  let presentAttendees: AttendeeRow[] = []
+  let tardyGroups: [string, AttendeeRow[]][] = []
+  let noTimeTardy: AttendeeRow[] = []
 
   if (todaySession) {
     // profiles!inner の RLS 問題を避けるため別クエリで取得してコード結合
     const [{ data: records }, { data: profileList }] = await Promise.all([
       supabase
         .from('attendance_records')
-        .select('user_id, status, reason, reason_detail')
+        .select('user_id, status, reason, reason_detail, arrival_time')
         .eq('session_id', todaySession.id),
       supabase
         .from('profiles')
@@ -103,6 +106,24 @@ export default async function DashboardPage() {
 
     attendees = all.filter(r => r.status === 'present' || r.status === 'tardy').sort(sortByGradeName)
     absentees = all.filter(r => r.status !== 'present' && r.status !== 'tardy').sort(sortByGradeName)
+
+    // 参加予定を時間帯グループに分類
+    presentAttendees = attendees.filter(r => r.status === 'present')
+    const tardyWithTime = attendees
+      .filter(r => r.status === 'tardy' && r.arrival_time)
+      .sort((a, b) => {
+        const t = (a.arrival_time ?? '').localeCompare(b.arrival_time ?? '')
+        return t !== 0 ? t : sortByGradeName(a, b)
+      })
+    noTimeTardy = attendees.filter(r => r.status === 'tardy' && !r.arrival_time).sort(sortByGradeName)
+
+    const tardyTimeMap = new Map<string, AttendeeRow[]>()
+    for (const a of tardyWithTime) {
+      const key = a.arrival_time!.substring(0, 5)
+      if (!tardyTimeMap.has(key)) tardyTimeMap.set(key, [])
+      tardyTimeMap.get(key)!.push(a)
+    }
+    tardyGroups = Array.from(tardyTimeMap.entries()).sort(([a], [b]) => a.localeCompare(b))
   }
 
   // 自分の今日の出欠（coach は不要）
@@ -209,21 +230,70 @@ export default async function DashboardPage() {
                 まだ出欠連絡がありません
               </p>
             ) : (
-              <div className="flex flex-wrap gap-2">
-                {attendees.map((a, i) => (
-                  <div
-                    key={i}
-                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-semibold"
-                    style={{
-                      background: a.status === 'tardy' ? '#fef3c7' : '#dcfce7',
-                      color: a.status === 'tardy' ? '#b45309' : '#15803d',
-                    }}
-                  >
-                    {a.status === 'tardy' && <Clock size={12} />}
-                    {a.profiles.display_name ?? a.profiles.full_name}
-                    {a.status === 'tardy' && <span className="text-xs opacity-70">遅刻</span>}
+              <div className="flex flex-col gap-3">
+                {/* 開始から参加 */}
+                {presentAttendees.length > 0 && (
+                  <div>
+                    <p className="text-xs font-semibold mb-1.5" style={{ color: 'var(--gray-500)' }}>
+                      開始から参加
+                    </p>
+                    <div className="flex flex-wrap gap-2">
+                      {presentAttendees.map((a, i) => (
+                        <div
+                          key={i}
+                          className="px-3 py-1.5 rounded-full text-sm font-semibold"
+                          style={{ background: '#dcfce7', color: '#15803d' }}
+                        >
+                          {a.profiles.display_name ?? a.profiles.full_name}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                {/* 時刻指定の遅刻グループ */}
+                {tardyGroups.map(([time, members]) => (
+                  <div key={time}>
+                    <div className="flex items-center gap-1.5 mb-1.5">
+                      <Clock size={11} style={{ color: '#b45309' }} />
+                      <p className="text-xs font-semibold" style={{ color: '#b45309' }}>
+                        {time} から参加
+                      </p>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      {members.map((a, i) => (
+                        <div
+                          key={i}
+                          className="px-3 py-1.5 rounded-full text-sm font-semibold"
+                          style={{ background: '#fef3c7', color: '#b45309' }}
+                        >
+                          {a.profiles.display_name ?? a.profiles.full_name}
+                        </div>
+                      ))}
+                    </div>
                   </div>
                 ))}
+                {/* 時刻未定の遅刻 */}
+                {noTimeTardy.length > 0 && (
+                  <div>
+                    <div className="flex items-center gap-1.5 mb-1.5">
+                      <Clock size={11} style={{ color: '#b45309' }} />
+                      <p className="text-xs font-semibold" style={{ color: '#b45309' }}>
+                        遅刻・時刻未定
+                      </p>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      {noTimeTardy.map((a, i) => (
+                        <div
+                          key={i}
+                          className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-semibold"
+                          style={{ background: '#fef3c7', color: '#b45309' }}
+                        >
+                          {a.profiles.display_name ?? a.profiles.full_name}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
             )}
           </div>

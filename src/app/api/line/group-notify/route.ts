@@ -12,7 +12,7 @@ const REASON_LABELS: Record<string, string> = {
 }
 
 export async function POST(request: NextRequest) {
-  const { sessionDate, status, reason, reasonDetail, isAdvance, isBukai } = await request.json()
+  const { sessionDate, status, reason, reasonDetail, arrivalTime, isAdvance, isBukai } = await request.json()
   if (!sessionDate) {
     return NextResponse.json({ error: 'sessionDate required' }, { status: 400 })
   }
@@ -57,7 +57,7 @@ export async function POST(request: NextRequest) {
   let text: string
   if (status === 'tardy') {
     text = `【出欠通知】\n${name}が${dateLabel}の${sessionLabel}に当日遅刻します。`
-    if (reasonStr) text += `\n理由：${reasonStr}`
+    if (arrivalTime) text += `\n参加予定時刻：${arrivalTime}`
   } else if (isAdvance) {
     text = `【出欠通知】\n${name}が${dateLabel}の${sessionLabel}を欠席します（事前連絡）。`
     if (reasonStr) text += `\n理由：${reasonStr}`

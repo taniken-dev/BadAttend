@@ -74,6 +74,7 @@ export interface AttendanceRecord {
   verified_by: string | null
   reason: AbsenceReason | null
   reason_detail: string | null
+  arrival_time: string | null
   reported_at: string | null
   is_emergency: boolean
   created_at: string
