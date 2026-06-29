@@ -1435,7 +1435,7 @@ function DetailPanel({
                 <AlertCircle size={13} className="shrink-0" />
                 参加表明の締め切りを過ぎました（開始1時間前）
               </div>
-            ) : isAttending ? (
+            ) : isAttending && !voluntaryTimePickerOpen ? (
               /* 参加済み：ステータス表示 + 時刻変更 + 取り消し */
               <div className="flex items-center gap-2 flex-wrap">
                 <span className="flex items-center gap-1.5 text-sm font-semibold px-3 py-1.5 rounded-full"
@@ -1471,7 +1471,7 @@ function DetailPanel({
                 </button>
               </div>
             ) : voluntaryTimePickerOpen ? (
-              /* ステップ2：何時から？ */
+              /* ステップ2：何時から？（新規登録 or 時刻編集共通） */
               <div className="flex flex-col gap-3">
                 <p className="text-xs font-semibold" style={{ color: 'var(--gray-600)' }}>
                   何時から参加しますか？
