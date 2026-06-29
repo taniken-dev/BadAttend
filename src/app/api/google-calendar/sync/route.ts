@@ -1,4 +1,4 @@
-import { google } from 'googleapis'
+import { google, type calendar_v3 } from 'googleapis'
 import { createServerClient } from '@supabase/ssr'
 import { createClient as createAdminClient } from '@supabase/supabase-js'
 import { cookies } from 'next/headers'
@@ -70,18 +70,19 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: 'year and month required' }, { status: 400 })
   }
 
-  const activityCalendarIds = parseCalendarIds(process.env.GOOGLE_CALENDAR_ACTIVITY_IDS)
-  const campCalendarIds     = parseCalendarIds(process.env.GOOGLE_CALENDAR_CAMP_IDS)
-  const bukaiCalendarIds    = parseCalendarIds(process.env.GOOGLE_CALENDAR_BUKAI_IDS)
-  const allActivityIds      = [...activityCalendarIds, ...campCalendarIds, ...bukaiCalendarIds]
+  const activityCalendarIds  = parseCalendarIds(process.env.GOOGLE_CALENDAR_ACTIVITY_IDS)
+  const campCalendarIds      = parseCalendarIds(process.env.GOOGLE_CALENDAR_CAMP_IDS)
+  const bukaiCalendarIds     = parseCalendarIds(process.env.GOOGLE_CALENDAR_BUKAI_IDS)
+  const miscCalendarIds      = parseCalendarIds(process.env.GOOGLE_CALENDAR_MISC_IDS)
+  const allActivityIds       = [...activityCalendarIds, ...campCalendarIds, ...bukaiCalendarIds]
 
-  if (allActivityIds.length === 0) {
+  if (allActivityIds.length === 0 && miscCalendarIds.length === 0) {
     // 活動日カレンダー未設定の場合はSupabaseのセッションをそのまま返す
     const startDate = `${year}-${String(month).padStart(2, '0')}-01`
     const endDate   = `${year}-${String(month).padStart(2, '0')}-${new Date(year, month, 0).getDate()}`
     const { data } = await supabase
       .from('practice_sessions')
-      .select('id, session_date, start_time, end_time, location, is_cancelled, cancellation_reason, is_results_confirmed, results_confirmed_at, note, google_event_id, is_camp, is_bukai, courts, created_at')
+      .select('id, session_date, start_time, end_time, location, is_cancelled, cancellation_reason, is_results_confirmed, results_confirmed_at, note, google_event_id, is_camp, is_bukai, is_voluntary, courts, created_at')
       .gte('session_date', startDate)
       .lte('session_date', endDate)
     return NextResponse.json({ sessions: data ?? [] })
@@ -89,6 +90,7 @@ export async function GET(request: NextRequest) {
 
   const campCalendarIdSet  = new Set(campCalendarIds)
   const bukaiCalendarIdSet = new Set(bukaiCalendarIds)
+  const miscCalendarIdSet  = new Set(miscCalendarIds)
 
   const timeMin   = new Date(year, month - 1, 1).toISOString()
   const timeMax   = new Date(year, month, 0, 23, 59, 59).toISOString()
@@ -100,19 +102,38 @@ export async function GET(request: NextRequest) {
     const calendar = google.calendar({ version: 'v3', auth })
 
     // 活動日・合宿カレンダーのイベントを全取得（カレンダーIDも保持）
-    const gcalResults = await Promise.all(
-      allActivityIds.map(calendarId =>
-        calendar.events.list({
-          calendarId,
-          timeMin,
-          timeMax,
-          singleEvents: true,
-          orderBy: 'startTime',
-          maxResults: 200,
-        }).then(res => (res.data.items ?? []).map(item => ({ item, calendarId })))
-      )
-    )
-    const gcalItems = gcalResults.flat()
+    const [gcalResults, miscResults] = await Promise.all([
+      Promise.all(
+        allActivityIds.map(calendarId =>
+          calendar.events.list({
+            calendarId,
+            timeMin,
+            timeMax,
+            singleEvents: true,
+            orderBy: 'startTime',
+            maxResults: 200,
+          }).then(res => (res.data.items ?? []).map(item => ({ item, calendarId })))
+        )
+      ),
+      // MISC（その他）カレンダーから自主練習イベントを取得
+      Promise.all(
+        miscCalendarIds.map(calendarId =>
+          calendar.events.list({
+            calendarId,
+            timeMin,
+            timeMax,
+            singleEvents: true,
+            orderBy: 'startTime',
+            maxResults: 200,
+          }).then(res => (res.data.items ?? [])
+            .filter(item => (item.summary ?? '').includes('自主練'))
+            .map(item => ({ item, calendarId }))
+          ).catch(() => [] as { item: calendar_v3.Schema$Event; calendarId: string }[])
+        )
+      ),
+    ])
+    const gcalItems      = gcalResults.flat()
+    const voluntaryItems = miscResults.flat()
 
     // DB操作は service role で行う
     const admin = createAdminClient(
@@ -190,6 +211,7 @@ export async function GET(request: NextRequest) {
             google_event_id: googleEventId,
             is_camp:         isCamp,
             is_bukai:        isBukai,
+            is_voluntary:    false,
             courts:          parsed.courts,
           }, { onConflict: 'session_date' })
           claimedDates.set(date, googleEventId)
@@ -215,6 +237,66 @@ export async function GET(request: NextRequest) {
           google_event_id: item.id,
           is_camp:         isCamp,
           is_bukai:        isBukai,
+          is_voluntary:    false,
+          courts:          parsed.courts,
+        }, { onConflict: 'session_date' })
+        claimedDates.set(date, item.id)
+      }
+    }
+
+    // 自主練習イベントを同期（通常セッションが存在しない日付のみ）
+    for (const { item } of voluntaryItems) {
+      if (!item.id) continue
+      const startStr = item.start?.date ?? item.start?.dateTime
+      if (!startStr) continue
+      const isAllDay = !!item.start?.date
+      const parsed   = parseDescription(item.description)
+
+      if (isAllDay && item.end?.date) {
+        const dates      = expandDates(startStr, item.end.date)
+        const isMultiDay = dates.length > 1
+
+        for (const date of dates) {
+          const googleEventId = isMultiDay ? `${item.id}_${date}` : item.id
+          gcalEventIdSet.add(googleEventId)
+
+          // 通常セッションが既にある日付はスキップ
+          const existing = claimedDates.get(date)
+          if (existing != null && baseEventId(existing) !== item.id) continue
+
+          await admin.from('practice_sessions').upsert({
+            session_date:    date,
+            start_time:      parsed.startTime ?? '17:00:00',
+            end_time:        parsed.endTime   ?? '22:00:00',
+            location:        item.location ?? '新習志野体育館',
+            note:            item.summary ?? '自主練習',
+            google_event_id: googleEventId,
+            is_camp:         false,
+            is_bukai:        false,
+            is_voluntary:    true,
+            courts:          parsed.courts,
+          }, { onConflict: 'session_date' })
+          claimedDates.set(date, googleEventId)
+        }
+      } else {
+        const date      = startStr.slice(0, 10)
+        const startTime = parsed.startTime ?? item.start?.dateTime?.slice(11, 19) ?? '17:00:00'
+        const endTime   = parsed.endTime   ?? item.end?.dateTime?.slice(11, 19)   ?? '22:00:00'
+        gcalEventIdSet.add(item.id)
+
+        const existing = claimedDates.get(date)
+        if (existing != null && baseEventId(existing) !== item.id) continue
+
+        await admin.from('practice_sessions').upsert({
+          session_date:    date,
+          start_time:      startTime,
+          end_time:        endTime,
+          location:        item.location ?? '新習志野体育館',
+          note:            item.summary ?? '自主練習',
+          google_event_id: item.id,
+          is_camp:         false,
+          is_bukai:        false,
+          is_voluntary:    true,
           courts:          parsed.courts,
         }, { onConflict: 'session_date' })
         claimedDates.set(date, item.id)
@@ -252,7 +334,7 @@ export async function GET(request: NextRequest) {
     // 月の全セッション（手動作成分も含む）を返す
     const { data: sessions } = await admin
       .from('practice_sessions')
-      .select('id, session_date, start_time, end_time, location, is_cancelled, cancellation_reason, is_results_confirmed, results_confirmed_at, note, google_event_id, is_camp, is_bukai, courts, created_at')
+      .select('id, session_date, start_time, end_time, location, is_cancelled, cancellation_reason, is_results_confirmed, results_confirmed_at, note, google_event_id, is_camp, is_bukai, is_voluntary, courts, created_at')
       .gte('session_date', startDate)
       .lte('session_date', endDate)
       .order('session_date')
@@ -263,7 +345,7 @@ export async function GET(request: NextRequest) {
     // 同期失敗時はSupabaseのデータをそのまま返してUIを壊さない
     const { data } = await supabase
       .from('practice_sessions')
-      .select('id, session_date, start_time, end_time, location, is_cancelled, cancellation_reason, is_results_confirmed, results_confirmed_at, note, google_event_id, is_camp, is_bukai, courts, created_at')
+      .select('id, session_date, start_time, end_time, location, is_cancelled, cancellation_reason, is_results_confirmed, results_confirmed_at, note, google_event_id, is_camp, is_bukai, is_voluntary, courts, created_at')
       .gte('session_date', startDate)
       .lte('session_date', endDate)
     return NextResponse.json({ sessions: data ?? [] })

@@ -131,7 +131,7 @@ export default function CalendarView() {
   const today    = new Date()
   const todayStr = toDateStr(today.getFullYear(), today.getMonth(), today.getDate())
 
-  const { viewRole, realRole } = useViewRole()
+  const { viewRole } = useViewRole()
   const [userId,       setUserId]      = useState<string | null>(null)
   const [current,      setCurrent]     = useState(new Date(today.getFullYear(), today.getMonth(), 1))
   const [sessions,     setSessions]    = useState<SessionMap>({})
@@ -141,7 +141,7 @@ export default function CalendarView() {
   const [loading,      setLoading]     = useState(false)
 
   const isManagerOrAdmin  = viewRole === 'manager' || viewRole === 'admin'
-  const canManageSessions = realRole === 'manager' || realRole === 'admin'
+  const canManageSessions = viewRole === 'manager' || viewRole === 'admin'
   const availableDates = useMemo(() => getWeeklyRegistrationInfo().availableDates, [])
 
   useEffect(() => {
@@ -163,7 +163,7 @@ export default function CalendarView() {
     // 1. Supabase から即座に既存セッションを表示（高速）
     supabase
       .from('practice_sessions')
-      .select('id, session_date, start_time, end_time, location, is_cancelled, cancellation_reason, is_results_confirmed, results_confirmed_at, note, google_event_id, is_camp, is_bukai, courts, created_at')
+      .select('id, session_date, start_time, end_time, location, is_cancelled, cancellation_reason, is_results_confirmed, results_confirmed_at, note, google_event_id, is_camp, is_bukai, is_voluntary, courts, created_at')
       .gte('session_date', s)
       .lte('session_date', e)
       .abortSignal(signal)
@@ -190,8 +190,8 @@ export default function CalendarView() {
       .then(r => r.ok ? r.json() : { events: [] })
       .then(({ events }: { events: GoogleCalendarEvent[] }) => {
         const map: Record<string, GoogleCalendarEvent[]> = {}
-        // 活動日は同期済みでセッションとして表示されるのでここでは除外
-        ;(events ?? []).filter(ev => !ev.isActivityDay).forEach(ev => {
+        // 活動日・同期済みイベント（自主練含む）はセッションとして表示されるのでここでは除外
+        ;(events ?? []).filter(ev => !ev.isActivityDay && !ev.alreadyImported).forEach(ev => {
           if (!map[ev.date]) map[ev.date] = []
           map[ev.date].push(ev)
         })
@@ -468,6 +468,87 @@ export default function CalendarView() {
     setSessions(prev => ({ ...prev, [sessionDate]: { ...prev[sessionDate], ...patch } }))
   }, [detail])
 
+  // ── 自主練の参加時刻を更新（既存レコードのarrival_timeだけ変更） ──
+  const handleVoluntaryUpdateTime = useCallback(async (arrivalTime: string | null) => {
+    if (!detail || !userId) return
+    const myRecord = detail.attendance.find(a => a.user_id === userId)
+    if (!myRecord) return
+
+    const { error } = await supabase
+      .from('attendance_records')
+      .update({ arrival_time: arrivalTime })
+      .eq('id', myRecord.id)
+    if (error) return
+
+    setDetail(prev => {
+      if (!prev) return prev
+      return {
+        ...prev,
+        attendance: prev.attendance.map(a =>
+          a.user_id === userId ? { ...a, arrival_time: arrivalTime } : a
+        ),
+      }
+    })
+  }, [detail, userId])
+
+  // ── 自主練の参加意思をトグル ─────────────────────────────
+  const handleVoluntaryToggle = useCallback(async (attending: boolean, arrivalTime?: string | null) => {
+    if (!detail || !userId) return
+    const session = detail.session
+
+    if (attending) {
+      const { data, error } = await supabase
+        .from('attendance_records')
+        .insert({
+          session_id:   session.id,
+          user_id:      userId,
+          status:       'present',
+          arrival_time: arrivalTime ?? null,
+          reported_at:  new Date().toISOString(),
+        })
+        .select('id, status, result_status, reason, reason_detail, arrival_time, user_id')
+        .single()
+      if (error || !data) {
+        console.error('voluntary insert error:', error)
+        alert('登録に失敗しました。時間を置いて再試行してください。')
+        return
+      }
+
+      setDetail(prev => {
+        if (!prev) return prev
+        const profile =
+          prev.unsubmitted.find(p => p.id === userId) ??
+          prev.attendance.find(a => a.user_id === userId)?.profile
+        if (!profile) return prev
+        return {
+          ...prev,
+          attendance: [...prev.attendance, { ...(data as AttendanceRow), profile }],
+          unsubmitted: prev.unsubmitted.filter(p => p.id !== userId),
+        }
+      })
+    } else {
+      const myRecord = detail.attendance.find(a => a.user_id === userId)
+      if (!myRecord) return
+
+      const { error } = await supabase.from('attendance_records').delete().eq('id', myRecord.id)
+      if (error) {
+        console.error('voluntary delete error:', error)
+        alert('取り消しに失敗しました。時間を置いて再試行してください。')
+        return
+      }
+
+      setDetail(prev => {
+        if (!prev) return prev
+        const removed = prev.attendance.find(a => a.user_id === userId)
+        return {
+          ...prev,
+          attendance: prev.attendance.filter(a => a.user_id !== userId),
+          unsubmitted: removed ? [...prev.unsubmitted, removed.profile] : prev.unsubmitted,
+        }
+      })
+    }
+  }, [detail, userId])
+
   // ── 自分の出欠を登録（部員向け） ──────────────────────────
   const handleSelfRegister = useCallback(async (
     status: AttendanceStatus,
@@ -627,13 +708,14 @@ export default function CalendarView() {
             const dayGcal  = gcalEvents[dateStr] ?? []
             const hasGcal  = dayGcal.length > 0
             const hasTournament = dayGcal.some(ev => !ev.isOther)
-            const hasMisc       = dayGcal.some(ev => ev.isOther)
+            // 自主練セッションが既にある日はMISCドット（グレー）を非表示
+            const hasMisc       = !session?.is_voluntary && dayGcal.some(ev => ev.isOther)
             const isToday    = dateStr === todayStr
             const isSelected = dateStr === selectedDate
             const confirmed  = session?.is_results_confirmed
             const isClickable = !!session || hasGcal
 
-            // 練習ドット色（合宿=オレンジ、部会=緑、通常練習=赤、確定済み=緑、休止=グレー）
+            // 練習ドット色（合宿=オレンジ、部会=緑、自主練=紫、通常練習=赤、確定済み=緑、休止=グレー）
             const dotColor = session
               ? isSelected
                 ? 'rgba(255,255,255,0.7)'
@@ -645,6 +727,8 @@ export default function CalendarView() {
                 ? '#f97316'
                 : session.is_bukai
                 ? '#15803d'
+                : session.is_voluntary
+                ? '#9333ea'
                 : '#ef4444'
               : 'transparent'
 
@@ -730,6 +814,11 @@ export default function CalendarView() {
           </div>
           <div className="flex items-center gap-1.5">
             <span className="w-2 h-2 rounded-full shrink-0"
+              style={{ background: '#9333ea' }} />
+            <span className="text-xs" style={{ color: 'var(--gray-500)' }}>自主練</span>
+          </div>
+          <div className="flex items-center gap-1.5">
+            <span className="w-2 h-2 rounded-full shrink-0"
               style={{ background: 'var(--club-blue)' }} />
             <span className="text-xs" style={{ color: 'var(--gray-500)' }}>大会など</span>
           </div>
@@ -761,10 +850,12 @@ export default function CalendarView() {
               detail={detail}
               isManagerOrAdmin={isManagerOrAdmin}
               canManageSessions={canManageSessions}
-              canSelfRegister={realRole !== 'coach'}
+              canSelfRegister={viewRole !== 'coach'}
               userId={userId}
               availableDates={availableDates}
               onSelfRegister={handleSelfRegister}
+              onVoluntaryToggle={handleVoluntaryToggle}
+              onVoluntaryUpdateTime={handleVoluntaryUpdateTime}
               onUpdateResultStatus={(id, status) =>
                 handleUpdateResultStatus(id, status, detail.session.session_date)
               }
@@ -791,8 +882,8 @@ export default function CalendarView() {
         </div>
       )}
 
-      {/* GCalイベントパネル（大会・合宿など表示のみ） */}
-      {selectedDate && (gcalEvents[selectedDate]?.length ?? 0) > 0 && (
+      {/* GCalイベントパネル（大会・合宿など表示のみ・自主練の日は除外） */}
+      {selectedDate && !sessions[selectedDate]?.is_voluntary && (gcalEvents[selectedDate]?.length ?? 0) > 0 && (
         <GCalEventsPanel events={gcalEvents[selectedDate]} />
       )}
     </div>
@@ -855,6 +946,8 @@ function DetailPanel({
   userId,
   availableDates,
   onSelfRegister,
+  onVoluntaryToggle,
+  onVoluntaryUpdateTime,
   onUpdateResultStatus,
   onBulkConfirm,
   onClearResultStatus,
@@ -870,6 +963,8 @@ function DetailPanel({
   userId: string | null
   availableDates: string[]
   onSelfRegister: (status: AttendanceStatus, reason: AbsenceReason | null, detail: string, arrivalTime: string | null) => Promise<string | null>
+  onVoluntaryToggle: (attending: boolean, arrivalTime?: string | null) => Promise<void>
+  onVoluntaryUpdateTime: (arrivalTime: string | null) => Promise<void>
   onUpdateResultStatus: (id: string, status: AttendanceStatus) => Promise<void>
   onBulkConfirm: () => Promise<void>
   onClearResultStatus: (id: string) => Promise<void>
@@ -933,8 +1028,14 @@ function DetailPanel({
   const [memberSearchQuery, setMemberSearchQuery] = useState('')
 
   // 練習休止トグル用
-  const [cancelReasonInput, setCancelReasonInput] = useState('')
-  const [cancelSubmitting,  setCancelSubmitting]  = useState(false)
+  const [cancelReasonInput,  setCancelReasonInput]  = useState('')
+  const [cancelSubmitting,   setCancelSubmitting]   = useState(false)
+
+  // 自主練参加トグル用
+  const [voluntaryToggling,       setVoluntaryToggling]       = useState(false)
+  const [voluntaryTimePickerOpen, setVoluntaryTimePickerOpen] = useState(false)
+  const [voluntaryArrivalTime,    setVoluntaryArrivalTime]    = useState<string | null>(null)
+  const [voluntaryIsEditing,      setVoluntaryIsEditing]      = useState(false)
 
   // セッションが変わったらフォームをリセット
   useEffect(() => {
@@ -947,6 +1048,9 @@ function DetailPanel({
     setSelfIsEditing(false)
     setMemberSearchQuery('')
     setCancelReasonInput('')
+    setVoluntaryTimePickerOpen(false)
+    setVoluntaryArrivalTime(null)
+    setVoluntaryIsEditing(false)
   }, [session.id])
 
   useEffect(() => {
@@ -1127,7 +1231,7 @@ function DetailPanel({
         {/* 左: セッション情報 */}
         <div className="flex-1 min-w-0 flex flex-col gap-1.5">
           <h2 className="text-base font-bold" style={{ color: 'var(--gray-900)' }}>
-            {dateLabel}の{session.is_bukai ? '部会' : session.is_camp ? '合宿' : '練習'}
+            {dateLabel}の{session.is_bukai ? '部会' : session.is_camp ? '合宿' : session.is_voluntary ? '自主練習' : '練習'}
           </h2>
           {/* バッジ行 */}
           {(session.is_results_confirmed || (session.is_cancelled && !canManageSessions)) && (
@@ -1285,8 +1389,8 @@ function DetailPanel({
         )}
       </div>
 
-      {/* 提出サマリーバー */}
-      {session.is_cancelled ? (
+      {/* 提出サマリーバー（自主練以外） */}
+      {!session.is_voluntary && session.is_cancelled ? (
         <button
           onClick={() => setAttendanceExpanded(v => !v)}
           className="flex items-center justify-between gap-2 px-3 py-2.5 rounded-xl w-full text-left cursor-pointer transition-opacity hover:opacity-80"
@@ -1310,7 +1414,7 @@ function DetailPanel({
             ? <ChevronUp size={15} className="shrink-0" style={{ color: 'var(--gray-400)' }} />
             : <ChevronDown size={15} className="shrink-0" style={{ color: 'var(--gray-400)' }} />}
         </button>
-      ) : (
+      ) : !session.is_voluntary ? (
         <div className="flex items-center gap-2 px-3 py-2.5 rounded-xl"
           style={{ background: 'var(--gray-50)', border: '1px solid var(--gray-200)' }}>
           <Users size={14} className="shrink-0" style={{ color: 'var(--gray-400)' }} />
@@ -1326,12 +1430,208 @@ function DetailPanel({
             )}
           </span>
         </div>
+      ) : null}
+
+      {/* 自主練習：参加意思表示UI（キャンセル時は折りたたみ外に置いて常時表示） */}
+      {session.is_voluntary && !session.is_cancelled && canSelfRegister && userId && (() => {
+        const sessionStartAt  = new Date(`${session.session_date}T${session.start_time}`)
+        const cutoffAt        = new Date(sessionStartAt.getTime() - 60 * 60 * 1000)
+        const isLocked        = new Date() >= cutoffAt
+        const isAttending     = !!myRecord
+        const cutoffHHMM      = `${String(cutoffAt.getHours()).padStart(2, '0')}:${String(cutoffAt.getMinutes()).padStart(2, '0')}`
+        const isToday         = session.session_date === todayForWindow
+        const cutoffDateLabel = isToday
+          ? `当日${cutoffHHMM}`
+          : `${cutoffAt.getMonth() + 1}/${cutoffAt.getDate()} ${cutoffHHMM}`
+
+        return (
+          <div className="rounded-xl px-4 py-3.5 flex flex-col gap-3"
+            style={{ background: 'color-mix(in srgb, #9333ea 6%, var(--card-bg))', border: '1.5px solid color-mix(in srgb, #9333ea 25%, white)' }}>
+            <div className="flex items-center justify-between">
+              <h3 className="text-sm font-bold" style={{ color: 'var(--gray-900)' }}>参加表明</h3>
+              {!isLocked && (
+                <span className="text-xs" style={{ color: 'var(--gray-400)' }}>
+                  {cutoffDateLabel}まで変更可
+                </span>
+              )}
+            </div>
+
+            {isLocked ? (
+              <div className="flex items-center gap-2 px-3 py-2.5 rounded-xl text-xs font-semibold"
+                style={{ background: 'var(--gray-100)', color: 'var(--gray-500)', border: '1px solid var(--gray-200)' }}>
+                <AlertCircle size={13} className="shrink-0" />
+                参加表明の締め切りを過ぎました（開始1時間前）
+              </div>
+            ) : isAttending ? (
+              /* 参加済み：ステータス表示 + 時刻変更 + 取り消し */
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="flex items-center gap-1.5 text-sm font-semibold px-3 py-1.5 rounded-full"
+                  style={{ background: '#f3e8ff', color: '#9333ea' }}>
+                  <CheckCircle2 size={14} />
+                  参加予定
+                  {myRecord?.arrival_time && (
+                    <span className="font-normal">
+                      {' '}· {myRecord.arrival_time.slice(0, 5)}〜
+                    </span>
+                  )}
+                </span>
+                <button
+                  onClick={() => {
+                    setVoluntaryIsEditing(true)
+                    setVoluntaryArrivalTime(myRecord?.arrival_time?.slice(0, 5) ?? null)
+                    setVoluntaryTimePickerOpen(true)
+                  }}
+                  className="text-xs px-3 py-1.5 rounded-full font-semibold cursor-pointer transition-opacity hover:opacity-70"
+                  style={{ background: '#ede9fe', color: '#7c3aed', border: '1px solid #ddd6fe' }}>
+                  時刻を変更
+                </button>
+                <button
+                  onClick={async () => {
+                    setVoluntaryToggling(true)
+                    await onVoluntaryToggle(false)
+                    setVoluntaryToggling(false)
+                  }}
+                  disabled={voluntaryToggling}
+                  className="text-xs px-3 py-1.5 rounded-full font-semibold cursor-pointer transition-opacity hover:opacity-70"
+                  style={{ background: 'var(--gray-100)', color: 'var(--gray-500)', border: '1px solid var(--gray-200)', opacity: voluntaryToggling ? 0.6 : 1 }}>
+                  {voluntaryToggling ? '処理中...' : '取り消す'}
+                </button>
+              </div>
+            ) : voluntaryTimePickerOpen ? (
+              /* ステップ2：何時から？ */
+              <div className="flex flex-col gap-3">
+                <p className="text-xs font-semibold" style={{ color: 'var(--gray-600)' }}>
+                  何時から参加しますか？
+                  <span className="ml-1 font-normal" style={{ color: 'var(--gray-400)' }}>（任意）</span>
+                </p>
+                <div className="grid grid-cols-4 gap-1.5">
+                  {(() => {
+                    const [sh, sm] = session.start_time.split(':').map(Number)
+                    const [eh, em] = session.end_time.split(':').map(Number)
+                    const startMin = sh * 60 + sm
+                    const endMin   = eh * 60 + em
+                    const times: string[] = []
+                    for (let m = startMin; m <= endMin; m += 30) {
+                      times.push(`${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`)
+                    }
+                    return times
+                  })().map(time => {
+                    const active = voluntaryArrivalTime === time
+                    return (
+                      <button key={time} type="button"
+                        onClick={() => setVoluntaryArrivalTime(active ? null : time)}
+                        className="flex items-center justify-center py-2 rounded-xl text-sm font-bold transition-all"
+                        style={{
+                          border:     `1.5px solid ${active ? '#9333ea' : 'var(--gray-200)'}`,
+                          background: active ? 'color-mix(in srgb, #9333ea 15%, var(--gray-100))' : 'var(--gray-100)',
+                          color:      active ? '#9333ea' : 'var(--gray-700)',
+                        }}>
+                        {time}
+                      </button>
+                    )
+                  })}
+                </div>
+                <div className="flex gap-2">
+                  <button
+                    onClick={async () => {
+                      setVoluntaryToggling(true)
+                      if (voluntaryIsEditing) {
+                        await onVoluntaryUpdateTime(voluntaryArrivalTime)
+                      } else {
+                        await onVoluntaryToggle(true, voluntaryArrivalTime)
+                      }
+                      setVoluntaryTimePickerOpen(false)
+                      setVoluntaryArrivalTime(null)
+                      setVoluntaryIsEditing(false)
+                      setVoluntaryToggling(false)
+                    }}
+                    disabled={voluntaryToggling}
+                    className="btn-primary flex-1"
+                    style={{ background: '#9333ea' }}>
+                    {voluntaryToggling
+                      ? <span className="flex items-center justify-center gap-2">
+                          <span className="inline-block w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                          {voluntaryIsEditing ? '更新中...' : '登録中...'}
+                        </span>
+                      : <span className="flex items-center justify-center gap-1.5">
+                          <CheckCircle2 size={14} />
+                          {voluntaryIsEditing
+                            ? (voluntaryArrivalTime ? `${voluntaryArrivalTime}に変更する` : '時間を未定にする')
+                            : (voluntaryArrivalTime ? `${voluntaryArrivalTime}から参加する` : '時間未定で参加する')}
+                        </span>}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => { setVoluntaryTimePickerOpen(false); setVoluntaryArrivalTime(null); setVoluntaryIsEditing(false) }}
+                    className="btn-secondary"
+                    style={{ flex: '0 0 auto', padding: '0 16px', width: 'auto' }}>
+                    戻る
+                  </button>
+                </div>
+              </div>
+            ) : (
+              /* ステップ1：参加するボタン */
+              <button
+                onClick={() => setVoluntaryTimePickerOpen(true)}
+                className="flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-semibold transition-all cursor-pointer active:scale-95 hover:opacity-80"
+                style={{ background: '#9333ea', color: 'white' }}>
+                <Dumbbell size={15} />
+                参加する
+              </button>
+            )}
+          </div>
+        )
+      })()}
+
+      {/* 自主練習：参加者リスト（キャンセル時も表示） */}
+      {session.is_voluntary && (
+        <div className="flex flex-col gap-2">
+          <div className="flex items-center gap-2 px-1">
+            <Users size={14} style={{ color: '#9333ea' }} />
+            <span className="text-sm font-semibold" style={{ color: 'var(--gray-700)' }}>
+              参加予定
+              <span className="ml-1.5 text-xs font-bold px-1.5 py-0.5 rounded-full"
+                style={{ background: '#f3e8ff', color: '#9333ea' }}>
+                {attendance.length}名
+              </span>
+            </span>
+          </div>
+          {attendance.length === 0 ? (
+            <p className="text-xs px-1" style={{ color: 'var(--gray-400)' }}>まだ参加表明はありません</p>
+          ) : (
+            <div className="flex flex-col gap-1">
+              {attendance.map(a => {
+                const name = a.profile.display_name ?? a.profile.full_name
+                const isMe = a.user_id === userId
+                return (
+                  <div key={a.id}
+                    className="flex items-center gap-2.5 px-3 py-2 rounded-xl"
+                    style={{
+                      background: isMe ? '#f3e8ff' : 'var(--gray-50)',
+                      border: `1px solid ${isMe ? '#e9d5ff' : 'var(--gray-100)'}`,
+                    }}>
+                    <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: '#9333ea' }} />
+                    <span className="text-sm font-medium" style={{ color: 'var(--gray-900)' }}>{name}</span>
+                    {a.arrival_time && (
+                      <span className="text-xs font-semibold px-1.5 py-0.5 rounded-full"
+                        style={{ background: '#ede9fe', color: '#7c3aed' }}>
+                        {a.arrival_time.slice(0, 5)}〜
+                      </span>
+                    )}
+                    <span className="text-xs ml-auto" style={{ color: 'var(--gray-400)' }}>{a.profile.grade}年</span>
+                    {isMe && <span className="text-xs font-semibold" style={{ color: '#9333ea' }}>あなた</span>}
+                  </div>
+                )
+              })}
+            </div>
+          )}
+        </div>
       )}
 
       {(!session.is_cancelled || attendanceExpanded) && <>
 
-      {/* 自分の出欠連絡（顧問以外・登録可能期間 or 事前欠席変更） */}
-      {canSelfRegister && userId && (canRegister || canEarlyAbsent) && (
+      {/* 自分の出欠連絡（顧問以外・登録可能期間 or 事前欠席変更）- 自主練以外 */}
+      {!session.is_voluntary && canSelfRegister && userId && (canRegister || canEarlyAbsent) && (
         <div className="rounded-xl px-4 py-3.5 flex flex-col gap-3"
           style={{ background: 'color-mix(in srgb, var(--club-blue) 6%, var(--card-bg))', border: '1.5px solid color-mix(in srgb, var(--club-blue) 25%, white)' }}>
           <div className="flex items-center justify-between">
@@ -1554,8 +1854,8 @@ function DetailPanel({
         </div>
       )}
 
-      {/* マネージャー/管理者向け：一括確定ボタン（練習開始時刻以降のみ） */}
-      {isManagerOrAdmin && attendance.length > 0 && !session.is_cancelled && canRegisterResult && (
+      {/* マネージャー/管理者向け：一括確定ボタン（練習開始時刻以降のみ・自主練除く） */}
+      {!session.is_voluntary && isManagerOrAdmin && attendance.length > 0 && !session.is_cancelled && canRegisterResult && (
         <div className="flex flex-col gap-2 px-3 py-3 rounded-xl"
           style={{ background: '#f0fdf4', border: '1px solid #bbf7d0' }}>
           <div className="flex items-center gap-2">
@@ -1591,8 +1891,8 @@ function DetailPanel({
         </div>
       )}
 
-      {/* 出欠リスト検索バー */}
-      {(attendance.length > 0 || unsubmitted.length > 0) && (
+      {/* 出欠リスト検索バー（自主練以外） */}
+      {!session.is_voluntary && (attendance.length > 0 || unsubmitted.length > 0) && (
         <div className="relative">
           <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" style={{ color: 'var(--gray-400)' }} />
           <input
@@ -1615,8 +1915,8 @@ function DetailPanel({
         </div>
       )}
 
-      {/* 並び替えチップ */}
-      {attendance.length > 0 && (
+      {/* 並び替えチップ（自主練以外） */}
+      {!session.is_voluntary && attendance.length > 0 && (
         <div className="flex items-center gap-1.5 flex-wrap">
           <span className="text-xs font-semibold shrink-0" style={{ color: 'var(--gray-400)' }}>並び替え</span>
           {SORT_OPTIONS.map(opt => {
@@ -1640,8 +1940,8 @@ function DetailPanel({
         </div>
       )}
 
-      {/* 出欠リスト */}
-      {attendance.length === 0 ? (
+      {/* 出欠リスト（自主練以外） */}
+      {!session.is_voluntary && (attendance.length === 0 ? (
         <div className="flex flex-col items-center py-6 gap-1">
           <p className="text-sm" style={{ color: 'var(--gray-400)' }}>まだ連絡がありません</p>
         </div>
@@ -1822,10 +2122,10 @@ function DetailPanel({
             )
           })}
         </div>
-      )}
+      ))}
 
-      {/* 未提出者リスト（提出者リストの下） */}
-      {unsubmitted.length > 0 && (
+      {/* 未提出者リスト（提出者リストの下・自主練以外） */}
+      {!session.is_voluntary && unsubmitted.length > 0 && (
         <div>
           <div className="flex items-center gap-2 mb-2">
             <span className="text-xs font-bold px-2 py-0.5 rounded-full"
