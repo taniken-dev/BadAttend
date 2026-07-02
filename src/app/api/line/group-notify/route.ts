@@ -11,11 +11,30 @@ const REASON_LABELS: Record<string, string> = {
   other: 'その他',
 }
 
+const ALLOWED_STATUS = new Set(['tardy', 'absent_normal', 'absent_emergency'])
+const ALLOWED_REASON = new Set(Object.keys(REASON_LABELS))
+const DATE_RE = /^\d{4}-\d{2}-\d{2}$/
+const TIME_RE = /^([01]?\d|2[0-3]):[0-5]\d$/
+
 export async function POST(request: NextRequest) {
-  const { sessionDate, status, reason, reasonDetail, arrivalTime, isAdvance, isBukai } = await request.json()
-  if (!sessionDate) {
-    return NextResponse.json({ error: 'sessionDate required' }, { status: 400 })
+  const { sessionDate, status, reason, reasonDetail, arrivalTime, isAdvance } = await request.json()
+
+  // 入力バリデーション（グループ全体に配信されるため厳格にチェック）
+  if (typeof sessionDate !== 'string' || !DATE_RE.test(sessionDate)) {
+    return NextResponse.json({ error: 'valid sessionDate required' }, { status: 400 })
   }
+  if (typeof status !== 'string' || !ALLOWED_STATUS.has(status)) {
+    return NextResponse.json({ error: 'invalid status' }, { status: 400 })
+  }
+  if (reason != null && (typeof reason !== 'string' || !ALLOWED_REASON.has(reason))) {
+    return NextResponse.json({ error: 'invalid reason' }, { status: 400 })
+  }
+  // 自由記述は 100 文字までに制限（スパム・悪用防止）
+  const safeReasonDetail =
+    typeof reasonDetail === 'string' ? reasonDetail.trim().slice(0, 100) : ''
+  // 参加予定時刻は HH:MM 形式のみ許可（不正値は無視）
+  const safeArrivalTime =
+    typeof arrivalTime === 'string' && TIME_RE.test(arrivalTime.trim()) ? arrivalTime.trim() : null
 
   const cookieStore = await cookies()
   const supabase = createServerClient(
@@ -38,26 +57,55 @@ export async function POST(request: NextRequest) {
 
   const { data: profile } = await supabase
     .from('profiles')
-    .select('full_name, display_name')
+    .select('full_name, display_name, is_approved')
     .eq('id', user.id)
     .single()
 
-  const name = profile?.display_name ?? profile?.full_name ?? 'メンバー'
+  // 承認済み部員のみ通知可（未承認ユーザーによるグループスパムを防止）
+  if (!profile?.is_approved) {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  }
+
+  // 対象セッションが実在し、かつ本人がそのセッションの出欠を登録済みで
+  // あることを確認（任意日付への無差別スパムを防止）
+  const { data: session } = await supabase
+    .from('practice_sessions')
+    .select('id, is_bukai')
+    .eq('session_date', sessionDate)
+    .single()
+
+  if (!session) {
+    return NextResponse.json({ error: 'session not found' }, { status: 404 })
+  }
+
+  const { data: myRecord } = await supabase
+    .from('attendance_records')
+    .select('id')
+    .eq('session_id', session.id)
+    .eq('user_id', user.id)
+    .single()
+
+  if (!myRecord) {
+    return NextResponse.json({ error: 'no attendance record' }, { status: 403 })
+  }
+
+  const name = profile.display_name ?? profile.full_name ?? 'メンバー'
 
   const date = new Date(sessionDate + 'T00:00:00')
   const dateLabel = date.toLocaleDateString('ja-JP', { month: 'long', day: 'numeric', weekday: 'short' })
 
   const reasonLabel = reason ? REASON_LABELS[reason] ?? reason : null
   const reasonStr = reasonLabel
-    ? reasonDetail ? `${reasonLabel}（${reasonDetail}）` : reasonLabel
+    ? safeReasonDetail ? `${reasonLabel}（${safeReasonDetail}）` : reasonLabel
     : null
 
-  const sessionLabel = isBukai ? '部会' : '練習'
+  // 部会かどうかは DB のセッション情報から判定（クライアント入力を信用しない）
+  const sessionLabel = session.is_bukai ? '部会' : '練習'
 
   let text: string
   if (status === 'tardy') {
     text = `【出欠通知】\n${name}が${dateLabel}の${sessionLabel}に当日遅刻します。`
-    if (arrivalTime) text += `\n参加予定時刻：${arrivalTime}`
+    if (safeArrivalTime) text += `\n参加予定時刻：${safeArrivalTime}`
   } else if (isAdvance) {
     text = `【出欠通知】\n${name}が${dateLabel}の${sessionLabel}を欠席します（事前連絡）。`
     if (reasonStr) text += `\n理由：${reasonStr}`

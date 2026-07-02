@@ -63,6 +63,17 @@ export async function GET(request: NextRequest) {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
+  // 承認済みユーザーのみ同期可（同期は service_role で DB 書き込み・
+  // Google API 呼び出しを行うため、未承認ユーザーには許可しない）
+  const { data: syncProfile } = await supabase
+    .from('profiles')
+    .select('is_approved')
+    .eq('id', user.id)
+    .single()
+  if (!syncProfile?.is_approved) {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  }
+
   const { searchParams } = new URL(request.url)
   const year  = parseInt(searchParams.get('year')  ?? '', 10)
   const month = parseInt(searchParams.get('month') ?? '', 10) // 1-indexed
