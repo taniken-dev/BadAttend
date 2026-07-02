@@ -14,24 +14,20 @@ import {
   ATTENDANCE_STATUS_LABELS,
   REASON_LABELS,
   STATUS_BADGE,
-  type Profile,
   type SelectionScore,
   type PracticeSession,
   type WarningFlag,
 } from '@/lib/types'
 import LeaderboardSection from './LeaderboardSection'
 import { HideFor } from '@/components/ui/RoleGate'
+import { getSessionUser, getMyProfile } from '@/lib/supabase/session'
 
 export default async function DashboardPage() {
   const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
+  const user = await getSessionUser()
   if (!user) redirect('/login')
 
-  const { data: profile } = await supabase
-    .from('profiles')
-    .select('*')
-    .eq('id', user.id)
-    .single<Profile>()
+  const profile = await getMyProfile()
 
   const isCoach = profile?.role === 'coach'
   const isAdmin = profile?.role === 'admin'
