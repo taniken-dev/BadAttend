@@ -184,134 +184,107 @@ export async function GET(request: NextRequest) {
       (existingMonthSessions ?? []).map(s => [s.session_date, s.google_event_id as string | null])
     )
 
-    // GCal イベントを practice_sessions に upsert（複数日イベントは日ごとに展開）
+    // GCal イベントを日付ごとに1行へ集約してから一括 upsert する。
+    // 従来はイベント1件ずつ直列で upsert しており、月あたりのイベント数だけ
+    // DB 往復が発生していた（判定ロジックは変えず処理のみ最適化）。
     const gcalEventIdSet = new Set<string>()
+    const rowByDate = new Map<string, Record<string, unknown>>()
 
-    for (const { item, calendarId } of gcalItems) {
-      if (!item.id) continue
+    // 先勝ちで日付を確保する（既存DBの確保・本実行内の確保の両方を尊重）
+    const tryClaim = (date: string, itemId: string, row: Record<string, unknown>) => {
+      const existing = claimedDates.get(date)
+      if (existing != null && baseEventId(existing) !== itemId) return
+      const pending = rowByDate.get(date)
+      if (pending && baseEventId(pending.google_event_id as string) !== itemId) return
+      rowByDate.set(date, row)
+    }
+
+    // 通常イベント・自主練イベント共通の日付展開＋確保処理
+    const processItem = (
+      item: calendar_v3.Schema$Event,
+      opts: {
+        isCamp: boolean; isBukai: boolean; isVoluntary: boolean
+        defaultEnd: string; noteFallback: string | null
+      },
+    ) => {
+      if (!item.id) return
       const startStr = item.start?.date ?? item.start?.dateTime
-      if (!startStr) continue
+      if (!startStr) return
       const isAllDay = !!item.start?.date
-      const isCamp   = campCalendarIdSet.has(calendarId)
-      const isBukai  = bukaiCalendarIdSet.has(calendarId)
-
-      // 説明文から時間・面数をパース（全イベント種別共通）
-      const parsed = parseDescription(item.description)
+      const parsed   = parseDescription(item.description)
 
       if (isAllDay && item.end?.date) {
         // 終日イベント（1日 or 複数日）
         const dates      = expandDates(startStr, item.end.date)
         const isMultiDay = dates.length > 1
-
         for (const date of dates) {
           // 複数日の場合は "{eventId}_{date}" で各日をユニークに識別
           const googleEventId = isMultiDay ? `${item.id}_${date}` : item.id
           gcalEventIdSet.add(googleEventId)
-
-          // 別のGCalイベントがこの日付を先に確保していればスキップ（上書き防止）
-          const existing = claimedDates.get(date)
-          if (existing != null && baseEventId(existing) !== item.id) continue
-
-          await admin.from('practice_sessions').upsert({
+          tryClaim(date, item.id, {
             session_date:    date,
             // 説明文に時間があれば優先、なければデフォルト
             start_time:      parsed.startTime ?? '17:00:00',
-            end_time:        parsed.endTime   ?? '20:00:00',
+            end_time:        parsed.endTime   ?? opts.defaultEnd,
             location:        item.location ?? '新習志野体育館',
-            note:            item.summary ?? null,
+            note:            item.summary ?? opts.noteFallback,
             google_event_id: googleEventId,
-            is_camp:         isCamp,
-            is_bukai:        isBukai,
-            is_voluntary:    false,
+            is_camp:         opts.isCamp,
+            is_bukai:        opts.isBukai,
+            is_voluntary:    opts.isVoluntary,
             courts:          parsed.courts,
-          }, { onConflict: 'session_date' })
-          claimedDates.set(date, googleEventId)
+          })
         }
       } else {
         // 時刻指定イベント（単日）
-        const date = startStr.slice(0, 10)
-        // 説明文に時間があれば優先、なければイベントの開始/終了時刻
+        const date      = startStr.slice(0, 10)
         const startTime = parsed.startTime ?? item.start?.dateTime?.slice(11, 19) ?? '17:00:00'
-        const endTime   = parsed.endTime   ?? item.end?.dateTime?.slice(11, 19)   ?? '20:00:00'
+        const endTime   = parsed.endTime   ?? item.end?.dateTime?.slice(11, 19)   ?? opts.defaultEnd
         gcalEventIdSet.add(item.id)
-
-        // 別のGCalイベントがこの日付を先に確保していればスキップ（上書き防止）
-        const existing = claimedDates.get(date)
-        if (existing != null && baseEventId(existing) !== item.id) continue
-
-        await admin.from('practice_sessions').upsert({
+        tryClaim(date, item.id, {
           session_date:    date,
           start_time:      startTime,
           end_time:        endTime,
           location:        item.location ?? '新習志野体育館',
-          note:            item.description ?? item.summary ?? null,
+          // 通常イベントは説明文優先、自主練は summary 優先
+          note:            opts.isVoluntary
+            ? (item.summary ?? opts.noteFallback)
+            : (item.description ?? item.summary ?? opts.noteFallback),
           google_event_id: item.id,
-          is_camp:         isCamp,
-          is_bukai:        isBukai,
-          is_voluntary:    false,
+          is_camp:         opts.isCamp,
+          is_bukai:        opts.isBukai,
+          is_voluntary:    opts.isVoluntary,
           courts:          parsed.courts,
-        }, { onConflict: 'session_date' })
-        claimedDates.set(date, item.id)
+        })
       }
     }
 
-    // 自主練習イベントを同期（通常セッションが存在しない日付のみ）
+    // 通常イベントを先に処理して日付を確保（自主練より優先）
+    for (const { item, calendarId } of gcalItems) {
+      processItem(item, {
+        isCamp:       campCalendarIdSet.has(calendarId),
+        isBukai:      bukaiCalendarIdSet.has(calendarId),
+        isVoluntary:  false,
+        defaultEnd:   '20:00:00',
+        noteFallback: null,
+      })
+    }
+
+    // 自主練習イベントを処理（通常セッションが無い日付のみ確保される）
     for (const { item } of voluntaryItems) {
-      if (!item.id) continue
-      const startStr = item.start?.date ?? item.start?.dateTime
-      if (!startStr) continue
-      const isAllDay = !!item.start?.date
-      const parsed   = parseDescription(item.description)
+      processItem(item, {
+        isCamp:       false,
+        isBukai:      false,
+        isVoluntary:  true,
+        defaultEnd:   '22:00:00',
+        noteFallback: '自主練習',
+      })
+    }
 
-      if (isAllDay && item.end?.date) {
-        const dates      = expandDates(startStr, item.end.date)
-        const isMultiDay = dates.length > 1
-
-        for (const date of dates) {
-          const googleEventId = isMultiDay ? `${item.id}_${date}` : item.id
-          gcalEventIdSet.add(googleEventId)
-
-          // 通常セッションが既にある日付はスキップ
-          const existing = claimedDates.get(date)
-          if (existing != null && baseEventId(existing) !== item.id) continue
-
-          await admin.from('practice_sessions').upsert({
-            session_date:    date,
-            start_time:      parsed.startTime ?? '17:00:00',
-            end_time:        parsed.endTime   ?? '22:00:00',
-            location:        item.location ?? '新習志野体育館',
-            note:            item.summary ?? '自主練習',
-            google_event_id: googleEventId,
-            is_camp:         false,
-            is_bukai:        false,
-            is_voluntary:    true,
-            courts:          parsed.courts,
-          }, { onConflict: 'session_date' })
-          claimedDates.set(date, googleEventId)
-        }
-      } else {
-        const date      = startStr.slice(0, 10)
-        const startTime = parsed.startTime ?? item.start?.dateTime?.slice(11, 19) ?? '17:00:00'
-        const endTime   = parsed.endTime   ?? item.end?.dateTime?.slice(11, 19)   ?? '22:00:00'
-        gcalEventIdSet.add(item.id)
-
-        const existing = claimedDates.get(date)
-        if (existing != null && baseEventId(existing) !== item.id) continue
-
-        await admin.from('practice_sessions').upsert({
-          session_date:    date,
-          start_time:      startTime,
-          end_time:        endTime,
-          location:        item.location ?? '新習志野体育館',
-          note:            item.summary ?? '自主練習',
-          google_event_id: item.id,
-          is_camp:         false,
-          is_bukai:        false,
-          is_voluntary:    true,
-          courts:          parsed.courts,
-        }, { onConflict: 'session_date' })
-        claimedDates.set(date, item.id)
-      }
+    // 集約した行を一括 upsert（1クエリ）
+    const rowsToUpsert = [...rowByDate.values()]
+    if (rowsToUpsert.length > 0) {
+      await admin.from('practice_sessions').upsert(rowsToUpsert, { onConflict: 'session_date' })
     }
 
     const { data: gcalSessions } = await admin
@@ -321,24 +294,36 @@ export async function GET(request: NextRequest) {
       .lte('session_date', endDate)
       .not('google_event_id', 'is', null)
 
-    for (const session of gcalSessions ?? []) {
-      if (gcalEventIdSet.has(session.google_event_id)) continue
-      // GCalから削除されたセッション
-      const { count } = await admin
+    // GCal から削除されたセッションを特定
+    const orphans = (gcalSessions ?? []).filter(s => !gcalEventIdSet.has(s.google_event_id))
+    if (orphans.length > 0) {
+      const orphanIds = orphans.map(s => s.id)
+
+      // どの orphan が出欠記録を持つかを1クエリで判定（従来はセッションごとに
+      // count クエリを投げる N+1 だった）
+      const { data: recs } = await admin
         .from('attendance_records')
-        .select('id', { count: 'exact', head: true })
-        .eq('session_id', session.id)
-      if ((count ?? 0) === 0) {
-        // 出欠記録なし → セッション自体を削除
-        await admin.from('practice_sessions').delete().eq('id', session.id)
-      } else if (!session.is_cancelled) {
-        // 出欠記録あり → 休止扱いにして記録を保護
+        .select('session_id')
+        .in('session_id', orphanIds)
+      const withRecords = new Set((recs ?? []).map(r => r.session_id))
+
+      // 出欠記録なし → セッション自体を削除（まとめて1クエリ）
+      const toDelete = orphans.filter(s => !withRecords.has(s.id)).map(s => s.id)
+      if (toDelete.length > 0) {
+        await admin.from('practice_sessions').delete().in('id', toDelete)
+      }
+
+      // 出欠記録あり かつ 未休止 → 休止扱いにして記録を保護（まとめて1クエリ）
+      const toCancel = orphans
+        .filter(s => withRecords.has(s.id) && !s.is_cancelled)
+        .map(s => s.id)
+      if (toCancel.length > 0) {
         await admin.from('practice_sessions')
           .update({
             is_cancelled:        true,
             cancellation_reason: 'Googleカレンダーから削除されました',
           })
-          .eq('id', session.id)
+          .in('id', toCancel)
       }
     }
 
