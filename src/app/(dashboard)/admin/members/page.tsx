@@ -2,6 +2,7 @@ import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import MembersManager from './MembersManager'
 import type { Profile } from '@/lib/types'
+import { getSessionUser, getMyProfile } from '@/lib/supabase/session'
 
 export interface OrphanUser {
   id: string
@@ -12,14 +13,10 @@ export interface OrphanUser {
 
 export default async function AdminMembersPage() {
   const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
+  const user = await getSessionUser()
   if (!user) redirect('/login')
 
-  const { data: myProfile } = await supabase
-    .from('profiles')
-    .select('role')
-    .eq('id', user.id)
-    .single()
+  const myProfile = await getMyProfile()
 
   if (!myProfile) {
     redirect('/dashboard')

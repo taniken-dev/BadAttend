@@ -1,6 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import { Inbox, MessageSquarePlus } from 'lucide-react'
+import { getSessionUser, getMyProfile } from '@/lib/supabase/session'
 
 interface Suggestion {
   id: string
@@ -11,14 +12,10 @@ interface Suggestion {
 
 export default async function AdminSuggestionsPage() {
   const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
+  const user = await getSessionUser()
   if (!user) redirect('/login')
 
-  const { data: myProfile } = await supabase
-    .from('profiles')
-    .select('role')
-    .eq('id', user.id)
-    .single()
+  const myProfile = await getMyProfile()
 
   if (!myProfile || myProfile.role !== 'admin') redirect('/dashboard')
 

@@ -1,23 +1,18 @@
 import { redirect } from 'next/navigation'
-import { createClient } from '@/lib/supabase/server'
 import NavBar from '@/components/ui/NavBar'
 import DashboardClientShell from './DashboardClientShell'
+import { getSessionUser, getMyProfile } from '@/lib/supabase/session'
 
 export default async function DashboardLayout({
   children,
 }: {
   children: React.ReactNode
 }) {
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
+  const user = await getSessionUser()
 
   if (!user) redirect('/login')
 
-  const { data: profile } = await supabase
-    .from('profiles')
-    .select('is_approved')
-    .eq('id', user.id)
-    .single()
+  const profile = await getMyProfile()
 
   if (!profile?.is_approved) redirect('/pending')
 
