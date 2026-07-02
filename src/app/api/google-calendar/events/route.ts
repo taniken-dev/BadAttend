@@ -37,6 +37,16 @@ export async function GET(request: NextRequest) {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
+  // 承認済みユーザーのみ閲覧可
+  const { data: eventsProfile } = await supabase
+    .from('profiles')
+    .select('is_approved')
+    .eq('id', user.id)
+    .single()
+  if (!eventsProfile?.is_approved) {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  }
+
   const { searchParams } = new URL(request.url)
   const year  = parseInt(searchParams.get('year')  ?? '', 10)
   const month = parseInt(searchParams.get('month') ?? '', 10) // 1-indexed

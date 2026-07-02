@@ -11,7 +11,14 @@ export async function GET(request: NextRequest) {
   const state      = searchParams.get('state')
   const tokenHash  = searchParams.get('token_hash')
   const type       = searchParams.get('type')
-  const next       = searchParams.get('next') ?? '/dashboard'
+  // オープンリダイレクト防止: 自サイト内の相対パスのみ許可
+  // （'//evil.com' や '/\evil.com' のようなプロトコル相対 URL を弾く）
+  const rawNext    = searchParams.get('next') ?? '/dashboard'
+  const next       = rawNext.startsWith('/')
+    && !rawNext.startsWith('//')
+    && !rawNext.startsWith('/\\')
+    ? rawNext
+    : '/dashboard'
 
   const savedState  = request.cookies.get('line_state')?.value
   // PWA から起動されたログインかどうか（クッキー経由で受け取る）

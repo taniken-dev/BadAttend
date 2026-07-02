@@ -4,8 +4,9 @@ import type { NextRequest } from 'next/server'
 
 export async function GET(request: NextRequest) {
   // Vercel Cron の認証チェック
+  // CRON_SECRET 未設定時に 'Bearer undefined' で誰でも通ってしまう事故を防ぐ
   const authHeader = request.headers.get('authorization')
-  if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
+  if (!process.env.CRON_SECRET || authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
@@ -83,11 +84,18 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ message: 'all submitted', sent: 0 })
   }
 
-  // line_user_id を取得
+  // line_user_id を取得（全ユーザーを1回だけ取得してマップ化。従来は
+  // 未提出者ごとに getUserById を直列実行しており最大 74 回の往復が発生していた）
+  const { data: userList } = await admin.auth.admin.listUsers({ perPage: 1000 })
+  const lineIdByUser = new Map<string, string>()
+  for (const u of userList?.users ?? []) {
+    const lineUserId = u.user_metadata?.line_user_id as string | undefined
+    if (lineUserId) lineIdByUser.set(u.id, lineUserId)
+  }
+
   const lineUserIds: string[] = []
   for (const uid of unsubmittedIds) {
-    const { data: { user } } = await admin.auth.admin.getUserById(uid)
-    const lineUserId = user?.user_metadata?.line_user_id as string | undefined
+    const lineUserId = lineIdByUser.get(uid)
     if (lineUserId) lineUserIds.push(lineUserId)
   }
 

@@ -36,33 +36,42 @@ export default async function DashboardPage() {
   const isCoach = profile?.role === 'coach'
   const isAdmin = profile?.role === 'admin'
 
-  // 個人スコア（coach は不要）
-  const { data: myScore } = isCoach ? { data: null } : await supabase
-    .from('v_selection_scores')
-    .select('*')
-    .eq('id', user.id)
-    .single<SelectionScore>()
-
-  // 全部員ランキング
-  const { data: allScores } = await supabase
-    .from('v_selection_scores')
-    .select('*')
-    .order('attendance_rate', { ascending: false })
-
-  // 注意勧告（admin のみ）
-  const { data: warningData } = isAdmin
-    ? await supabase.from('warning_flags').select('*').is('resolved_at', null)
-    : { data: [] }
-  const warnedUserIds = ((warningData ?? []) as WarningFlag[]).map(w => w.user_id)
-
-  // 今日のセッション
   const today = new Intl.DateTimeFormat('sv-SE', { timeZone: 'Asia/Tokyo' }).format(new Date())
-  const { data: todaySession } = await supabase
-    .from('practice_sessions')
-    .select('*')
-    .eq('session_date', today)
-    .eq('is_cancelled', false)
-    .single<PracticeSession>()
+
+  // 互いに依存しない初期クエリをまとめて並列実行（従来は直列 await だった）
+  const [
+    { data: myScore },
+    { data: allScores },
+    { data: warningData },
+    { data: todaySession },
+    { data: recentRecords },
+  ] = await Promise.all([
+    // 個人スコア（coach は不要）
+    isCoach
+      ? Promise.resolve({ data: null })
+      : supabase.from('v_selection_scores').select('*').eq('id', user.id).single<SelectionScore>(),
+    // 全部員ランキング
+    supabase.from('v_selection_scores').select('*').order('attendance_rate', { ascending: false }),
+    // 注意勧告（admin のみ）
+    isAdmin
+      ? supabase.from('warning_flags').select('*').is('resolved_at', null)
+      : Promise.resolve({ data: [] }),
+    // 今日のセッション
+    supabase.from('practice_sessions').select('*').eq('session_date', today).eq('is_cancelled', false).single<PracticeSession>(),
+    // 直近10回の自分の出欠実績（result_status 確定済みのみ・coach は不要）
+    isCoach
+      ? Promise.resolve({ data: null })
+      : supabase
+          .from('attendance_records')
+          .select('result_status, practice_sessions!inner(session_date)')
+          .eq('user_id', user.id)
+          .not('result_status', 'is', null)
+          .lte('practice_sessions.session_date', today)
+          .order('created_at', { ascending: false })
+          .limit(10),
+  ])
+
+  const warnedUserIds = ((warningData ?? []) as WarningFlag[]).map(w => w.user_id)
 
   // 今日の全出欠レコード
   type RawRecord = { user_id: string; status: string; reason: string | null; reason_detail: string | null; arrival_time: string | null }
@@ -137,16 +146,6 @@ export default async function DashboardPage() {
       .single()
     myTodayRecord = data
   }
-
-  // 直近10回の自分の出欠実績（result_status 確定済みのみ・coach は不要）
-  const { data: recentRecords } = isCoach ? { data: null } : await supabase
-    .from('attendance_records')
-    .select('result_status, practice_sessions!inner(session_date)')
-    .eq('user_id', user.id)
-    .not('result_status', 'is', null)
-    .lte('practice_sessions.session_date', today)
-    .order('created_at', { ascending: false })
-    .limit(10)
 
   const isLocked = profile?.lockout_until
     ? new Date(profile.lockout_until) >= new Date()

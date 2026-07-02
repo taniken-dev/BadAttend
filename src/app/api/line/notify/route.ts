@@ -46,10 +46,18 @@ export async function POST(request: NextRequest) {
   )
 
   // 各ユーザーの line_user_id を user_metadata から取得
+  // （全ユーザーを1回だけ取得してマップ化。従来は対象者ごとに
+  //   getUserById を直列実行していた）
+  const { data: userList } = await admin.auth.admin.listUsers({ perPage: 1000 })
+  const lineIdByUser = new Map<string, string>()
+  for (const u of userList?.users ?? []) {
+    const lineUserId = u.user_metadata?.line_user_id as string | undefined
+    if (lineUserId) lineIdByUser.set(u.id, lineUserId)
+  }
+
   const lineUserIds: string[] = []
   for (const uid of userIds as string[]) {
-    const { data: { user: u } } = await admin.auth.admin.getUserById(uid)
-    const lineUserId = u?.user_metadata?.line_user_id as string | undefined
+    const lineUserId = lineIdByUser.get(uid)
     if (lineUserId) lineUserIds.push(lineUserId)
   }
 
