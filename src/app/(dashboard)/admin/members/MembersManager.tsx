@@ -59,8 +59,7 @@ export default function MembersManager({
   const supabase = createClient()
   const router = useRouter()
   const { viewRole } = useViewRole()
-  // デバッグスイッチャーでロールを変更した場合もreadOnlyを反映
-  const effectiveReadOnly  = readOnly || viewRole !== 'admin'
+  const effectiveReadOnly  = viewRole !== 'admin'
   const canSeeSkillRank   = viewRole === 'admin' || viewRole === 'coach'
   const [updating, setUpdating]       = useState<string | null>(null)
   const [toast, setToast]             = useState<{ msg: string; ok: boolean } | null>(null)
