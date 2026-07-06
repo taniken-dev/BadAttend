@@ -1306,7 +1306,7 @@ function DetailPanel({
             </div>
             {session.time_note && (
               <p className="text-xs pl-5" style={{ color: 'var(--gray-400)' }}>
-                （）内は体育館の利用可能時間です。{session.end_time.slice(0, 5)}以降も自主練習ができます
+                （）内は体育館の利用可能時間です。
               </p>
             )}
           </div>
