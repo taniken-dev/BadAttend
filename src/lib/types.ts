@@ -37,8 +37,8 @@ export interface Profile {
 export interface PracticeSession {
   id: string
   session_date: string
-  start_time: string
-  end_time: string
+  start_time: string | null
+  end_time: string | null
   location: string
   is_cancelled: boolean
   cancellation_reason: string | null
@@ -50,6 +50,7 @@ export interface PracticeSession {
   is_bukai: boolean
   is_voluntary: boolean
   courts: number | null
+  time_note: string | null
   created_at: string
 }
 

@@ -18,29 +18,37 @@ function parseCalendarIds(env: string | undefined): string[] {
   return (env ?? '').split(',').map(s => s.trim()).filter(Boolean)
 }
 
-// Googleカレンダーイベントの説明文から時間と面数をパースする
+// Googleカレンダーイベントの説明文から時間・面数・補足時間をパースする
 // 対応フォーマット例: 時間：17:00〜22:00 / 面数：4面
+// 時間の後ろに（15:00）のような括弧がある場合は「体育館の利用可能時間（自主練習可）」の
+// 補足として timeNote に保持する（例: 時間：9:00〜12:00(15:00) → timeNote = "15:00"）
+// GCalのリッチテキスト説明文は <b>時間</b>：15:00～20:00<br> のようにHTMLタグを含むため、
+// パース前にタグを除去する（自主練カレンダーはプレーンテキストのため元々問題なかった）
 function parseDescription(desc: string | null | undefined): {
   startTime: string | null
   endTime: string | null
   courts: number | null
+  timeNote: string | null
 } {
-  if (!desc) return { startTime: null, endTime: null, courts: null }
+  if (!desc) return { startTime: null, endTime: null, courts: null, timeNote: null }
+  const plainDesc = desc.replace(/<br\s*\/?>/gi, '\n').replace(/<[^>]+>/g, '')
 
-  // 時間：HH:MM〜HH:MM（全角/半角コロン、各種チルダ対応）
-  const timeMatch = desc.match(/時間[：:]\s*(\d{1,2})[：:](\d{2})\s*[〜～~]\s*(\d{1,2})[：:](\d{2})/)
+  // 時間：HH:MM〜HH:MM（全角/半角コロン、各種チルダ対応）+ 任意の（補足）
+  const timeMatch = plainDesc.match(/時間[：:]\s*(\d{1,2})[：:](\d{2})\s*[〜～~]\s*(\d{1,2})[：:](\d{2})\s*(?:[（(]([^）)]*)[）)])?/)
   let startTime: string | null = null
   let endTime: string | null   = null
+  let timeNote: string | null  = null
   if (timeMatch) {
     startTime = `${timeMatch[1].padStart(2, '0')}:${timeMatch[2]}:00`
     endTime   = `${timeMatch[3].padStart(2, '0')}:${timeMatch[4]}:00`
+    timeNote  = timeMatch[5] ? timeMatch[5].trim() || null : null
   }
 
   // 面数：N（面は省略可）
-  const courtsMatch = desc.match(/面数[：:]\s*(\d+)/)
+  const courtsMatch = plainDesc.match(/面数[：:]\s*(\d+)/)
   const courts = courtsMatch ? parseInt(courtsMatch[1], 10) : null
 
-  return { startTime, endTime, courts }
+  return { startTime, endTime, courts, timeNote }
 }
 
 export async function GET(request: NextRequest) {
@@ -93,7 +101,7 @@ export async function GET(request: NextRequest) {
     const endDate   = `${year}-${String(month).padStart(2, '0')}-${new Date(year, month, 0).getDate()}`
     const { data } = await supabase
       .from('practice_sessions')
-      .select('id, session_date, start_time, end_time, location, is_cancelled, cancellation_reason, is_results_confirmed, results_confirmed_at, note, google_event_id, is_camp, is_bukai, is_voluntary, courts, created_at')
+      .select('id, session_date, start_time, end_time, location, is_cancelled, cancellation_reason, is_results_confirmed, results_confirmed_at, note, google_event_id, is_camp, is_bukai, is_voluntary, courts, time_note, created_at')
       .gte('session_date', startDate)
       .lte('session_date', endDate)
     return NextResponse.json({ sessions: data ?? [] })
@@ -200,11 +208,13 @@ export async function GET(request: NextRequest) {
     }
 
     // 通常イベント・自主練イベント共通の日付展開＋確保処理
+    // 時間・面数は説明文（または時刻指定イベントの実時刻）に明記されている場合のみ設定し、
+    // 書かれていない場合は null のまま保存する（架空のデフォルト時刻を表示しないため）
     const processItem = (
       item: calendar_v3.Schema$Event,
       opts: {
         isCamp: boolean; isBukai: boolean; isVoluntary: boolean
-        defaultEnd: string; noteFallback: string | null
+        noteFallback: string | null
       },
     ) => {
       if (!item.id) return
@@ -223,9 +233,8 @@ export async function GET(request: NextRequest) {
           gcalEventIdSet.add(googleEventId)
           tryClaim(date, item.id, {
             session_date:    date,
-            // 説明文に時間があれば優先、なければデフォルト
-            start_time:      parsed.startTime ?? '17:00:00',
-            end_time:        parsed.endTime   ?? opts.defaultEnd,
+            start_time:      parsed.startTime,
+            end_time:        parsed.endTime,
             location:        item.location ?? '新習志野体育館',
             note:            item.summary ?? opts.noteFallback,
             google_event_id: googleEventId,
@@ -233,13 +242,14 @@ export async function GET(request: NextRequest) {
             is_bukai:        opts.isBukai,
             is_voluntary:    opts.isVoluntary,
             courts:          parsed.courts,
+            time_note:       parsed.timeNote,
           })
         }
       } else {
-        // 時刻指定イベント（単日）
+        // 時刻指定イベント（単日）：GCal自体に設定された実時刻があればそれを優先
         const date      = startStr.slice(0, 10)
-        const startTime = parsed.startTime ?? item.start?.dateTime?.slice(11, 19) ?? '17:00:00'
-        const endTime   = parsed.endTime   ?? item.end?.dateTime?.slice(11, 19)   ?? opts.defaultEnd
+        const startTime = parsed.startTime ?? item.start?.dateTime?.slice(11, 19) ?? null
+        const endTime   = parsed.endTime   ?? item.end?.dateTime?.slice(11, 19)   ?? null
         gcalEventIdSet.add(item.id)
         tryClaim(date, item.id, {
           session_date:    date,
@@ -255,6 +265,7 @@ export async function GET(request: NextRequest) {
           is_bukai:        opts.isBukai,
           is_voluntary:    opts.isVoluntary,
           courts:          parsed.courts,
+          time_note:       parsed.timeNote,
         })
       }
     }
@@ -265,7 +276,6 @@ export async function GET(request: NextRequest) {
         isCamp:       campCalendarIdSet.has(calendarId),
         isBukai:      bukaiCalendarIdSet.has(calendarId),
         isVoluntary:  false,
-        defaultEnd:   '20:00:00',
         noteFallback: null,
       })
     }
@@ -276,7 +286,6 @@ export async function GET(request: NextRequest) {
         isCamp:       false,
         isBukai:      false,
         isVoluntary:  true,
-        defaultEnd:   '22:00:00',
         noteFallback: '自主練習',
       })
     }
@@ -330,7 +339,7 @@ export async function GET(request: NextRequest) {
     // 月の全セッション（手動作成分も含む）を返す
     const { data: sessions } = await admin
       .from('practice_sessions')
-      .select('id, session_date, start_time, end_time, location, is_cancelled, cancellation_reason, is_results_confirmed, results_confirmed_at, note, google_event_id, is_camp, is_bukai, is_voluntary, courts, created_at')
+      .select('id, session_date, start_time, end_time, location, is_cancelled, cancellation_reason, is_results_confirmed, results_confirmed_at, note, google_event_id, is_camp, is_bukai, is_voluntary, courts, time_note, created_at')
       .gte('session_date', startDate)
       .lte('session_date', endDate)
       .order('session_date')
@@ -341,7 +350,7 @@ export async function GET(request: NextRequest) {
     // 同期失敗時はSupabaseのデータをそのまま返してUIを壊さない
     const { data } = await supabase
       .from('practice_sessions')
-      .select('id, session_date, start_time, end_time, location, is_cancelled, cancellation_reason, is_results_confirmed, results_confirmed_at, note, google_event_id, is_camp, is_bukai, is_voluntary, courts, created_at')
+      .select('id, session_date, start_time, end_time, location, is_cancelled, cancellation_reason, is_results_confirmed, results_confirmed_at, note, google_event_id, is_camp, is_bukai, is_voluntary, courts, time_note, created_at')
       .gte('session_date', startDate)
       .lte('session_date', endDate)
     return NextResponse.json({ sessions: data ?? [] })

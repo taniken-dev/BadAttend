@@ -163,7 +163,7 @@ export default function CalendarView() {
     // 1. Supabase から即座に既存セッションを表示（高速）
     supabase
       .from('practice_sessions')
-      .select('id, session_date, start_time, end_time, location, is_cancelled, cancellation_reason, is_results_confirmed, results_confirmed_at, note, google_event_id, is_camp, is_bukai, is_voluntary, courts, created_at')
+      .select('id, session_date, start_time, end_time, location, is_cancelled, cancellation_reason, is_results_confirmed, results_confirmed_at, note, google_event_id, is_camp, is_bukai, is_voluntary, courts, time_note, created_at')
       .gte('session_date', s)
       .lte('session_date', e)
       .abortSignal(signal)
@@ -1076,9 +1076,12 @@ function DetailPanel({
     !!myRecord && session.session_date > todayForWindow &&
     !availableDates.includes(session.session_date)
 
-  // 実績登録は練習開始時刻以降のみ（合宿は常に可能）
-  const sessionStartAt = new Date(`${session.session_date}T${session.start_time}`)
-  const canRegisterResult = session.is_camp || session.is_bukai || new Date() >= sessionStartAt
+  // 実績登録は練習開始時刻以降のみ（合宿・部会や時刻未設定セッションは常に可能）
+  const sessionStartAt = session.start_time
+    ? new Date(`${session.session_date}T${session.start_time}`)
+    : null
+  const canRegisterResult = session.is_camp || session.is_bukai ||
+    sessionStartAt === null || new Date() >= sessionStartAt
   const selfIsAbsent = selfStatus === 'absent_normal'
   const selfIsTardy  = selfStatus === 'tardy'
 
@@ -1294,10 +1297,20 @@ function DetailPanel({
           </div>
         )}
 
-        <div className="flex items-center gap-2 text-sm" style={{ color: 'var(--gray-600)' }}>
-          <Clock size={14} className="shrink-0" style={{ color: 'var(--gray-400)' }} />
-          {session.start_time.slice(0, 5)} 〜 {session.end_time.slice(0, 5)}
-        </div>
+        {session.start_time && session.end_time && (
+          <div className="flex flex-col gap-0.5">
+            <div className="flex items-center gap-2 text-sm" style={{ color: 'var(--gray-600)' }}>
+              <Clock size={14} className="shrink-0" style={{ color: 'var(--gray-400)' }} />
+              {session.start_time.slice(0, 5)} 〜 {session.end_time.slice(0, 5)}
+              {session.time_note && `（${session.time_note}）`}
+            </div>
+            {session.time_note && (
+              <p className="text-xs pl-5" style={{ color: 'var(--gray-400)' }}>
+                （）内は体育館の利用可能時間です。{session.end_time.slice(0, 5)}以降も自主練習ができます
+              </p>
+            )}
+          </div>
+        )}
         <div className="flex items-center gap-2 text-sm" style={{ color: 'var(--gray-600)' }}>
           <MapPin size={14} className="shrink-0" style={{ color: 'var(--gray-400)' }} />
           {session.location}
@@ -1407,7 +1420,8 @@ function DetailPanel({
 
       {/* 自主練習：参加意思表示UI（キャンセル時は折りたたみ外に置いて常時表示） */}
       {session.is_voluntary && !session.is_cancelled && canSelfRegister && userId && (() => {
-        const sessionStartAt  = new Date(`${session.session_date}T${session.start_time}`)
+        // 自主練習は必ず実時刻を持つ（時刻指定イベントのため）
+        const sessionStartAt  = new Date(`${session.session_date}T${session.start_time ?? '17:00:00'}`)
         const cutoffAt        = new Date(sessionStartAt.getTime() - 60 * 60 * 1000)
         const isLocked        = new Date() >= cutoffAt
         const isAttending     = !!myRecord
@@ -1479,8 +1493,8 @@ function DetailPanel({
                 </p>
                 <div className="grid grid-cols-4 gap-1.5">
                   {(() => {
-                    const [sh, sm] = session.start_time.split(':').map(Number)
-                    const [eh, em] = session.end_time.split(':').map(Number)
+                    const [sh, sm] = (session.start_time ?? '17:00:00').split(':').map(Number)
+                    const [eh, em] = (session.end_time ?? '22:00:00').split(':').map(Number)
                     const startMin = sh * 60 + sm
                     const endMin   = eh * 60 + em
                     const times: string[] = []
