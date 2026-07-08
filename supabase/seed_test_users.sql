@@ -31,7 +31,8 @@ begin
       '00000000-0000-0000-0000-000000000000',
       'authenticated', 'authenticated',
       'tani@cit-badminton.jp',
-      crypt('Tani1234!', gen_salt('bf')),
+      -- ローカル開発専用。実行前にパスワードを差し替えること（本番では実行しない）
+      crypt('CHANGE_ME_LOCAL_ONLY', gen_salt('bf')),
       now(),
       jsonb_build_object('full_name', '谷 謙太郎', 'grade', 3),
       '{"provider":"email","providers":["email"]}',
