@@ -40,6 +40,7 @@ export async function GET(request: NextRequest) {
     .select('id, session_date')
     .in('session_date', targetDates)
     .eq('is_cancelled', false)
+    .eq('is_voluntary', false)
 
   if (!sessions || sessions.length === 0) {
     return NextResponse.json({ message: 'no sessions', dates: targetDates })
