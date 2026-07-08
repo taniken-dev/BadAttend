@@ -111,15 +111,6 @@ export interface SelectionScore {
   selection_rank: SelectionRank
 }
 
-export const SKILL_RANK_LABELS: Record<SkillRank, string> = {
-  1: 'E級',
-  2: 'D級',
-  3: 'C級',
-  4: 'B級',
-  5: 'A級',
-  6: 'S級',
-}
-
 export const ATTENDANCE_STATUS_LABELS: Record<AttendanceStatus, string> = {
   present: '出席',
   tardy: '遅刻',

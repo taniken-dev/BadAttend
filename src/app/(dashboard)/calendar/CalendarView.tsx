@@ -616,6 +616,7 @@ export default function CalendarView() {
       fetch('/api/line/group-notify', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        // 部会かどうかはサーバー側が DB から判定するため送らない
         body: JSON.stringify({
           sessionId: session.id,
           status,
@@ -623,7 +624,6 @@ export default function CalendarView() {
           reasonDetail,
           arrivalTime,
           isAdvance: isAdvanceAbsent,
-          isBukai: session.is_bukai,
         }),
       }).catch(() => {})
     }

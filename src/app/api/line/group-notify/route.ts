@@ -1,7 +1,6 @@
-import { createServerClient } from '@supabase/ssr'
-import { cookies } from 'next/headers'
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
+import { createClient } from '@/lib/supabase/server'
 
 const REASON_LABELS: Record<string, string> = {
   practice: '別練習・大会',
@@ -35,21 +34,7 @@ export async function POST(request: NextRequest) {
   const safeArrivalTime =
     typeof arrivalTime === 'string' && TIME_RE.test(arrivalTime.trim()) ? arrivalTime.trim() : null
 
-  const cookieStore = await cookies()
-  const supabase = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    {
-      cookies: {
-        getAll() { return cookieStore.getAll() },
-        setAll(cookiesToSet) {
-          cookiesToSet.forEach(({ name, value, options }) => {
-            try { cookieStore.set(name, value, options) } catch {}
-          })
-        },
-      },
-    }
-  )
+  const supabase = await createClient()
 
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })

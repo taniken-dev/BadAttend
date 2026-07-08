@@ -1,22 +1,9 @@
 import { google, type calendar_v3 } from 'googleapis'
-import { createServerClient } from '@supabase/ssr'
-import { createClient as createAdminClient } from '@supabase/supabase-js'
-import { cookies } from 'next/headers'
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
-
-function buildOAuthClient() {
-  const auth = new google.auth.OAuth2(
-    process.env.GOOGLE_CLIENT_ID,
-    process.env.GOOGLE_CLIENT_SECRET,
-  )
-  auth.setCredentials({ refresh_token: process.env.GOOGLE_REFRESH_TOKEN })
-  return auth
-}
-
-function parseCalendarIds(env: string | undefined): string[] {
-  return (env ?? '').split(',').map(s => s.trim()).filter(Boolean)
-}
+import { createClient } from '@/lib/supabase/server'
+import { createAdminClient } from '@/lib/supabase/admin'
+import { buildOAuthClient, parseCalendarIds } from '@/lib/google'
 
 // Googleカレンダーイベントの説明文から時間・面数・補足時間をパースする
 // 対応フォーマット例: 時間：17:00〜22:00 / 面数：4面
@@ -53,21 +40,7 @@ function parseDescription(desc: string | null | undefined): {
 
 export async function GET(request: NextRequest) {
   // 認証チェック（ログイン済みであれば誰でも同期可能）
-  const cookieStore = await cookies()
-  const supabase = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    {
-      cookies: {
-        getAll() { return cookieStore.getAll() },
-        setAll(cookiesToSet) {
-          cookiesToSet.forEach(({ name, value, options }) => {
-            try { cookieStore.set(name, value, options) } catch {}
-          })
-        },
-      },
-    }
-  )
+  const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
@@ -155,10 +128,7 @@ export async function GET(request: NextRequest) {
     const voluntaryItems = miscResults.flat()
 
     // DB操作は service role で行う
-    const admin = createAdminClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.SUPABASE_SERVICE_ROLE_KEY!
-    )
+    const admin = createAdminClient()
 
     // 終日イベントを日ごとに展開するヘルパー
     function expandDates(startDate: string, endDateExclusive: string): string[] {
