@@ -1,39 +1,12 @@
 import { google, type calendar_v3 } from 'googleapis'
-import { createServerClient } from '@supabase/ssr'
-import { cookies } from 'next/headers'
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 import type { GoogleCalendarEvent } from '@/lib/types'
-
-function buildOAuthClient() {
-  const auth = new google.auth.OAuth2(
-    process.env.GOOGLE_CLIENT_ID,
-    process.env.GOOGLE_CLIENT_SECRET,
-  )
-  auth.setCredentials({ refresh_token: process.env.GOOGLE_REFRESH_TOKEN })
-  return auth
-}
-
-function parseCalendarIds(env: string | undefined): string[] {
-  return (env ?? '').split(',').map(s => s.trim()).filter(Boolean)
-}
+import { createClient } from '@/lib/supabase/server'
+import { buildOAuthClient, parseCalendarIds } from '@/lib/google'
 
 export async function GET(request: NextRequest) {
-  const cookieStore = await cookies()
-  const supabase = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    {
-      cookies: {
-        getAll() { return cookieStore.getAll() },
-        setAll(cookiesToSet) {
-          cookiesToSet.forEach(({ name, value, options }) => {
-            try { cookieStore.set(name, value, options) } catch {}
-          })
-        },
-      },
-    }
-  )
+  const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 

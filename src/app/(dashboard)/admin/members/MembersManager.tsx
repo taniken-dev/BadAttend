@@ -48,12 +48,10 @@ function displayName(m: Pick<Profile, 'full_name' | 'display_name'>) {
 export default function MembersManager({
   members,
   currentUserId,
-  readOnly = false,
   orphanUsers = [],
 }: {
   members: Profile[]
   currentUserId: string
-  readOnly?: boolean
   orphanUsers?: OrphanUser[]
 }) {
   const supabase = createClient()

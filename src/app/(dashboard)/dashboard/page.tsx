@@ -36,16 +36,11 @@ export default async function DashboardPage() {
 
   // 互いに依存しない初期クエリをまとめて並列実行（従来は直列 await だった）
   const [
-    { data: myScore },
     { data: allScores },
     { data: warningData },
     { data: todaySession },
     { data: recentRecords },
   ] = await Promise.all([
-    // 個人スコア（coach は不要）
-    isCoach
-      ? Promise.resolve({ data: null })
-      : supabase.from('v_selection_scores').select('*').eq('id', user.id).single<SelectionScore>(),
     // 全部員ランキング
     supabase.from('v_selection_scores').select('*').order('attendance_rate', { ascending: false }),
     // 注意勧告（admin のみ）
@@ -69,6 +64,11 @@ export default async function DashboardPage() {
   ])
 
   const warnedUserIds = ((warningData ?? []) as WarningFlag[]).map(w => w.user_id)
+
+  // 個人スコアはランキングと同じビューの同一行なので、別クエリを投げずに抽出する
+  const myScore = isCoach
+    ? null
+    : ((allScores ?? []) as SelectionScore[]).find(s => s.id === user.id) ?? null
 
   // 今日の全出欠レコード
   type RawRecord = { user_id: string; status: string; reason: string | null; reason_detail: string | null; arrival_time: string | null }

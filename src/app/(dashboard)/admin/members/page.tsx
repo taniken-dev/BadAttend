@@ -40,7 +40,6 @@ export default async function AdminMembersPage() {
     <MembersManager
       members={(members ?? []) as Profile[]}
       currentUserId={user.id}
-      readOnly={!isAdmin}
       orphanUsers={(orphanData ?? []) as OrphanUser[]}
     />
   )
