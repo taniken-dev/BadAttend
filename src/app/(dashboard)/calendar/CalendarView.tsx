@@ -13,7 +13,7 @@ import { useViewRole } from '@/contexts/ViewRoleContext'
 import { getWeeklyRegistrationInfo } from '@/lib/utils'
 import type { PracticeSession, AttendanceStatus, AbsenceReason, GoogleCalendarEvent } from '@/lib/types'
 
-type SessionMap = Record<string, PracticeSession>
+type SessionMap = Record<string, PracticeSession[]>
 
 type AttendanceRow = {
   id: string
@@ -126,6 +126,12 @@ function toDateStr(y: number, m: number, d: number) {
   return `${y}-${String(m + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`
 }
 
+// 部会・合宿・自主練などを先に、通常の部活を一番下に表示する
+function sortDaySessions(list: PracticeSession[]): PracticeSession[] {
+  const rank = (s: PracticeSession) => (s.is_bukai || s.is_camp || s.is_voluntary) ? 0 : 1
+  return [...list].sort((a, b) => rank(a) - rank(b))
+}
+
 export default function CalendarView() {
   const supabase = createClient()
   const today    = new Date()
@@ -137,12 +143,27 @@ export default function CalendarView() {
   const [sessions,     setSessions]    = useState<SessionMap>({})
   const [gcalEvents,   setGcalEvents]  = useState<Record<string, GoogleCalendarEvent[]>>({})
   const [selectedDate, setSelectedDate] = useState<string | null>(null)
-  const [detail,       setDetail]      = useState<DayDetail | null>(null)
+  const [details,      setDetails]     = useState<DayDetail[]>([])
   const [loading,      setLoading]     = useState(false)
+  const [collapsedSessionIds, setCollapsedSessionIds] = useState<Set<string>>(new Set())
 
   const isManagerOrAdmin  = viewRole === 'manager' || viewRole === 'admin'
   const canManageSessions = viewRole === 'manager' || viewRole === 'admin'
   const availableDates = useMemo(() => getWeeklyRegistrationInfo().availableDates, [])
+
+  // details 配列内の特定セッションのみを更新する
+  const updateDetail = (sessionId: string, updater: (d: DayDetail) => DayDetail) => {
+    setDetails(prev => prev.map(d => d.session.id === sessionId ? updater(d) : d))
+  }
+
+  // sessions マップ内の特定セッションのみを更新する（同日に複数セッションがあり得るため）
+  const patchSession = (sessionDate: string, sessionId: string, patch: Partial<PracticeSession>) => {
+    setSessions(prev => {
+      const list = prev[sessionDate]
+      if (!list) return prev
+      return { ...prev, [sessionDate]: list.map(s => s.id === sessionId ? { ...s, ...patch } : s) }
+    })
+  }
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data: { user } }) => {
@@ -170,7 +191,10 @@ export default function CalendarView() {
       .then(({ data }) => {
         if (signal.aborted) return
         const map: SessionMap = {}
-        ;(data ?? []).forEach(s => { map[s.session_date] = s as PracticeSession })
+        ;(data ?? []).forEach(s => {
+          const row = s as PracticeSession
+          ;(map[row.session_date] ??= []).push(row)
+        })
         setSessions(map)
       })
 
@@ -180,7 +204,7 @@ export default function CalendarView() {
       .then((body: { sessions: PracticeSession[] } | null) => {
         if (!body) return
         const map: SessionMap = {}
-        ;(body.sessions ?? []).forEach(s => { map[s.session_date] = s })
+        ;(body.sessions ?? []).forEach(s => { (map[s.session_date] ??= []).push(s) })
         setSessions(map)
       })
       .catch(() => {})
@@ -200,29 +224,30 @@ export default function CalendarView() {
       .catch(() => {})
 
     setSelectedDate(null)
-    setDetail(null)
+    setDetails([])
     return () => abort.abort()
   }, [current])
 
-  // ── 日付クリック → 詳細取得 ──────────────────────────────
+  // ── 日付クリック → 詳細取得（同日に複数セッションがある場合は全件まとめて取得） ──
   const handleDayClick = useCallback(async (dateStr: string) => {
-    const session   = sessions[dateStr]
-    const hasGcal   = (gcalEvents[dateStr]?.length ?? 0) > 0
-    if (!session && !hasGcal) return
-    if (selectedDate === dateStr) { setSelectedDate(null); setDetail(null); return }
+    const daySessions = sessions[dateStr] ?? []
+    const hasGcal      = (gcalEvents[dateStr]?.length ?? 0) > 0
+    if (daySessions.length === 0 && !hasGcal) return
+    if (selectedDate === dateStr) { setSelectedDate(null); setDetails([]); return }
 
     setSelectedDate(dateStr)
-    setDetail(null)
+    setDetails([])
     setLoading(false)
-    if (!session) return  // GCalイベントのみの日は詳細取得不要
+    if (daySessions.length === 0) return  // GCalイベントのみの日は詳細取得不要
 
     setLoading(true)
 
+    const sessionIds = daySessions.map(s => s.id)
     const [{ data: atRows }, { data: allProfiles }] = await Promise.all([
       supabase
         .from('attendance_records')
-        .select('id, status, result_status, reason, reason_detail, arrival_time, user_id')
-        .eq('session_id', session.id),
+        .select('id, status, result_status, reason, reason_detail, arrival_time, user_id, session_id')
+        .in('session_id', sessionIds),
       supabase
         .from('profiles')
         .select('id, full_name, display_name, avatar_url, grade, role, joined_at')
@@ -230,25 +255,27 @@ export default function CalendarView() {
         .eq('is_active', true),
     ])
 
-    const rows     = (atRows ?? []) as AttendanceRow[]
+    const rows     = (atRows ?? []) as (AttendanceRow & { session_id: string })[]
     const everyone = (allProfiles ?? []) as MemberProfile[]
+    const profileMap = Object.fromEntries(everyone.map(p => [p.id, p]))
 
-    const submittedIds = new Set(rows.map(r => r.user_id))
-    const profileMap   = Object.fromEntries(everyone.map(p => [p.id, p]))
+    const newDetails: DayDetail[] = sortDaySessions(daySessions).map(session => {
+      const sessionRows   = rows.filter(r => r.session_id === session.id)
+      const submittedIds  = new Set(sessionRows.map(r => r.user_id))
+      const attendance: EnrichedAttendance[] = sessionRows
+        .filter(r => profileMap[r.user_id])
+        .map(r => ({ ...r, profile: profileMap[r.user_id] }))
 
-    const attendance: EnrichedAttendance[] = rows
-      .filter(r => profileMap[r.user_id])
-      .map(r => ({ ...r, profile: profileMap[r.user_id] }))
+      // 入部日が設定されている場合、セッション日より後に入部したメンバーを除外
+      const activeMembers = everyone.filter(p =>
+        p.role !== 'coach' && (!p.joined_at || p.joined_at <= session.session_date)
+      )
+      const unsubmitted = activeMembers.filter(p => !submittedIds.has(p.id))
 
-    // 入部日が設定されている場合、セッション日より後に入部したメンバーを除外
-    const sessionDate = session.session_date
-    const activeMembers = everyone.filter(p =>
-      p.role !== 'coach' && (!p.joined_at || p.joined_at <= sessionDate)
-    )
-    const nonCoachMembers = activeMembers
-    const unsubmitted = nonCoachMembers.filter(p => !submittedIds.has(p.id))
+      return { session, attendance, unsubmitted, totalApproved: activeMembers.length }
+    })
 
-    setDetail({ session, attendance, unsubmitted, totalApproved: nonCoachMembers.length })
+    setDetails(newDetails)
     setLoading(false)
   }, [sessions, selectedDate, gcalEvents])
 
@@ -273,23 +300,22 @@ export default function CalendarView() {
       .select('id, status, result_status, reason, reason_detail, user_id')
       .single()
     if (error || !data) return
-    setDetail(prev => {
-      if (!prev) return prev
-      return {
-        ...prev,
-        attendance: [...prev.attendance, { ...(data as AttendanceRow), profile }],
-        unsubmitted: prev.unsubmitted.filter(p => p.id !== memberId),
-      }
-    })
+    updateDetail(sessionId, prev => ({
+      ...prev,
+      attendance: [...prev.attendance, { ...(data as AttendanceRow), profile }],
+      unsubmitted: prev.unsubmitted.filter(p => p.id !== memberId),
+    }))
   }, [userId])
 
   // ── 実績ステータスを1件更新 ─────────────────────────────
   const handleUpdateResultStatus = useCallback(async (
     recordId: string,
     newStatus: AttendanceStatus,
-    sessionDate: string,
+    sessionId: string,
   ) => {
-    if (!userId || !detail) return
+    if (!userId) return
+    const detail = details.find(d => d.session.id === sessionId)
+    if (!detail) return
     const { error } = await supabase
       .from('attendance_records')
       .update({ result_status: newStatus, verified_by: userId })
@@ -309,27 +335,22 @@ export default function CalendarView() {
     }
 
     // detail を楽観的に更新
-    setDetail(prev => {
-      if (!prev) return prev
-      return {
-        ...prev,
-        session: { ...prev.session, is_results_confirmed: true },
-        attendance: prev.attendance.map(a =>
-          a.id === recordId ? { ...a, result_status: newStatus } : a
-        ),
-      }
-    })
-    setSessions(prev => {
-      const session = prev[sessionDate]
-      if (!session || session.is_results_confirmed) return prev
-      return { ...prev, [sessionDate]: { ...session, is_results_confirmed: true } }
-    })
-  }, [userId, detail])
+    updateDetail(sessionId, prev => ({
+      ...prev,
+      session: { ...prev.session, is_results_confirmed: true },
+      attendance: prev.attendance.map(a =>
+        a.id === recordId ? { ...a, result_status: newStatus } : a
+      ),
+    }))
+    if (!detail.session.is_results_confirmed) {
+      patchSession(detail.session.session_date, sessionId, { is_results_confirmed: true })
+    }
+  }, [userId, details])
 
   // ── セッション全員の実績を一括確定 ──────────────────────
-  const handleBulkConfirm = useCallback(async () => {
+  const handleBulkConfirm = useCallback(async (sessionId: string) => {
+    const detail = details.find(d => d.session.id === sessionId)
     if (!detail || !userId) return
-    const sessionId = detail.session.id
     const sessionDate = detail.session.session_date
 
     // result_status が未設定の行を status で埋める
@@ -354,29 +375,23 @@ export default function CalendarView() {
       .eq('id', sessionId)
 
     // ローカル state 更新
-    setDetail(prev => {
-      if (!prev) return prev
-      return {
-        ...prev,
-        session: { ...prev.session, is_results_confirmed: true },
-        attendance: prev.attendance.map(a =>
-          a.result_status ? a : { ...a, result_status: a.status }
-        ),
-      }
-    })
-    setSessions(prev => ({
+    updateDetail(sessionId, prev => ({
       ...prev,
-      [sessionDate]: { ...prev[sessionDate], is_results_confirmed: true },
+      session: { ...prev.session, is_results_confirmed: true },
+      attendance: prev.attendance.map(a =>
+        a.result_status ? a : { ...a, result_status: a.status }
+      ),
     }))
-  }, [detail, userId])
+    patchSession(sessionDate, sessionId, { is_results_confirmed: true })
+  }, [details, userId])
 
   // ── 個別実績を未確定に戻す ──────────────────────────────────
   const handleClearResultStatus = useCallback(async (
     recordId: string,
-    sessionDate: string,
+    sessionId: string,
   ) => {
+    const detail = details.find(d => d.session.id === sessionId)
     if (!detail) return
-    const sessionId = detail.session.id
     const { error } = await supabase
       .from('attendance_records')
       .update({ result_status: null, verified_by: null })
@@ -395,26 +410,20 @@ export default function CalendarView() {
         .eq('id', sessionId)
     }
 
-    setDetail(prev => {
-      if (!prev) return prev
-      return {
-        ...prev,
-        session: allCleared ? { ...prev.session, is_results_confirmed: false } : prev.session,
-        attendance: updatedAttendance,
-      }
-    })
+    updateDetail(sessionId, prev => ({
+      ...prev,
+      session: allCleared ? { ...prev.session, is_results_confirmed: false } : prev.session,
+      attendance: updatedAttendance,
+    }))
     if (allCleared) {
-      setSessions(prev => ({
-        ...prev,
-        [sessionDate]: { ...prev[sessionDate], is_results_confirmed: false },
-      }))
+      patchSession(detail.session.session_date, sessionId, { is_results_confirmed: false })
     }
-  }, [detail])
+  }, [details])
 
   // ── セッション全員の実績を未確定に戻す ──────────────────────
-  const handleRevertAll = useCallback(async () => {
+  const handleRevertAll = useCallback(async (sessionId: string) => {
+    const detail = details.find(d => d.session.id === sessionId)
     if (!detail) return
-    const sessionId = detail.session.id
     const sessionDate = detail.session.session_date
 
     const clears = detail.attendance
@@ -432,27 +441,22 @@ export default function CalendarView() {
       .update({ is_results_confirmed: false, results_confirmed_at: null })
       .eq('id', sessionId)
 
-    setDetail(prev => {
-      if (!prev) return prev
-      return {
-        ...prev,
-        session: { ...prev.session, is_results_confirmed: false },
-        attendance: prev.attendance.map(a => ({ ...a, result_status: null })),
-      }
-    })
-    setSessions(prev => ({
+    updateDetail(sessionId, prev => ({
       ...prev,
-      [sessionDate]: { ...prev[sessionDate], is_results_confirmed: false },
+      session: { ...prev.session, is_results_confirmed: false },
+      attendance: prev.attendance.map(a => ({ ...a, result_status: null })),
     }))
-  }, [detail])
+    patchSession(sessionDate, sessionId, { is_results_confirmed: false })
+  }, [details])
 
   // ── 練習休止のトグル ─────────────────────────────────────
   const handleToggleCancelled = useCallback(async (
+    sessionId: string,
     cancelled: boolean,
     reason: string | null,
   ) => {
+    const detail = details.find(d => d.session.id === sessionId)
     if (!detail) return
-    const sessionId   = detail.session.id
     const sessionDate = detail.session.session_date
 
     await supabase
@@ -464,13 +468,15 @@ export default function CalendarView() {
       .eq('id', sessionId)
 
     const patch = { is_cancelled: cancelled, cancellation_reason: cancelled ? (reason?.trim() || null) : null }
-    setDetail(prev => prev ? { ...prev, session: { ...prev.session, ...patch } } : prev)
-    setSessions(prev => ({ ...prev, [sessionDate]: { ...prev[sessionDate], ...patch } }))
-  }, [detail])
+    updateDetail(sessionId, prev => ({ ...prev, session: { ...prev.session, ...patch } }))
+    patchSession(sessionDate, sessionId, patch)
+  }, [details])
 
   // ── 自主練の参加時刻を更新（既存レコードのarrival_timeだけ変更） ──
-  const handleVoluntaryUpdateTime = useCallback(async (arrivalTime: string | null) => {
-    if (!detail || !userId) return
+  const handleVoluntaryUpdateTime = useCallback(async (sessionId: string, arrivalTime: string | null) => {
+    if (!userId) return
+    const detail = details.find(d => d.session.id === sessionId)
+    if (!detail) return
     const myRecord = detail.attendance.find(a => a.user_id === userId)
     if (!myRecord) return
 
@@ -480,20 +486,19 @@ export default function CalendarView() {
       .eq('id', myRecord.id)
     if (error) return
 
-    setDetail(prev => {
-      if (!prev) return prev
-      return {
-        ...prev,
-        attendance: prev.attendance.map(a =>
-          a.user_id === userId ? { ...a, arrival_time: arrivalTime } : a
-        ),
-      }
-    })
-  }, [detail, userId])
+    updateDetail(sessionId, prev => ({
+      ...prev,
+      attendance: prev.attendance.map(a =>
+        a.user_id === userId ? { ...a, arrival_time: arrivalTime } : a
+      ),
+    }))
+  }, [details, userId])
 
   // ── 自主練の参加意思をトグル ─────────────────────────────
-  const handleVoluntaryToggle = useCallback(async (attending: boolean, arrivalTime?: string | null) => {
-    if (!detail || !userId) return
+  const handleVoluntaryToggle = useCallback(async (sessionId: string, attending: boolean, arrivalTime?: string | null) => {
+    if (!userId) return
+    const detail = details.find(d => d.session.id === sessionId)
+    if (!detail) return
     const session = detail.session
 
     if (attending) {
@@ -514,8 +519,7 @@ export default function CalendarView() {
         return
       }
 
-      setDetail(prev => {
-        if (!prev) return prev
+      updateDetail(sessionId, prev => {
         const profile =
           prev.unsubmitted.find(p => p.id === userId) ??
           prev.attendance.find(a => a.user_id === userId)?.profile
@@ -537,8 +541,7 @@ export default function CalendarView() {
         return
       }
 
-      setDetail(prev => {
-        if (!prev) return prev
+      updateDetail(sessionId, prev => {
         const removed = prev.attendance.find(a => a.user_id === userId)
         return {
           ...prev,
@@ -547,16 +550,19 @@ export default function CalendarView() {
         }
       })
     }
-  }, [detail, userId])
+  }, [details, userId])
 
   // ── 自分の出欠を登録（部員向け） ──────────────────────────
   const handleSelfRegister = useCallback(async (
+    sessionId: string,
     status: AttendanceStatus,
     reason: AbsenceReason | null,
     reasonDetail: string,
     arrivalTime: string | null,
   ): Promise<string | null> => {
-    if (!detail || !userId) return 'エラー'
+    if (!userId) return 'エラー'
+    const detail = details.find(d => d.session.id === sessionId)
+    if (!detail) return 'エラー'
     const session = detail.session
     const needsReason = status === 'absent_normal' || status === 'absent_emergency'
     const existingRecord = detail.attendance.find(a => a.user_id === userId) ?? null
@@ -611,7 +617,7 @@ export default function CalendarView() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          sessionDate: session.session_date,
+          sessionId: session.id,
           status,
           reason,
           reasonDetail,
@@ -622,8 +628,7 @@ export default function CalendarView() {
       }).catch(() => {})
     }
 
-    setDetail(prev => {
-      if (!prev) return prev
+    updateDetail(sessionId, prev => {
       const profile =
         prev.attendance.find(a => a.user_id === userId)?.profile ??
         (prev.unsubmitted.find(p => p.id === userId) as MemberProfile | undefined)
@@ -639,7 +644,7 @@ export default function CalendarView() {
     })
 
     return null
-  }, [detail, userId, availableDates])
+  }, [details, userId, availableDates])
 
   // ── カレンダーグリッド ────────────────────────────────────
   const y = current.getFullYear()
@@ -702,26 +707,25 @@ export default function CalendarView() {
         <div className="grid grid-cols-7 gap-y-0.5">
           {cells.map((day, idx) => {
             if (!day) return <div key={`e${idx}`} />
-            const dow      = (firstDow + day - 1) % 7
-            const dateStr  = toDateStr(y, m, day)
-            const session  = sessions[dateStr]
-            const dayGcal  = gcalEvents[dateStr] ?? []
-            const hasGcal  = dayGcal.length > 0
+            const dow        = (firstDow + day - 1) % 7
+            const dateStr    = toDateStr(y, m, day)
+            const daySessions = sessions[dateStr] ?? []
+            const dayGcal    = gcalEvents[dateStr] ?? []
+            const hasGcal    = dayGcal.length > 0
             const hasTournament = dayGcal.some(ev => !ev.isOther)
             // 自主練セッションが既にある日はMISCドット（グレー）を非表示
-            const hasMisc       = !session?.is_voluntary && dayGcal.some(ev => ev.isOther)
+            const hasMisc       = !daySessions.some(s => s.is_voluntary) && dayGcal.some(ev => ev.isOther)
             const isToday    = dateStr === todayStr
             const isSelected = dateStr === selectedDate
-            const confirmed  = session?.is_results_confirmed
-            const isClickable = !!session || hasGcal
+            const isClickable = daySessions.length > 0 || hasGcal
 
             // 練習ドット色（合宿=オレンジ、部会=緑、自主練=紫、通常練習=赤、確定済み=緑、休止=グレー）
-            const dotColor = session
-              ? isSelected
+            const dotColor = (session: PracticeSession) =>
+              isSelected
                 ? 'rgba(255,255,255,0.7)'
                 : session.is_cancelled
                 ? 'var(--gray-300)'
-                : confirmed
+                : session.is_results_confirmed
                 ? '#16a34a'
                 : session.is_camp
                 ? '#f97316'
@@ -730,7 +734,6 @@ export default function CalendarView() {
                 : session.is_voluntary
                 ? '#9333ea'
                 : '#ef4444'
-              : 'transparent'
 
             // GCalドット色（大会など=青、その他=グレー）
             const gcalDotColor      = isSelected ? 'rgba(255,255,255,0.7)' : 'var(--club-blue)'
@@ -768,14 +771,14 @@ export default function CalendarView() {
                   }}>
                   {day}
                 </span>
-                {/* ドット行 */}
+                {/* ドット行（同日に複数セッションがある場合はそれぞれ表示） */}
                 <div className="flex items-center gap-0.5 mt-0.5" style={{ minHeight: 8 }}>
                   {/* 練習ドット（確定済みはチェックアイコン） */}
-                  {session && !session.is_cancelled && confirmed && !isSelected
-                    ? <CheckCircle2 size={8} style={{ color: session.is_camp ? '#f97316' : '#16a34a' }} />  /* 部会も確定済みは同じ緑 */
-                    : session
-                    ? <span className="w-1 h-1 rounded-full" style={{ background: dotColor }} />
-                    : null}
+                  {daySessions.map(session =>
+                    !session.is_cancelled && session.is_results_confirmed && !isSelected
+                      ? <CheckCircle2 key={session.id} size={8} style={{ color: session.is_camp ? '#f97316' : '#16a34a' }} />  /* 部会も確定済みは同じ緑 */
+                      : <span key={session.id} className="w-1 h-1 rounded-full" style={{ background: dotColor(session) }} />
+                  )}
                   {/* 大会などドット（青） */}
                   {hasTournament && (
                     <span className="w-1 h-1 rounded-full" style={{ background: gcalDotColor }} />
@@ -830,60 +833,96 @@ export default function CalendarView() {
           <div className="flex items-center gap-1.5 ml-auto">
             <span className="text-xs font-bold px-1.5 py-0.5 rounded"
               style={{ background: 'var(--club-blue-muted)', color: 'var(--club-blue)' }}>
-              {Object.values(sessions).filter(s => !s.is_cancelled).length}
+              {Object.values(sessions).flat().filter(s => !s.is_cancelled).length}
             </span>
             <span className="text-xs" style={{ color: 'var(--gray-500)' }}>今月の練習数</span>
           </div>
         </div>
       </div>
 
-      {/* 詳細パネル（練習日） */}
-      {selectedDate && (detail || loading) && (
-        <div className="card animate-slide-up" style={{ animationDelay: '0.04s' }}>
+      {/* 詳細パネル（練習日・同日に複数セッションがある場合は部会などを上、部活を一番下に表示） */}
+      {selectedDate && (details.length > 0 || loading) && (
+        <div className="flex flex-col gap-3">
           {loading ? (
-            <div className="flex items-center justify-center py-10">
-              <span className="w-6 h-6 border-2 rounded-full animate-spin"
-                style={{ borderColor: 'var(--gray-200)', borderTopColor: 'var(--club-blue)' }} />
+            <div className="card animate-slide-up" style={{ animationDelay: '0.04s' }}>
+              <div className="flex items-center justify-center py-10">
+                <span className="w-6 h-6 border-2 rounded-full animate-spin"
+                  style={{ borderColor: 'var(--gray-200)', borderTopColor: 'var(--club-blue)' }} />
+              </div>
             </div>
-          ) : detail ? (
-            <DetailPanel
-              detail={detail}
-              isManagerOrAdmin={isManagerOrAdmin}
-              canManageSessions={canManageSessions}
-              canSelfRegister={viewRole !== 'coach'}
-              userId={userId}
-              availableDates={availableDates}
-              onSelfRegister={handleSelfRegister}
-              onVoluntaryToggle={handleVoluntaryToggle}
-              onVoluntaryUpdateTime={handleVoluntaryUpdateTime}
-              onUpdateResultStatus={(id, status) =>
-                handleUpdateResultStatus(id, status, detail.session.session_date)
-              }
-              onBulkConfirm={handleBulkConfirm}
-              onClearResultStatus={(id) =>
-                handleClearResultStatus(id, detail.session.session_date)
-              }
-              onRevertAll={handleRevertAll}
-              onRegisterForUnsubmitted={(memberId, status, profile) =>
-                handleRegisterResultForUnsubmitted(
-                  memberId, detail.session.id, detail.session.session_date, status, profile
-                )
-              }
-              onToggleCancelled={handleToggleCancelled}
-              onRemind={async (userIds) => {
-                await fetch('/api/line/notify', {
-                  method: 'POST',
-                  headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify({ userIds, sessionDate: detail.session.session_date }),
-                })
-              }}
-            />
-          ) : null}
+          ) : (
+            details.map(d => {
+              const isPlainPractice = !d.session.is_bukai && !d.session.is_camp && !d.session.is_voluntary
+              const isCollapsed = isPlainPractice && collapsedSessionIds.has(d.session.id)
+              return (
+                <div key={d.session.id} className="card animate-slide-up" style={{ animationDelay: '0.04s' }}>
+                  {isPlainPractice && details.length > 1 && (
+                    <button
+                      type="button"
+                      onClick={() => setCollapsedSessionIds(prev => {
+                        const next = new Set(prev)
+                        if (next.has(d.session.id)) next.delete(d.session.id)
+                        else next.add(d.session.id)
+                        return next
+                      })}
+                      className="flex items-center gap-1.5 text-xs font-semibold cursor-pointer"
+                      style={{ color: 'var(--gray-500)', marginBottom: isCollapsed ? 0 : 12 }}
+                    >
+                      {isCollapsed ? <ChevronDown size={14} /> : <ChevronUp size={14} />}
+                      部活動{isCollapsed ? 'を表示' : 'を折りたたむ'}
+                    </button>
+                  )}
+                  {!isCollapsed && (
+                    <DetailPanel
+                      detail={d}
+                      isManagerOrAdmin={isManagerOrAdmin}
+                      canManageSessions={canManageSessions}
+                      canSelfRegister={viewRole !== 'coach'}
+                      userId={userId}
+                      availableDates={availableDates}
+                      onSelfRegister={(status, reason, reasonDetail, arrivalTime) =>
+                        handleSelfRegister(d.session.id, status, reason, reasonDetail, arrivalTime)
+                      }
+                      onVoluntaryToggle={(attending, arrivalTime) =>
+                        handleVoluntaryToggle(d.session.id, attending, arrivalTime)
+                      }
+                      onVoluntaryUpdateTime={(arrivalTime) =>
+                        handleVoluntaryUpdateTime(d.session.id, arrivalTime)
+                      }
+                      onUpdateResultStatus={(id, status) =>
+                        handleUpdateResultStatus(id, status, d.session.id)
+                      }
+                      onBulkConfirm={() => handleBulkConfirm(d.session.id)}
+                      onClearResultStatus={(id) =>
+                        handleClearResultStatus(id, d.session.id)
+                      }
+                      onRevertAll={() => handleRevertAll(d.session.id)}
+                      onRegisterForUnsubmitted={(memberId, status, profile) =>
+                        handleRegisterResultForUnsubmitted(
+                          memberId, d.session.id, d.session.session_date, status, profile
+                        )
+                      }
+                      onToggleCancelled={(cancelled, reason) =>
+                        handleToggleCancelled(d.session.id, cancelled, reason)
+                      }
+                      onRemind={async (userIds) => {
+                        await fetch('/api/line/notify', {
+                          method: 'POST',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({ userIds, sessionDate: d.session.session_date }),
+                        })
+                      }}
+                    />
+                  )}
+                </div>
+              )
+            })
+          )}
         </div>
       )}
 
       {/* GCalイベントパネル（大会・合宿など表示のみ・自主練の日は除外） */}
-      {selectedDate && !sessions[selectedDate]?.is_voluntary && (gcalEvents[selectedDate]?.length ?? 0) > 0 && (
+      {selectedDate && !(sessions[selectedDate] ?? []).some(s => s.is_voluntary) && (gcalEvents[selectedDate]?.length ?? 0) > 0 && (
         <GCalEventsPanel events={gcalEvents[selectedDate]} />
       )}
     </div>
@@ -1014,7 +1053,8 @@ function DetailPanel({
   const [reminding,               setReminding]               = useState(false)
   const [remindResult,            setRemindResult]            = useState<{ sent: number } | 'error' | null>(null)
   const [sortKeys,                setSortKeys]                = useState<SortKey[]>(['status'])
-  const [attendanceExpanded,      setAttendanceExpanded]      = useState(!session.is_cancelled)
+  // 出欠リスト（検索・出席者・未提出者）はデフォルトで折りたたんでおく
+  const [attendanceExpanded,      setAttendanceExpanded]      = useState(false)
 
   // 自己登録フォーム（部員向け）
   const [selfFormOpen,    setSelfFormOpen]    = useState(false)
@@ -1053,11 +1093,9 @@ function DetailPanel({
     setVoluntaryTimePickerOpen(false)
     setVoluntaryArrivalTime(null)
     setVoluntaryIsEditing(false)
+    // 出欠リスト（検索・出席者・未提出者）はデフォルトで折りたたんでおく
+    setAttendanceExpanded(false)
   }, [session.id])
-
-  useEffect(() => {
-    setAttendanceExpanded(!session.is_cancelled)
-  }, [session.is_cancelled])
 
   const myRecord = attendance.find(a => a.user_id === userId) ?? null
 
@@ -1375,8 +1413,8 @@ function DetailPanel({
         )}
       </div>
 
-      {/* 提出サマリーバー（自主練以外） */}
-      {!session.is_voluntary && session.is_cancelled ? (
+      {/* 提出サマリーバー（自主練以外・クリックで出欠リストの折りたたみを切替） */}
+      {!session.is_voluntary && (
         <button
           onClick={() => setAttendanceExpanded(v => !v)}
           className="flex items-center justify-between gap-2 px-3 py-2.5 rounded-xl w-full text-left cursor-pointer transition-opacity hover:opacity-80"
@@ -1400,23 +1438,7 @@ function DetailPanel({
             ? <ChevronUp size={15} className="shrink-0" style={{ color: 'var(--gray-400)' }} />
             : <ChevronDown size={15} className="shrink-0" style={{ color: 'var(--gray-400)' }} />}
         </button>
-      ) : !session.is_voluntary ? (
-        <div className="flex items-center gap-2 px-3 py-2.5 rounded-xl"
-          style={{ background: 'var(--gray-50)', border: '1px solid var(--gray-200)' }}>
-          <Users size={14} className="shrink-0" style={{ color: 'var(--gray-400)' }} />
-          <span className="text-sm" style={{ color: 'var(--gray-600)' }}>
-            <span className="font-bold" style={{ color: 'var(--gray-900)' }}>
-              {attendance.length}
-            </span>
-            /{totalApproved}名 連絡済み
-            {notYet > 0 && (
-              <span className="ml-2 font-semibold" style={{ color: '#d97706' }}>
-                • 未提出 {notYet}名
-              </span>
-            )}
-          </span>
-        </div>
-      ) : null}
+      )}
 
       {/* 自主練習：参加意思表示UI（キャンセル時は折りたたみ外に置いて常時表示） */}
       {session.is_voluntary && !session.is_cancelled && canSelfRegister && userId && (() => {
@@ -1615,9 +1637,7 @@ function DetailPanel({
         </div>
       )}
 
-      {(!session.is_cancelled || attendanceExpanded) && <>
-
-      {/* 自分の出欠連絡（顧問以外・登録可能期間 or 事前欠席変更）- 自主練以外 */}
+      {/* 自分の出欠連絡（顧問以外・登録可能期間 or 事前欠席変更）- 自主練以外・折りたたみ対象外で常時表示 */}
       {!session.is_voluntary && canSelfRegister && userId && (canRegister || canEarlyAbsent) && (
         <div className="rounded-xl px-4 py-3.5 flex flex-col gap-3"
           style={{ background: 'color-mix(in srgb, var(--club-blue) 6%, var(--card-bg))', border: '1.5px solid color-mix(in srgb, var(--club-blue) 25%, white)' }}>
@@ -1840,6 +1860,9 @@ function DetailPanel({
           )}
         </div>
       )}
+
+      {/* ここから出欠リスト本体（デフォルト折りたたみ・サマリーバーで開閉） */}
+      {attendanceExpanded && <>
 
       {/* マネージャー/管理者向け：一括確定ボタン（練習開始時刻以降のみ・自主練除く） */}
       {!session.is_voluntary && isManagerOrAdmin && attendance.length > 0 && !session.is_cancelled && canRegisterResult && (

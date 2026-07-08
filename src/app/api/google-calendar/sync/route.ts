@@ -175,39 +175,25 @@ export async function GET(request: NextRequest) {
       return dates
     }
 
-    // マルチデイIDからベースイベントIDを取り出す（"eventId_YYYY-MM-DD" → "eventId"）
-    function baseEventId(id: string): string {
-      const m = id.match(/^(.+)_\d{4}-\d{2}-\d{2}$/)
-      return m ? m[1] : id
-    }
-
-    // 既存セッションの日付→google_event_id マップを事前取得（上書き衝突防止用）
+    // 既存セッションの日付一覧を事前取得（自主練の除外判定に使用）
     const { data: existingMonthSessions } = await admin
       .from('practice_sessions')
-      .select('session_date, google_event_id')
+      .select('session_date, is_voluntary')
       .gte('session_date', startDate)
       .lte('session_date', endDate)
 
-    const claimedDates = new Map<string, string | null>(
-      (existingMonthSessions ?? []).map(s => [s.session_date, s.google_event_id as string | null])
+    // 通常（非自主練）セッションが存在する日付。1日に部活・部会など複数の
+    // 通常セッションが共存できるため、ここでは日付の奪い合いはしない。
+    // 自主練だけは「その日に通常セッションが無い場合のみ」作成する。
+    const datesWithRegularSession = new Set<string>(
+      (existingMonthSessions ?? []).filter(s => !s.is_voluntary).map(s => s.session_date)
     )
 
-    // GCal イベントを日付ごとに1行へ集約してから一括 upsert する。
-    // 従来はイベント1件ずつ直列で upsert しており、月あたりのイベント数だけ
-    // DB 往復が発生していた（判定ロジックは変えず処理のみ最適化）。
+    // GCal イベントを google_event_id ごとに1行へ集約してから一括 upsert する。
     const gcalEventIdSet = new Set<string>()
-    const rowByDate = new Map<string, Record<string, unknown>>()
+    const rowByEventId = new Map<string, Record<string, unknown>>()
 
-    // 先勝ちで日付を確保する（既存DBの確保・本実行内の確保の両方を尊重）
-    const tryClaim = (date: string, itemId: string, row: Record<string, unknown>) => {
-      const existing = claimedDates.get(date)
-      if (existing != null && baseEventId(existing) !== itemId) return
-      const pending = rowByDate.get(date)
-      if (pending && baseEventId(pending.google_event_id as string) !== itemId) return
-      rowByDate.set(date, row)
-    }
-
-    // 通常イベント・自主練イベント共通の日付展開＋確保処理
+    // 通常イベント・自主練イベント共通の日付展開処理
     // 時間・面数は説明文（または時刻指定イベントの実時刻）に明記されている場合のみ設定し、
     // 書かれていない場合は null のまま保存する（架空のデフォルト時刻を表示しないため）
     const processItem = (
@@ -228,10 +214,12 @@ export async function GET(request: NextRequest) {
         const dates      = expandDates(startStr, item.end.date)
         const isMultiDay = dates.length > 1
         for (const date of dates) {
+          if (opts.isVoluntary && datesWithRegularSession.has(date)) continue
           // 複数日の場合は "{eventId}_{date}" で各日をユニークに識別
           const googleEventId = isMultiDay ? `${item.id}_${date}` : item.id
           gcalEventIdSet.add(googleEventId)
-          tryClaim(date, item.id, {
+          if (!opts.isVoluntary) datesWithRegularSession.add(date)
+          rowByEventId.set(googleEventId, {
             session_date:    date,
             start_time:      parsed.startTime,
             end_time:        parsed.endTime,
@@ -247,11 +235,13 @@ export async function GET(request: NextRequest) {
         }
       } else {
         // 時刻指定イベント（単日）：GCal自体に設定された実時刻があればそれを優先
-        const date      = startStr.slice(0, 10)
+        const date = startStr.slice(0, 10)
+        if (opts.isVoluntary && datesWithRegularSession.has(date)) return
         const startTime = parsed.startTime ?? item.start?.dateTime?.slice(11, 19) ?? null
         const endTime   = parsed.endTime   ?? item.end?.dateTime?.slice(11, 19)   ?? null
         gcalEventIdSet.add(item.id)
-        tryClaim(date, item.id, {
+        if (!opts.isVoluntary) datesWithRegularSession.add(date)
+        rowByEventId.set(item.id, {
           session_date:    date,
           start_time:      startTime,
           end_time:        endTime,
@@ -291,9 +281,9 @@ export async function GET(request: NextRequest) {
     }
 
     // 集約した行を一括 upsert（1クエリ）
-    const rowsToUpsert = [...rowByDate.values()]
+    const rowsToUpsert = [...rowByEventId.values()]
     if (rowsToUpsert.length > 0) {
-      await admin.from('practice_sessions').upsert(rowsToUpsert, { onConflict: 'session_date' })
+      await admin.from('practice_sessions').upsert(rowsToUpsert, { onConflict: 'google_event_id' })
     }
 
     const { data: gcalSessions } = await admin

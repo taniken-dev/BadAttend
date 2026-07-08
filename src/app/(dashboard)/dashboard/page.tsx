@@ -52,8 +52,9 @@ export default async function DashboardPage() {
     isAdmin
       ? supabase.from('warning_flags').select('*').is('resolved_at', null)
       : Promise.resolve({ data: [] }),
-    // 今日のセッション
-    supabase.from('practice_sessions').select('*').eq('session_date', today).eq('is_cancelled', false).single<PracticeSession>(),
+    // 今日のセッション（同日に複数ある場合は開始時刻が最も早いものを代表として表示）
+    supabase.from('practice_sessions').select('*').eq('session_date', today).eq('is_cancelled', false)
+      .order('start_time', { ascending: true, nullsFirst: false }).limit(1).maybeSingle<PracticeSession>(),
     // 直近10回の自分の出欠実績（result_status 確定済みのみ・coach は不要）
     isCoach
       ? Promise.resolve({ data: null })
