@@ -13,15 +13,14 @@ const REASON_LABELS: Record<string, string> = {
 
 const ALLOWED_STATUS = new Set(['tardy', 'absent_normal', 'absent_emergency'])
 const ALLOWED_REASON = new Set(Object.keys(REASON_LABELS))
-const DATE_RE = /^\d{4}-\d{2}-\d{2}$/
 const TIME_RE = /^([01]?\d|2[0-3]):[0-5]\d$/
 
 export async function POST(request: NextRequest) {
-  const { sessionDate, status, reason, reasonDetail, arrivalTime, isAdvance } = await request.json()
+  const { sessionId, status, reason, reasonDetail, arrivalTime, isAdvance } = await request.json()
 
   // 入力バリデーション（グループ全体に配信されるため厳格にチェック）
-  if (typeof sessionDate !== 'string' || !DATE_RE.test(sessionDate)) {
-    return NextResponse.json({ error: 'valid sessionDate required' }, { status: 400 })
+  if (typeof sessionId !== 'string' || !sessionId) {
+    return NextResponse.json({ error: 'valid sessionId required' }, { status: 400 })
   }
   if (typeof status !== 'string' || !ALLOWED_STATUS.has(status)) {
     return NextResponse.json({ error: 'invalid status' }, { status: 400 })
@@ -67,11 +66,11 @@ export async function POST(request: NextRequest) {
   }
 
   // 対象セッションが実在し、かつ本人がそのセッションの出欠を登録済みで
-  // あることを確認（任意日付への無差別スパムを防止）
+  // あることを確認（任意セッションへの無差別スパムを防止）
   const { data: session } = await supabase
     .from('practice_sessions')
-    .select('id, is_bukai')
-    .eq('session_date', sessionDate)
+    .select('id, session_date, is_bukai')
+    .eq('id', sessionId)
     .single()
 
   if (!session) {
@@ -91,7 +90,7 @@ export async function POST(request: NextRequest) {
 
   const name = profile.display_name ?? profile.full_name ?? 'メンバー'
 
-  const date = new Date(sessionDate + 'T00:00:00')
+  const date = new Date(session.session_date + 'T00:00:00')
   const dateLabel = date.toLocaleDateString('ja-JP', { month: 'long', day: 'numeric', weekday: 'short' })
 
   const reasonLabel = reason ? REASON_LABELS[reason] ?? reason : null
