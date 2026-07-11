@@ -17,16 +17,16 @@
     --club-blue-light:  #e0e7ff;
     --club-blue-muted:  rgba(67, 56, 202, 0.08);
 
-    --club-amber:       #d97706;
-    --club-amber-light: #fef3c7;
+    --club-amber:       #cb912f;
+    --club-amber-light: #fdecc8;
 
     /* ランクカラー */
-    --rank-s:   #7c3aed;
+    --rank-s:   #7d569c;
     --rank-a:   #4338ca;
-    --rank-b:   #0891b2;
-    --rank-c:   #16a34a;
-    --rank-d:   #d97706;
-    --rank-e:   #dc2626;
+    --rank-b:   #38869e;
+    --rank-c:   #448361;
+    --rank-d:   #cb912f;
+    --rank-e:   #d44c47;
 
     /* --- Notion 暖色グレースケール --- */
     --apple-bg:  #f7f6f3;
@@ -232,7 +232,7 @@
     align-items: center;
     justify-content: center;
     gap: 8px;
-    background-color: #dc2626;
+    background-color: #d44c47;
     color: white;
     border-radius: var(--radius-md);
     padding: 12px 20px;
@@ -243,7 +243,7 @@
     border: none;
     width: 100%;
   }
-  .btn-danger:hover  { background-color: #b91c1c; transform: translateY(-1px); }
+  .btn-danger:hover  { background-color: #a8423d; transform: translateY(-1px); }
   .btn-danger:active { transform: scale(0.98); }
 
   .btn-secondary {
@@ -328,11 +328,11 @@
     font-weight: 600;
     letter-spacing: 0.02em;
   }
-  .badge-present   { background: #dcfce7; color: #15803d; }
-  .badge-tardy     { background: #fef3c7; color: #b45309; }
-  .badge-absent    { background: #fee2e2; color: #b91c1c; }
-  .badge-emergency { background: #f3e8ff; color: #6d28d9; }
-  .badge-warning   { background: #fff7ed; color: #c2410c; }
+  .badge-present   { background: #dbeddb; color: #2f5f44; }
+  .badge-tardy     { background: #fdecc8; color: #8a5d22; }
+  .badge-absent    { background: #ffe2dd; color: #a8423d; }
+  .badge-emergency { background: #e8deee; color: #674785; }
+  .badge-warning   { background: #faebdd; color: #a85a28; }
 
   /* --- ランクバッジ --- */
   .rank-badge {
@@ -353,46 +353,46 @@
     border-radius: var(--radius-md);
     font-size: 32px;
   }
-  .rank-s { background: rgba(124,58,237,0.12); color: var(--rank-s); }
+  .rank-s { background: rgba(125,86,156,0.14); color: var(--rank-s); }
   .rank-a { background: rgba(67,56,202,0.12);  color: var(--rank-a); }
-  .rank-b { background: rgba(8,145,178,0.12);  color: var(--rank-b); }
-  .rank-c { background: rgba(22,163,74,0.12);  color: var(--rank-c); }
-  .rank-d { background: rgba(217,119,6,0.12);  color: var(--rank-d); }
-  .rank-e { background: rgba(220,38,38,0.12);  color: var(--rank-e); }
+  .rank-b { background: rgba(56,134,158,0.14); color: var(--rank-b); }
+  .rank-c { background: rgba(68,131,97,0.14);  color: var(--rank-c); }
+  .rank-d { background: rgba(203,145,47,0.14); color: var(--rank-d); }
+  .rank-e { background: rgba(212,76,71,0.14);  color: var(--rank-e); }
 
   /* --- アラート --- */
   .alert-error {
     display: flex;
     align-items: flex-start;
     gap: 10px;
-    background: #fef2f2;
-    border: 1px solid #fecaca;
+    background: #fdebec;
+    border: 1px solid #f2c7c2;
     border-radius: var(--radius);
     padding: 12px 14px;
     font-size: 13px;
-    color: #991b1b;
+    color: #8f3a35;
   }
   .alert-warning {
     display: flex;
     align-items: flex-start;
     gap: 10px;
-    background: #fff7ed;
-    border: 1px solid #fed7aa;
+    background: #faebdd;
+    border: 1px solid #ecd2ae;
     border-radius: var(--radius);
     padding: 12px 14px;
     font-size: 13px;
-    color: #92400e;
+    color: #6e4a1a;
   }
   .alert-success {
     display: flex;
     align-items: flex-start;
     gap: 10px;
-    background: #f0fdf4;
-    border: 1px solid #bbf7d0;
+    background: #edf3ec;
+    border: 1px solid #c6ddc8;
     border-radius: var(--radius);
     padding: 12px 14px;
     font-size: 13px;
-    color: #14532d;
+    color: #2b5240;
   }
 
   /* --- ナビゲーション --- */

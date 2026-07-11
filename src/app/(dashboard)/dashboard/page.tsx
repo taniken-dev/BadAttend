@@ -210,13 +210,13 @@ export default async function DashboardPage() {
           {/* 参加者カード */}
           <div className="card animate-slide-up" style={{ animationDelay: '0.05s' }}>
             <div className="flex items-center gap-2 mb-3">
-              <CheckCircle2 size={16} style={{ color: '#16a34a' }} />
+              <CheckCircle2 size={16} style={{ color: '#448361' }} />
               <h2 className="text-sm font-bold" style={{ color: 'var(--gray-900)' }}>
                 参加予定
               </h2>
               <span
                 className="ml-auto text-xs font-bold px-2 py-0.5 rounded-full"
-                style={{ background: '#dcfce7', color: '#15803d' }}
+                style={{ background: '#dbeddb', color: '#2f5f44' }}
               >
                 {attendees.length} 名
               </span>
@@ -238,7 +238,7 @@ export default async function DashboardPage() {
                         <div
                           key={i}
                           className="px-3 py-1.5 rounded-full text-sm font-semibold"
-                          style={{ background: '#dcfce7', color: '#15803d' }}
+                          style={{ background: '#dbeddb', color: '#2f5f44' }}
                         >
                           {a.profiles.display_name ?? a.profiles.full_name}
                         </div>
@@ -250,8 +250,8 @@ export default async function DashboardPage() {
                 {tardyGroups.map(([time, members]) => (
                   <div key={time}>
                     <div className="flex items-center gap-1.5 mb-1.5">
-                      <Clock size={11} style={{ color: '#b45309' }} />
-                      <p className="text-xs font-semibold" style={{ color: '#b45309' }}>
+                      <Clock size={11} style={{ color: '#8a5d22' }} />
+                      <p className="text-xs font-semibold" style={{ color: '#8a5d22' }}>
                         {time} から参加
                       </p>
                     </div>
@@ -260,7 +260,7 @@ export default async function DashboardPage() {
                         <div
                           key={i}
                           className="px-3 py-1.5 rounded-full text-sm font-semibold"
-                          style={{ background: '#fef3c7', color: '#b45309' }}
+                          style={{ background: '#fdecc8', color: '#8a5d22' }}
                         >
                           {a.profiles.display_name ?? a.profiles.full_name}
                         </div>
@@ -272,8 +272,8 @@ export default async function DashboardPage() {
                 {noTimeTardy.length > 0 && (
                   <div>
                     <div className="flex items-center gap-1.5 mb-1.5">
-                      <Clock size={11} style={{ color: '#b45309' }} />
-                      <p className="text-xs font-semibold" style={{ color: '#b45309' }}>
+                      <Clock size={11} style={{ color: '#8a5d22' }} />
+                      <p className="text-xs font-semibold" style={{ color: '#8a5d22' }}>
                         遅刻・時刻未定
                       </p>
                     </div>
@@ -282,7 +282,7 @@ export default async function DashboardPage() {
                         <div
                           key={i}
                           className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-semibold"
-                          style={{ background: '#fef3c7', color: '#b45309' }}
+                          style={{ background: '#fdecc8', color: '#8a5d22' }}
                         >
                           {a.profiles.display_name ?? a.profiles.full_name}
                         </div>
@@ -298,13 +298,13 @@ export default async function DashboardPage() {
           {absentees.length > 0 && (
             <div className="card animate-slide-up" style={{ animationDelay: '0.1s' }}>
               <div className="flex items-center gap-2 mb-3">
-                <XCircle size={16} style={{ color: '#dc2626' }} />
+                <XCircle size={16} style={{ color: '#d44c47' }} />
                 <h2 className="text-sm font-bold" style={{ color: 'var(--gray-900)' }}>
                   欠席連絡あり
                 </h2>
                 <span
                   className="ml-auto text-xs font-bold px-2 py-0.5 rounded-full"
-                  style={{ background: '#fee2e2', color: '#b91c1c' }}
+                  style={{ background: '#ffe2dd', color: '#a8423d' }}
                 >
                   {absentees.length} 名
                 </span>
@@ -314,7 +314,7 @@ export default async function DashboardPage() {
                   <div key={i} className="flex items-center gap-3 py-2">
                     <div
                       className="w-8 h-8 rounded-lg flex items-center justify-center text-xs font-bold shrink-0"
-                      style={{ background: '#fee2e2', color: '#b91c1c' }}
+                      style={{ background: '#ffe2dd', color: '#a8423d' }}
                     >
                       {(a.profiles.display_name ?? a.profiles.full_name).charAt(0)}
                     </div>
@@ -391,19 +391,19 @@ export default async function DashboardPage() {
 
           {/* 出席・遅刻・欠席 内訳 */}
           <div className="grid grid-cols-3 gap-2">
-            <div className="flex flex-col items-center gap-1 py-3 rounded-xl" style={{ background: '#dcfce7' }}>
-              <span className="text-2xl font-bold" style={{ color: '#16a34a' }}>{myScore?.present_count ?? 0}</span>
-              <span className="text-xs font-medium" style={{ color: '#16a34a' }}>出席</span>
+            <div className="flex flex-col items-center gap-1 py-3 rounded-xl" style={{ background: '#dbeddb' }}>
+              <span className="text-2xl font-bold" style={{ color: '#448361' }}>{myScore?.present_count ?? 0}</span>
+              <span className="text-xs font-medium" style={{ color: '#448361' }}>出席</span>
             </div>
-            <div className="flex flex-col items-center gap-1 py-3 rounded-xl" style={{ background: '#fef3c7' }}>
-              <span className="text-2xl font-bold" style={{ color: '#b45309' }}>{myScore?.tardy_count ?? 0}</span>
-              <span className="text-xs font-medium" style={{ color: '#b45309' }}>遅刻</span>
+            <div className="flex flex-col items-center gap-1 py-3 rounded-xl" style={{ background: '#fdecc8' }}>
+              <span className="text-2xl font-bold" style={{ color: '#8a5d22' }}>{myScore?.tardy_count ?? 0}</span>
+              <span className="text-xs font-medium" style={{ color: '#8a5d22' }}>遅刻</span>
             </div>
-            <div className="flex flex-col items-center gap-1 py-3 rounded-xl" style={{ background: '#fee2e2' }}>
-              <span className="text-2xl font-bold" style={{ color: '#b91c1c' }}>{myScore?.absent_count ?? 0}</span>
-              <span className="text-xs font-medium" style={{ color: '#b91c1c' }}>欠席</span>
+            <div className="flex flex-col items-center gap-1 py-3 rounded-xl" style={{ background: '#ffe2dd' }}>
+              <span className="text-2xl font-bold" style={{ color: '#a8423d' }}>{myScore?.absent_count ?? 0}</span>
+              <span className="text-xs font-medium" style={{ color: '#a8423d' }}>欠席</span>
               {(myScore?.unreported_count ?? 0) > 0 && (
-                <span className="text-xs font-semibold px-1.5 py-0.5 rounded-full" style={{ background: '#fca5a5', color: '#7f1d1d' }}>
+                <span className="text-xs font-semibold px-1.5 py-0.5 rounded-full" style={{ background: '#e5a49e', color: '#6d302c' }}>
                   無断 {myScore!.unreported_count}回
                 </span>
               )}
@@ -419,8 +419,8 @@ export default async function DashboardPage() {
               <div className="flex gap-1.5 flex-wrap">
                 {recentRecords!.map((r: any, i: number) => {
                   const dotColor =
-                    r.result_status === 'present' ? '#16a34a' :
-                    r.result_status === 'tardy'   ? '#d97706' : '#dc2626'
+                    r.result_status === 'present' ? '#448361' :
+                    r.result_status === 'tardy'   ? '#cb912f' : '#d44c47'
                   return (
                     <div
                       key={i}
