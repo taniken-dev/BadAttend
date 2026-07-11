@@ -11,10 +11,10 @@
    - プレフィックス: `feat:` / `fix:` / `refactor:` / `style:` / `docs:` のいずれか
    - 1行目: 変更の「目的・理由」を日本語で簡潔に（50文字以内）
    - 本文: 変更の要点を箇条書きで列挙（必要な場合のみ）
-   - フッター: `Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>`
+   - フッター: 実際に作業している Claude のモデル名で `Co-Authored-By: Claude <モデル名> <noreply@anthropic.com>` を付ける（例: `Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>`）
 5. 未ステージのファイルを `git add` する（`.env` 等の機密ファイルは除外）
 6. ヒアドキュメント形式でコミットを実行する
-7. `git push origin main` でプッシュする
+7. `git branch --show-current` で現在のブランチ名を取得し、`git push origin <ブランチ名>` でプッシュする
 8. 完了後、コミットハッシュとメッセージを1行で報告する
 
 ## 注意事項
