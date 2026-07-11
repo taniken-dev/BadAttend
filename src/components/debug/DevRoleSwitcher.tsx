@@ -9,10 +9,10 @@ import type { Role } from '@/lib/types'
 // 本番ビルドではバンドルから除外される
 
 const ROLES: { value: Role; label: string; color: string; bg: string }[] = [
-  { value: 'admin',   label: '管理者',       color: '#7c3aed', bg: '#f5f3ff' },
-  { value: 'manager', label: 'マネージャー', color: '#0284c7', bg: '#e0f2fe' },
-  { value: 'member',  label: '部員',         color: '#16a34a', bg: '#f0fdf4' },
-  { value: 'coach',   label: '顧問',         color: '#b45309', bg: '#fef3c7' },
+  { value: 'admin',   label: '管理者',       color: '#7d569c', bg: '#f0ebf6' },
+  { value: 'manager', label: 'マネージャー', color: '#337ea9', bg: '#d3e5ef' },
+  { value: 'member',  label: '部員',         color: '#448361', bg: '#edf3ec' },
+  { value: 'coach',   label: '顧問',         color: '#8a5d22', bg: '#fdecc8' },
 ]
 
 export default function DevRoleSwitcher() {
@@ -119,8 +119,8 @@ function DevRoleSwitcherInner() {
               <button
                 onClick={() => { setViewRole(realRole); setOpen(false) }}
                 className="w-full px-3 py-2.5 text-xs font-medium text-left transition-colors"
-                style={{ color: '#dc2626' }}
-                onMouseEnter={e => (e.currentTarget as HTMLElement).style.background = '#fef2f2'}
+                style={{ color: '#d44c47' }}
+                onMouseEnter={e => (e.currentTarget as HTMLElement).style.background = '#fdebec'}
                 onMouseLeave={e => (e.currentTarget as HTMLElement).style.background = 'transparent'}
               >
                 ↩ 本来のロールに戻す

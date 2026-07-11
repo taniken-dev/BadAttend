@@ -74,26 +74,26 @@ function ReasonBadge({ reason, reasonDetail }: { reason: string | null; reasonDe
 }
 
 const STATUS_GROUPS = [
-  { key: 'present',           label: '出席予定',    color: '#16a34a', bg: '#dcfce7' },
-  { key: 'tardy',             label: '遅刻予定',    color: '#d97706', bg: '#fef3c7' },
-  { key: 'absent',            label: '欠席・その他', color: '#dc2626', bg: '#fee2e2' },
+  { key: 'present',           label: '出席予定',    color: '#448361', bg: '#dbeddb' },
+  { key: 'tardy',             label: '遅刻予定',    color: '#cb912f', bg: '#fdecc8' },
+  { key: 'absent',            label: '欠席・その他', color: '#d44c47', bg: '#ffe2dd' },
 ]
 
 const MEMBER_STATUS_OPTIONS: {
   value: AttendanceStatus; label: string; description: string; color: string; icon: React.ElementType
 }[] = [
-  { value: 'present',      label: '出席', description: '練習に参加します',         color: '#16a34a', icon: UserCheck },
-  { value: 'tardy',        label: '遅刻', description: '遅れて参加します',         color: '#d97706', icon: Clock },
-  { value: 'absent_normal',label: '欠席', description: '理由を選択してください',   color: '#dc2626', icon: UserX },
+  { value: 'present',      label: '出席', description: '練習に参加します',         color: '#448361', icon: UserCheck },
+  { value: 'tardy',        label: '遅刻', description: '遅れて参加します',         color: '#cb912f', icon: Clock },
+  { value: 'absent_normal',label: '欠席', description: '理由を選択してください',   color: '#d44c47', icon: UserX },
 ]
 
 const MEMBER_REASON_OPTIONS: {
   value: AbsenceReason; label: string; icon: React.ElementType; description: string; color: string
 }[] = [
   { value: 'practice', label: '別練習・大会', icon: Dumbbell,   description: '他チームとの練習、大会参加など',    color: '#4338ca' },
-  { value: 'class',    label: '授業',         icon: BookOpen,   description: '講義、補講、試験など',              color: '#0891b2' },
-  { value: 'sick',     label: '体調不良',     icon: HeartPulse, description: '翌日の練習が自動でロックされます',  color: '#dc2626' },
-  { value: 'personal', label: '私用',         icon: User,       description: '家族の事情、冠婚葬祭など',          color: '#d97706' },
+  { value: 'class',    label: '授業',         icon: BookOpen,   description: '講義、補講、試験など',              color: '#38869e' },
+  { value: 'sick',     label: '体調不良',     icon: HeartPulse, description: '翌日の練習が自動でロックされます',  color: '#d44c47' },
+  { value: 'personal', label: '私用',         icon: User,       description: '家族の事情、冠婚葬祭など',          color: '#cb912f' },
   { value: 'other',    label: 'その他',       icon: HelpCircle, description: '詳細を自由記述で入力してください',  color: '#6b7280' },
 ]
 
@@ -115,10 +115,10 @@ const SELF_STATUS_LABELS: Partial<Record<AttendanceStatus, string>> = {
 }
 
 const RESULT_STATUS_OPTIONS: { value: AttendanceStatus; label: string; color: string }[] = [
-  { value: 'present',           label: '出席',      color: '#16a34a' },
-  { value: 'tardy',             label: '遅刻',      color: '#d97706' },
-  { value: 'absent_normal',     label: '欠席',      color: '#dc2626' },
-  { value: 'absent_emergency',  label: '当日欠席',  color: '#9333ea' },
+  { value: 'present',           label: '出席',      color: '#448361' },
+  { value: 'tardy',             label: '遅刻',      color: '#cb912f' },
+  { value: 'absent_normal',     label: '欠席',      color: '#d44c47' },
+  { value: 'absent_emergency',  label: '当日欠席',  color: '#9065b0' },
   { value: 'absent_unreported', label: '無連絡欠席', color: '#64748b' },
 ]
 
@@ -697,7 +697,7 @@ export default function CalendarView() {
         <div className="grid grid-cols-7 mb-1">
           {DOW.map((d, i) => (
             <div key={d} className="text-center py-1 text-xs font-semibold"
-              style={{ color: i === 0 ? '#ef4444' : i === 6 ? 'var(--club-blue)' : 'var(--gray-400)' }}>
+              style={{ color: i === 0 ? '#d44c47' : i === 6 ? 'var(--club-blue)' : 'var(--gray-400)' }}>
               {d}
             </div>
           ))}
@@ -726,14 +726,14 @@ export default function CalendarView() {
                 : session.is_cancelled
                 ? 'var(--gray-300)'
                 : session.is_results_confirmed
-                ? '#16a34a'
+                ? '#448361'
                 : session.is_camp
-                ? '#f97316'
+                ? '#d9730d'
                 : session.is_bukai
-                ? '#15803d'
+                ? '#2f5f44'
                 : session.is_voluntary
-                ? '#9333ea'
-                : '#ef4444'
+                ? '#9065b0'
+                : '#d44c47'
 
             // GCalドット色（大会など=青、その他=グレー）
             const gcalDotColor      = isSelected ? 'rgba(255,255,255,0.7)' : 'var(--club-blue)'
@@ -764,7 +764,7 @@ export default function CalendarView() {
                 <span className="text-sm font-medium leading-snug"
                   style={{
                     color: isSelected ? 'white'
-                      : dow === 0 ? '#ef4444'
+                      : dow === 0 ? '#d44c47'
                       : dow === 6 ? 'var(--club-blue)'
                       : 'var(--gray-900)',
                     fontWeight: isToday ? 800 : undefined,
@@ -776,7 +776,7 @@ export default function CalendarView() {
                   {/* 練習ドット（確定済みはチェックアイコン） */}
                   {daySessions.map(session =>
                     !session.is_cancelled && session.is_results_confirmed && !isSelected
-                      ? <CheckCircle2 key={session.id} size={8} style={{ color: session.is_camp ? '#f97316' : '#16a34a' }} />  /* 部会も確定済みは同じ緑 */
+                      ? <CheckCircle2 key={session.id} size={8} style={{ color: session.is_camp ? '#d9730d' : '#448361' }} />  /* 部会も確定済みは同じ緑 */
                       : <span key={session.id} className="w-1 h-1 rounded-full" style={{ background: dotColor(session) }} />
                   )}
                   {/* 大会などドット（青） */}
@@ -798,26 +798,26 @@ export default function CalendarView() {
           style={{ borderTop: '1px solid var(--gray-100)' }}>
           <div className="flex items-center gap-1.5">
             <span className="w-2 h-2 rounded-full shrink-0"
-              style={{ background: '#ef4444' }} />
+              style={{ background: '#d44c47' }} />
             <span className="text-xs" style={{ color: 'var(--gray-500)' }}>練習日</span>
           </div>
           <div className="flex items-center gap-1.5">
             <span className="w-2 h-2 rounded-full shrink-0"
-              style={{ background: '#f97316' }} />
+              style={{ background: '#d9730d' }} />
             <span className="text-xs" style={{ color: 'var(--gray-500)' }}>合宿</span>
           </div>
           <div className="flex items-center gap-1.5">
             <span className="w-2 h-2 rounded-full shrink-0"
-              style={{ background: '#15803d' }} />
+              style={{ background: '#2f5f44' }} />
             <span className="text-xs" style={{ color: 'var(--gray-500)' }}>部会</span>
           </div>
           <div className="flex items-center gap-1.5">
-            <CheckCircle2 size={8} style={{ color: '#16a34a' }} />
+            <CheckCircle2 size={8} style={{ color: '#448361' }} />
             <span className="text-xs" style={{ color: 'var(--gray-500)' }}>実績確定済み</span>
           </div>
           <div className="flex items-center gap-1.5">
             <span className="w-2 h-2 rounded-full shrink-0"
-              style={{ background: '#9333ea' }} />
+              style={{ background: '#9065b0' }} />
             <span className="text-xs" style={{ color: 'var(--gray-500)' }}>自主練</span>
           </div>
           <div className="flex items-center gap-1.5">
@@ -1281,7 +1281,7 @@ function DetailPanel({
             {session.is_results_confirmed && (
               <>
                 <span className="flex items-center gap-1 text-xs px-2 py-0.5 rounded-full font-semibold"
-                  style={{ background: '#dcfce7', color: '#15803d' }}>
+                  style={{ background: '#dbeddb', color: '#2f5f44' }}>
                   <CheckCircle2 size={11} />
                   実績確定済み
                 </span>
@@ -1304,11 +1304,11 @@ function DetailPanel({
             {session.is_cancelled && (
               <div className="flex items-center gap-1.5 flex-wrap">
                 <span className="flex items-center gap-1 text-xs px-2 py-0.5 rounded-full font-semibold"
-                  style={{ background: '#fee2e2', color: '#b91c1c' }}>
+                  style={{ background: '#ffe2dd', color: '#a8423d' }}>
                   休止中
                 </span>
                 {session.cancellation_reason && (
-                  <span className="text-xs" style={{ color: '#b91c1c' }}>
+                  <span className="text-xs" style={{ color: '#a8423d' }}>
                     {session.cancellation_reason}
                   </span>
                 )}
@@ -1374,9 +1374,9 @@ function DetailPanel({
               </button>
             ) : (
               <div className="flex flex-col gap-2 p-3 rounded-xl mt-1"
-                style={{ background: '#fff1f2', border: '1px solid #fecdd3' }}>
+                style={{ background: '#fdebec', border: '1px solid #f2c7c2' }}>
                 <div className="flex items-center justify-between">
-                  <span className="text-xs font-semibold" style={{ color: '#b91c1c' }}>練習を休止にする</span>
+                  <span className="text-xs font-semibold" style={{ color: '#a8423d' }}>練習を休止にする</span>
                   <button type="button" onClick={() => { setCancelFormOpen(false); setCancelReasonInput('') }}
                     className="text-xs cursor-pointer hover:opacity-70" style={{ color: 'var(--gray-400)' }}>
                     キャンセル
@@ -1400,7 +1400,7 @@ function DetailPanel({
                     setCancelSubmitting(false)
                   }}
                   className="flex items-center justify-center gap-1 py-2 rounded-xl text-xs font-semibold transition-all cursor-pointer active:scale-95 hover:opacity-80"
-                  style={{ background: '#ef4444', color: 'white', opacity: cancelSubmitting ? 0.6 : 1 }}
+                  style={{ background: '#d44c47', color: 'white', opacity: cancelSubmitting ? 0.6 : 1 }}
                 >
                   {cancelSubmitting
                     ? <span className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin" />
@@ -1428,7 +1428,7 @@ function DetailPanel({
               </span>
               /{totalApproved}名 連絡済み
               {notYet > 0 && (
-                <span className="ml-2 font-semibold" style={{ color: '#d97706' }}>
+                <span className="ml-2 font-semibold" style={{ color: '#cb912f' }}>
                   • 未提出 {notYet}名
                 </span>
               )}
@@ -1455,7 +1455,7 @@ function DetailPanel({
 
         return (
           <div className="rounded-xl px-4 py-3.5 flex flex-col gap-3"
-            style={{ background: 'color-mix(in srgb, #9333ea 6%, var(--card-bg))', border: '1.5px solid color-mix(in srgb, #9333ea 25%, white)' }}>
+            style={{ background: 'color-mix(in srgb, #9065b0 6%, var(--card-bg))', border: '1.5px solid color-mix(in srgb, #9065b0 25%, white)' }}>
             <div className="flex items-center justify-between">
               <h3 className="text-sm font-bold" style={{ color: 'var(--gray-900)' }}>参加表明</h3>
               {!isLocked && (
@@ -1475,7 +1475,7 @@ function DetailPanel({
               /* 参加済み：ステータス表示 + 時刻変更 + 取り消し */
               <div className="flex items-center gap-2 flex-wrap">
                 <span className="flex items-center gap-1.5 text-sm font-semibold px-3 py-1.5 rounded-full"
-                  style={{ background: '#f3e8ff', color: '#9333ea' }}>
+                  style={{ background: '#e8deee', color: '#9065b0' }}>
                   <CheckCircle2 size={14} />
                   参加予定
                   {myRecord?.arrival_time && (
@@ -1491,7 +1491,7 @@ function DetailPanel({
                     setVoluntaryTimePickerOpen(true)
                   }}
                   className="text-xs px-3 py-1.5 rounded-full font-semibold cursor-pointer transition-opacity hover:opacity-70"
-                  style={{ background: '#ede9fe', color: '#7c3aed', border: '1px solid #ddd6fe' }}>
+                  style={{ background: '#ece4f1', color: '#7d569c', border: '1px solid #d9cbe5' }}>
                   時刻を変更
                 </button>
                 <button
@@ -1531,9 +1531,9 @@ function DetailPanel({
                         onClick={() => setVoluntaryArrivalTime(active ? null : time)}
                         className="flex items-center justify-center py-2 rounded-xl text-sm font-bold transition-all"
                         style={{
-                          border:     `1.5px solid ${active ? '#9333ea' : 'var(--gray-200)'}`,
-                          background: active ? 'color-mix(in srgb, #9333ea 15%, var(--gray-100))' : 'var(--gray-100)',
-                          color:      active ? '#9333ea' : 'var(--gray-700)',
+                          border:     `1.5px solid ${active ? '#9065b0' : 'var(--gray-200)'}`,
+                          background: active ? 'color-mix(in srgb, #9065b0 15%, var(--gray-100))' : 'var(--gray-100)',
+                          color:      active ? '#9065b0' : 'var(--gray-700)',
                         }}>
                         {time}
                       </button>
@@ -1556,7 +1556,7 @@ function DetailPanel({
                     }}
                     disabled={voluntaryToggling}
                     className="btn-primary flex-1"
-                    style={{ background: '#9333ea' }}>
+                    style={{ background: '#9065b0' }}>
                     {voluntaryToggling
                       ? <span className="flex items-center justify-center gap-2">
                           <span className="inline-block w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
@@ -1583,7 +1583,7 @@ function DetailPanel({
               <button
                 onClick={() => setVoluntaryTimePickerOpen(true)}
                 className="flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-semibold transition-all cursor-pointer active:scale-95 hover:opacity-80"
-                style={{ background: '#9333ea', color: 'white' }}>
+                style={{ background: '#9065b0', color: 'white' }}>
                 <Dumbbell size={15} />
                 参加する
               </button>
@@ -1596,11 +1596,11 @@ function DetailPanel({
       {session.is_voluntary && (
         <div className="flex flex-col gap-2">
           <div className="flex items-center gap-2 px-1">
-            <Users size={14} style={{ color: '#9333ea' }} />
+            <Users size={14} style={{ color: '#9065b0' }} />
             <span className="text-sm font-semibold" style={{ color: 'var(--gray-700)' }}>
               参加予定
               <span className="ml-1.5 text-xs font-bold px-1.5 py-0.5 rounded-full"
-                style={{ background: '#f3e8ff', color: '#9333ea' }}>
+                style={{ background: '#e8deee', color: '#9065b0' }}>
                 {attendance.length}名
               </span>
             </span>
@@ -1616,19 +1616,19 @@ function DetailPanel({
                   <div key={a.id}
                     className="flex items-center gap-2.5 px-3 py-2 rounded-xl"
                     style={{
-                      background: isMe ? '#f3e8ff' : 'var(--gray-50)',
-                      border: `1px solid ${isMe ? '#e9d5ff' : 'var(--gray-100)'}`,
+                      background: isMe ? '#e8deee' : 'var(--gray-50)',
+                      border: `1px solid ${isMe ? '#ddcfe8' : 'var(--gray-100)'}`,
                     }}>
-                    <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: '#9333ea' }} />
+                    <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: '#9065b0' }} />
                     <span className="text-sm font-medium" style={{ color: 'var(--gray-900)' }}>{name}</span>
                     {a.arrival_time && (
                       <span className="text-xs font-semibold px-1.5 py-0.5 rounded-full"
-                        style={{ background: '#ede9fe', color: '#7c3aed' }}>
+                        style={{ background: '#ece4f1', color: '#7d569c' }}>
                         {a.arrival_time.slice(0, 5)}〜
                       </span>
                     )}
                     <span className="text-xs ml-auto" style={{ color: 'var(--gray-400)' }}>{a.profile.grade}年</span>
-                    {isMe && <span className="text-xs font-semibold" style={{ color: '#9333ea' }}>あなた</span>}
+                    {isMe && <span className="text-xs font-semibold" style={{ color: '#9065b0' }}>あなた</span>}
                   </div>
                 )
               })}
@@ -1661,8 +1661,8 @@ function DetailPanel({
             <div className="flex items-center gap-2 flex-wrap">
               <span className="flex items-center gap-1 text-sm font-semibold px-2.5 py-1 rounded-full"
                 style={{
-                  background: myRecord.status === 'present' ? '#dcfce7' : myRecord.status === 'tardy' ? '#fef3c7' : '#fee2e2',
-                  color: myRecord.status === 'present' ? '#16a34a' : myRecord.status === 'tardy' ? '#d97706' : '#dc2626',
+                  background: myRecord.status === 'present' ? '#dbeddb' : myRecord.status === 'tardy' ? '#fdecc8' : '#ffe2dd',
+                  color: myRecord.status === 'present' ? '#448361' : myRecord.status === 'tardy' ? '#cb912f' : '#d44c47',
                 }}>
                 <CheckCircle2 size={13} />
                 {SELF_STATUS_LABELS[myRecord.status as AttendanceStatus] ?? myRecord.status}
@@ -1680,7 +1680,7 @@ function DetailPanel({
             <form onSubmit={handleSelfSubmit} className="flex flex-col gap-3">
               {selfError && (
                 <div className="flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-semibold"
-                  style={{ background: '#fee2e2', color: '#b91c1c' }}>
+                  style={{ background: '#ffe2dd', color: '#a8423d' }}>
                   <AlertCircle size={13} /> {selfError}
                 </div>
               )}
@@ -1694,7 +1694,7 @@ function DetailPanel({
               {/* 事前欠席変更バナー（登録期間外・当日前） */}
               {canEarlyAbsent && !canRegister && (
                 <div className="flex items-center gap-2 px-3 py-2.5 rounded-xl text-xs font-semibold"
-                  style={{ background: '#fef3c7', color: '#92400e', border: '1px solid #fcd34d' }}>
+                  style={{ background: '#fdecc8', color: '#6e4a1a', border: '1px solid #e3c47f' }}>
                   <AlertCircle size={13} className="shrink-0" />
                   事前欠席連絡です。LINEグループに通知されます。
                 </div>
@@ -1703,7 +1703,7 @@ function DetailPanel({
               {/* 登録期間外の当日登録リマインダー */}
               {isSameDayWindow && !availableDates.includes(session.session_date) && (
                 <div className="flex items-center gap-2 px-3 py-2.5 rounded-xl text-xs font-semibold"
-                  style={{ background: '#eff6ff', color: '#1d4ed8', border: '1px solid #bfdbfe' }}>
+                  style={{ background: '#e7f3f8', color: '#2d6d92', border: '1px solid #c4dced' }}>
                   <AlertCircle size={13} className="shrink-0" />
                   通常の登録期間（土〜火 23:59）を守るようにしてください。
                 </div>
@@ -1712,7 +1712,7 @@ function DetailPanel({
               {/* 当日欠席バナー */}
               {isSameDayWindow && selfIsAbsent && (
                 <div className="flex items-center gap-2 px-3 py-2.5 rounded-xl text-xs font-semibold"
-                  style={{ background: '#fef3c7', color: '#92400e', border: '1px solid #fcd34d' }}>
+                  style={{ background: '#fdecc8', color: '#6e4a1a', border: '1px solid #e3c47f' }}>
                   <AlertCircle size={13} className="shrink-0" />
                   当日欠席として送信されます。実績が即座に確定し、LINEグループに通知されます。
                 </div>
@@ -1721,7 +1721,7 @@ function DetailPanel({
               {/* 当日遅刻バナー */}
               {isSameDayWindow && selfIsTardy && (
                 <div className="flex items-center gap-2 px-3 py-2.5 rounded-xl text-xs font-semibold"
-                  style={{ background: '#fef3c7', color: '#92400e', border: '1px solid #fcd34d' }}>
+                  style={{ background: '#fdecc8', color: '#6e4a1a', border: '1px solid #e3c47f' }}>
                   <AlertCircle size={13} className="shrink-0" />
                   当日遅刻としてLINEグループに通知されます。
                 </div>
@@ -1806,9 +1806,9 @@ function DetailPanel({
                           onClick={() => setSelfArrivalTime(time)}
                           className="flex items-center justify-center py-2.5 rounded-xl text-sm font-bold transition-all"
                           style={{
-                            border: `1.5px solid ${active ? '#d97706' : 'var(--gray-200)'}`,
-                            background: active ? 'color-mix(in srgb, #d97706 15%, var(--gray-100))' : 'var(--gray-100)',
-                            color: active ? '#d97706' : 'var(--gray-700)',
+                            border: `1.5px solid ${active ? '#cb912f' : 'var(--gray-200)'}`,
+                            background: active ? 'color-mix(in srgb, #cb912f 15%, var(--gray-100))' : 'var(--gray-100)',
+                            color: active ? '#cb912f' : 'var(--gray-700)',
                           }}
                         >
                           {time}
@@ -1867,20 +1867,20 @@ function DetailPanel({
       {/* マネージャー/管理者向け：一括確定ボタン（練習開始時刻以降のみ・自主練除く） */}
       {!session.is_voluntary && isManagerOrAdmin && attendance.length > 0 && !session.is_cancelled && canRegisterResult && (
         <div className="flex flex-col gap-2 px-3 py-3 rounded-xl"
-          style={{ background: '#f0fdf4', border: '1px solid #bbf7d0' }}>
+          style={{ background: '#edf3ec', border: '1px solid #c6ddc8' }}>
           <div className="flex items-center gap-2">
-            <ClipboardCheck size={15} style={{ color: '#15803d' }} />
-            <span className="text-sm font-semibold" style={{ color: '#15803d' }}>
+            <ClipboardCheck size={15} style={{ color: '#2f5f44' }} />
+            <span className="text-sm font-semibold" style={{ color: '#2f5f44' }}>
               実績管理
             </span>
             {unconfirmedCount > 0 && (
               <span className="ml-auto text-xs px-2 py-0.5 rounded-full font-semibold"
-                style={{ background: '#fef3c7', color: '#b45309' }}>
+                style={{ background: '#fdecc8', color: '#8a5d22' }}>
                 未確定 {unconfirmedCount}名
               </span>
             )}
           </div>
-          <p className="text-xs" style={{ color: '#166534' }}>
+          <p className="text-xs" style={{ color: '#2b5240' }}>
             各メンバーの実績ステータスを個別に変更するか、「一括確定」で予定をそのまま実績として保存できます。
           </p>
           {unconfirmedCount > 0 && (
@@ -1888,7 +1888,7 @@ function DetailPanel({
               onClick={handleBulk}
               disabled={confirming}
               className="flex items-center justify-center gap-2 py-2 rounded-xl text-sm font-semibold transition-all cursor-pointer active:scale-95 hover:opacity-80"
-              style={{ background: '#16a34a', color: 'white', opacity: confirming ? 0.7 : 1 }}
+              style={{ background: '#448361', color: 'white', opacity: confirming ? 0.7 : 1 }}
             >
               {confirming ? (
                 <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
@@ -1970,7 +1970,7 @@ function DetailPanel({
                 className="flex items-start gap-2.5 px-3 py-2.5 rounded-xl"
                 style={{
                   background: `color-mix(in srgb, ${statusGroup?.bg ?? 'var(--gray-100)'} 60%, white)`,
-                  border: `1px solid ${isDiverged ? '#fcd34d' : `color-mix(in srgb, ${statusGroup?.bg ?? 'var(--gray-100)'} 80%, white)`}`,
+                  border: `1px solid ${isDiverged ? '#e3c47f' : `color-mix(in srgb, ${statusGroup?.bg ?? 'var(--gray-100)'} 80%, white)`}`,
                   opacity: updatingId === a.id ? 0.6 : 1,
                 }}>
                 {/* アバター */}
@@ -2001,7 +2001,7 @@ function DetailPanel({
                     )}
                     {isDiverged && (
                       <span className="flex items-center gap-0.5 text-xs px-1.5 py-0.5 rounded"
-                        style={{ background: '#fef3c7', color: '#b45309', fontSize: '10px' }}>
+                        style={{ background: '#fdecc8', color: '#8a5d22', fontSize: '10px' }}>
                         <AlertCircle size={9} />
                         予定と実績が異なります
                       </span>
@@ -2051,7 +2051,7 @@ function DetailPanel({
                               onClick={() => handleConfirmOne(a.id, (pendingStatus[a.id] ?? a.status) as AttendanceStatus)}
                               disabled={updatingId === a.id}
                               className="flex items-center gap-1 text-xs px-2 py-0.5 rounded-lg font-semibold cursor-pointer transition-opacity hover:opacity-80"
-                              style={{ background: '#dcfce7', color: '#15803d', border: '1px solid #86efac' }}
+                              style={{ background: '#dbeddb', color: '#2f5f44', border: '1px solid #a3c9ab' }}
                             >
                               {updatingId === a.id
                                 ? <span className="w-2.5 h-2.5 border border-current border-t-transparent rounded-full animate-spin" />
@@ -2139,7 +2139,7 @@ function DetailPanel({
         <div>
           <div className="flex items-center gap-2 mb-2">
             <span className="text-xs font-bold px-2 py-0.5 rounded-full"
-              style={{ background: '#fef3c7', color: '#b45309' }}>
+              style={{ background: '#fdecc8', color: '#8a5d22' }}>
               未提出 {memberSearchLower ? `${filteredUnsubmitted.length} / ` : ''}{unsubmitted.length}名
             </span>
             {isManagerOrAdmin && !session.is_cancelled && (
@@ -2160,8 +2160,8 @@ function DetailPanel({
             <div className="mb-2 px-3 py-2 rounded-xl text-xs font-semibold"
               style={
                 remindResult === 'error'
-                  ? { background: '#fee2e2', color: '#b91c1c' }
-                  : { background: '#dcfce7', color: '#15803d' }
+                  ? { background: '#ffe2dd', color: '#a8423d' }
+                  : { background: '#dbeddb', color: '#2f5f44' }
               }>
               {remindResult === 'error'
                 ? 'LINE送信に失敗しました'
@@ -2185,8 +2185,8 @@ function DetailPanel({
                   <div key={p.id}
                     className="flex items-center gap-2.5 px-3 py-2 rounded-xl flex-wrap"
                     style={{
-                      background: '#fffbeb',
-                      border: '1px solid #fde68a',
+                      background: '#fbf3db',
+                      border: '1px solid #ecd9a3',
                       opacity: registeringId === p.id ? 0.6 : 1,
                     }}>
                     {p.avatar_url ? (
@@ -2194,7 +2194,7 @@ function DetailPanel({
                         className="w-7 h-7 rounded-full object-cover shrink-0" />
                     ) : (
                       <div className="w-7 h-7 rounded-full flex items-center justify-center text-xs font-black shrink-0"
-                        style={{ background: '#fef3c7', color: '#b45309' }}>
+                        style={{ background: '#fdecc8', color: '#8a5d22' }}>
                         {(p.display_name ?? p.full_name).charAt(0)}
                       </div>
                     )}
@@ -2234,7 +2234,7 @@ function DetailPanel({
                             setRegisteringId(null)
                           }}
                           className="flex items-center gap-1 text-xs px-2 py-0.5 rounded-lg font-semibold cursor-pointer transition-opacity hover:opacity-80"
-                          style={{ background: '#dcfce7', color: '#15803d', border: '1px solid #86efac' }}
+                          style={{ background: '#dbeddb', color: '#2f5f44', border: '1px solid #a3c9ab' }}
                         >
                           {registeringId === p.id
                             ? <span className="w-2.5 h-2.5 border border-current border-t-transparent rounded-full animate-spin" />

@@ -17,7 +17,7 @@ export default function RulesPage() {
       <section className="card p-5 flex flex-col gap-4">
         <div className="flex items-center gap-2.5">
           <span className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0"
-            style={{ background: '#eff6ff', color: '#2563eb' }}>
+            style={{ background: '#e7f3f8', color: '#337ea9' }}>
             <Clock size={18} />
           </span>
           <h2 className="text-base font-bold" style={{ color: 'var(--gray-900)' }}>登録できる期間</h2>
@@ -52,7 +52,7 @@ export default function RulesPage() {
       <section className="card p-5 flex flex-col gap-4">
         <div className="flex items-center gap-2.5">
           <span className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0"
-            style={{ background: '#f0fdf4', color: '#16a34a' }}>
+            style={{ background: '#edf3ec', color: '#448361' }}>
             <CalendarCheck size={18} />
           </span>
           <h2 className="text-base font-bold" style={{ color: 'var(--gray-900)' }}>ステータスの種類</h2>
@@ -61,29 +61,29 @@ export default function RulesPage() {
         <div className="flex flex-col gap-2">
           <StatusRow
             icon={<CheckCircle2 size={15} />}
-            color="#16a34a"
-            bg="#dcfce7"
+            color="#448361"
+            bg="#dbeddb"
             label="出席"
             desc="練習に参加する"
           />
           <StatusRow
             icon={<Timer size={15} />}
-            color="#d97706"
-            bg="#fef3c7"
+            color="#cb912f"
+            bg="#fdecc8"
             label="遅刻"
             desc="遅れて参加する。参加予定時刻を30分刻みで選択"
           />
           <StatusRow
             icon={<XCircle size={15} />}
-            color="#dc2626"
-            bg="#fee2e2"
+            color="#d44c47"
+            bg="#ffe2dd"
             label="欠席"
             desc="練習を休む。理由の入力が必要"
           />
           <StatusRow
             icon={<AlertTriangle size={15} />}
-            color="#9333ea"
-            bg="#f3e8ff"
+            color="#9065b0"
+            bg="#e8deee"
             label="当日欠席"
             desc="当日に欠席を報告した場合に自動で適用される。LINEグループに通知が送られる"
           />
@@ -94,7 +94,7 @@ export default function RulesPage() {
       <section className="card p-5 flex flex-col gap-4">
         <div className="flex items-center gap-2.5">
           <span className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0"
-            style={{ background: '#fdf4ff', color: '#a21caf' }}>
+            style={{ background: '#f9f2f7', color: '#c14c8a' }}>
             <BookOpen size={18} />
           </span>
           <h2 className="text-base font-bold" style={{ color: 'var(--gray-900)' }}>欠席・遅刻の理由</h2>
@@ -118,15 +118,15 @@ export default function RulesPage() {
 
       {/* 当日欠席・遅刻の注意 */}
       <section className="card p-5 flex flex-col gap-3"
-        style={{ border: '1.5px solid #fca5a5', background: '#fff7f7' }}>
+        style={{ border: '1.5px solid #e5a49e', background: '#fdebec' }}>
         <div className="flex items-center gap-2.5">
           <span className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0"
-            style={{ background: '#fee2e2', color: '#dc2626' }}>
+            style={{ background: '#ffe2dd', color: '#d44c47' }}>
             <AlertTriangle size={18} />
           </span>
-          <h2 className="text-base font-bold" style={{ color: '#dc2626' }}>当日の連絡について</h2>
+          <h2 className="text-base font-bold" style={{ color: '#d44c47' }}>当日の連絡について</h2>
         </div>
-        <ul className="flex flex-col gap-2 text-sm" style={{ color: '#7f1d1d' }}>
+        <ul className="flex flex-col gap-2 text-sm" style={{ color: '#6d302c' }}>
           <li className="flex gap-2"><span>・</span><span>当日に欠席を登録すると「当日欠席」として記録され、LINEグループに自動通知されます</span></li>
           <li className="flex gap-2"><span>・</span><span>当日に遅刻を登録した場合も同様にLINEグループへ通知されます</span></li>
           <li className="flex gap-2"><span>・</span><span>体調不良の欠席は、次の練習への登録がロックされる場合があります</span></li>
@@ -137,7 +137,7 @@ export default function RulesPage() {
       <section className="card p-5 flex flex-col gap-4">
         <div className="flex items-center gap-2.5">
           <span className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0"
-            style={{ background: '#eff6ff', color: '#2563eb' }}>
+            style={{ background: '#e7f3f8', color: '#337ea9' }}>
             <CalendarCheck size={18} />
           </span>
           <h2 className="text-base font-bold" style={{ color: 'var(--gray-900)' }}>登録の手順</h2>
@@ -153,7 +153,7 @@ export default function RulesPage() {
             <li key={i} className="flex gap-3 items-start">
               <span
                 className="w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold shrink-0 mt-0.5"
-                style={{ background: '#eff6ff', color: '#2563eb' }}
+                style={{ background: '#e7f3f8', color: '#337ea9' }}
               >
                 {i + 1}
               </span>
@@ -172,7 +172,7 @@ function PeriodRow({ period, desc, deadline }: { period: string; desc: string; d
       <div className="flex items-center justify-between gap-2">
         <span className="text-sm font-semibold" style={{ color: 'var(--gray-900)' }}>{period}</span>
         <span className="text-xs font-medium px-2 py-0.5 rounded-full"
-          style={{ background: '#eff6ff', color: '#2563eb', whiteSpace: 'nowrap' }}>
+          style={{ background: '#e7f3f8', color: '#337ea9', whiteSpace: 'nowrap' }}>
           {deadline}
         </span>
       </div>
