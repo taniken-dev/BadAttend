@@ -19,10 +19,9 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     document.documentElement.classList.toggle('dark', next)
     localStorage.setItem('theme', next ? 'dark' : 'light')
     setIsDark(next)
-    // viewport が出力した media 付き meta を全て更新（手動トグルで上書き）
-    document.querySelectorAll('meta[name="theme-color"]').forEach(m =>
-      m.setAttribute('content', next ? '#191919' : '#f7f6f3')
-    )
+    // layout.tsx の <head> にある単一の theme-color meta を更新
+    document.querySelector('meta[name="theme-color"]')
+      ?.setAttribute('content', next ? '#191919' : '#f7f6f3')
   }
 
   return (
