@@ -3,7 +3,8 @@
 
 /* ============================================================
    デザイントークン — バドミントン部 出欠管理システム
-   MOS Shift Design System 継承 + スポーツ✕大学 テーマ適用
+   Notion風デザインシステム（暖色グレー基調 + インディゴアクセント）
+   参照: VoltAgent/awesome-design-md notion/DESIGN.md
    ============================================================ */
 @layer base {
   :root {
@@ -27,38 +28,39 @@
     --rank-d:   #d97706;
     --rank-e:   #dc2626;
 
-    /* --- Apple 標準グレースケール --- */
-    --apple-bg:  #f5f5f7;
-    --gray-50:   #f9fafb;
-    --gray-100:  #f3f4f6;
-    --gray-200:  #e5e7eb;
-    --gray-300:  #d1d5db;
-    --gray-400:  #9ca3af;
-    --gray-500:  #6b7280;
-    --gray-600:  #4b5563;
-    --gray-700:  #374151;
-    --gray-900:  #111827;
+    /* --- Notion 暖色グレースケール --- */
+    --apple-bg:  #f7f6f3;
+    --gray-50:   #faf9f7;
+    --gray-100:  #f1f0ec;
+    --gray-200:  #e5e3df;
+    --gray-300:  #d3d1cb;
+    --gray-400:  #a4a097;
+    --gray-500:  #787671;
+    --gray-600:  #5d5b54;
+    --gray-700:  #454440;
+    --gray-900:  #2f2e2b;
 
-    /* --- Apple テキスト・ボーダートークン --- */
-    --ink:        #1d1d1f;
-    --ink-muted:  #7a7a7a;
-    --hairline:   #e0e0e0;
+    /* --- Notion テキスト・ボーダートークン --- */
+    --ink:        #37352f;
+    --ink-muted:  #787671;
+    --hairline:   #e5e3df;
 
-    /* --- 影 --- */
-    --shadow-xs: 0 1px 2px rgba(0,0,0,0.04);
-    --shadow-sm: 0 2px 8px rgba(0,0,0,0.06), 0 1px 3px rgba(0,0,0,0.04);
-    --shadow:    0 8px 30px rgba(0,0,0,0.04), 0 1px 4px rgba(0,0,0,0.06);
-    --shadow-md: 0 12px 40px rgba(0,0,0,0.06), 0 2px 6px rgba(0,0,0,0.06);
-    --shadow-lg: 0 20px 60px rgba(0,0,0,0.08), 0 4px 12px rgba(0,0,0,0.06);
+    /* --- 影（Notion風: 控えめ） --- */
+    --shadow-xs: 0 1px 2px rgba(15,15,15,0.04);
+    --shadow-sm: 0 1px 3px rgba(15,15,15,0.05), 0 1px 2px rgba(15,15,15,0.03);
+    --shadow:    0 2px 6px rgba(15,15,15,0.05), 0 1px 2px rgba(15,15,15,0.04);
+    --shadow-md: 0 4px 12px rgba(15,15,15,0.08);
+    --shadow-lg: 0 16px 48px -8px rgba(15,15,15,0.16), 0 4px 12px rgba(15,15,15,0.06);
 
-    /* --- 角丸 --- */
-    --radius-xs:   8px;
-    --radius-sm:  10px;
-    --radius:     12px;
-    --radius-md:  14px;
-    --radius-lg:  18px;
-    --radius-xl:  22px;
-    --radius-2xl: 28px;
+    /* --- 角丸（Notion風: 最大12px程度）
+       Tailwind v4 の rounded-* ユーティリティもこの変数を参照する --- */
+    --radius-xs:   4px;
+    --radius-sm:   6px;
+    --radius:      8px;
+    --radius-md:   8px;
+    --radius-lg:  10px;
+    --radius-xl:  12px;
+    --radius-2xl: 16px;
     --radius-full: 9999px;
 
     /* --- イージング --- */
@@ -69,30 +71,34 @@
 
 }
 
-/* ダークモード変数 — .dark クラス（システム or 手動トグル） */
+/* ダークモード変数 — .dark クラス（システム or 手動トグル）
+   Notionアプリのダークテーマ（#191919 基調・暖色ニュートラル）に準拠 */
 .dark {
   color-scheme: dark;
-  --card-bg:   #1e1e24;
-  --apple-bg:  #0f0f11;
-  --gray-50:   #1a1a1e;
-  --gray-100:  #222228;
-  --gray-200:  #2e2e36;
-  --gray-300:  #3e3e4a;
-  --gray-400:  #5a5a6e;
-  --gray-500:  #7a7a90;
-  --gray-600:  #9a9ab0;
-  --gray-700:  #c0c0d0;
-  --gray-900:  #f0f0f6;
+  --card-bg:   #202020;
+  --apple-bg:  #191919;
+  --gray-50:   #1e1e1e;
+  --gray-100:  #252525;
+  --gray-200:  #2f2f2f;
+  --gray-300:  #3b3b39;
+  --gray-400:  #5c5b57;
+  --gray-500:  #82807a;
+  --gray-600:  #a09e97;
+  --gray-700:  #c9c7c1;
+  --gray-900:  #ebeae8;
   --shadow-xs: 0 1px 2px rgba(0,0,0,0.3);
-  --shadow-sm: 0 2px 8px rgba(0,0,0,0.4), 0 1px 3px rgba(0,0,0,0.3);
-  --shadow:    0 8px 30px rgba(0,0,0,0.3), 0 1px 4px rgba(0,0,0,0.4);
-  --shadow-md: 0 12px 40px rgba(0,0,0,0.4), 0 2px 6px rgba(0,0,0,0.3);
-  --shadow-lg: 0 20px 60px rgba(0,0,0,0.5), 0 4px 12px rgba(0,0,0,0.4);
-  --club-blue-light: rgba(67, 56, 202, 0.2);
-  --club-blue-muted: rgba(67, 56, 202, 0.12);
-  --ink:       #f0f0f6;
-  --ink-muted: #9a9ab0;
-  --hairline:  rgba(255,255,255,0.08);
+  --shadow-sm: 0 1px 3px rgba(0,0,0,0.35), 0 1px 2px rgba(0,0,0,0.3);
+  --shadow:    0 2px 6px rgba(0,0,0,0.35), 0 1px 2px rgba(0,0,0,0.3);
+  --shadow-md: 0 4px 12px rgba(0,0,0,0.4);
+  --shadow-lg: 0 16px 48px -8px rgba(0,0,0,0.5), 0 4px 12px rgba(0,0,0,0.4);
+  /* ダーク背景ではインディゴを一段明るくしてコントラストを確保 */
+  --club-blue:       #5f57d9;
+  --club-blue-dark:  #4a42c4;
+  --club-blue-light: rgba(95, 87, 217, 0.22);
+  --club-blue-muted: rgba(95, 87, 217, 0.14);
+  --ink:       #d4d3d0;
+  --ink-muted: #9b9993;
+  --hairline:  rgba(255,255,255,0.09);
 }
 
 @layer base {
@@ -106,7 +112,8 @@
   body {
     background-color: var(--apple-bg);
     color: var(--ink);
-    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", var(--font-noto), sans-serif;
+    /* Noto Sans JP を全プラットフォームで最優先（next/font が --font-noto を供給） */
+    font-family: var(--font-noto), sans-serif;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
   }
@@ -181,11 +188,12 @@
   }
 
   .card-hero {
-    background: linear-gradient(135deg, var(--club-blue-dark) 0%, var(--club-blue) 100%);
+    /* Notion風: グラデーションを廃しフラットな単色バンドに */
+    background: var(--club-blue);
     border-radius: var(--radius-xl);
     padding: 28px 24px;
     color: white;
-    box-shadow: var(--shadow-lg);
+    box-shadow: var(--shadow-md);
   }
 
   /* --- ボタン --- */
@@ -389,7 +397,7 @@
 
   /* --- ナビゲーション --- */
   .glass-white {
-    background: rgba(245,245,247,0.88);
+    background: rgba(247,246,243,0.88);
     backdrop-filter: blur(20px) saturate(180%);
     -webkit-backdrop-filter: blur(20px) saturate(180%);
     border-bottom: 1px solid rgba(0,0,0,0.06);
@@ -428,7 +436,7 @@
     bottom: 0;
     left: 0;
     right: 0;
-    background: rgba(245,245,247,0.92);
+    background: rgba(247,246,243,0.92);
     backdrop-filter: blur(20px);
     -webkit-backdrop-filter: blur(20px);
     border-top: 1px solid rgba(0,0,0,0.06);
@@ -475,11 +483,11 @@
 }
 
 .dark .glass-white {
-  background: rgba(15,15,17,0.88);
+  background: rgba(25,25,25,0.88);
   border-bottom: 1px solid rgba(255,255,255,0.06);
 }
 
 .dark .bottom-nav {
-  background: rgba(15,15,17,0.92);
+  background: rgba(25,25,25,0.92);
   border-top: 1px solid rgba(255,255,255,0.06);
 }

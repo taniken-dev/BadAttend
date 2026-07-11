@@ -27,7 +27,7 @@ export default function PwaReturnBanner() {
   return (
     <div
       className="fixed inset-0 z-50 flex flex-col items-center justify-center px-6 text-center"
-      style={{ background: 'linear-gradient(145deg, #0f0c29 0%, #302b63 50%, #24243e 100%)' }}
+      style={{ background: '#191919' }}
     >
       {/* 成功アイコン */}
       <div
