@@ -59,7 +59,7 @@ export default async function AdminSuggestionsPage() {
               <div className="flex items-start gap-3">
                 <span
                   className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0 mt-0.5"
-                  style={{ background: '#dcfce7', color: '#16a34a' }}
+                  style={{ background: '#dbeddb', color: '#448361' }}
                 >
                   <MessageSquarePlus size={16} />
                 </span>

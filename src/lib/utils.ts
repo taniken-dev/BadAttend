@@ -78,8 +78,8 @@ export function getWeeklyRegistrationInfo(now: Date = new Date()): {
 }
 
 export function getAttendanceRateColor(rate: number): string {
-  if (rate >= 80) return '#16a34a'
-  if (rate >= 60) return '#4338ca'
-  if (rate >= 40) return '#d97706'
-  return '#dc2626'
+  if (rate >= 80) return '#448361'
+  if (rate >= 60) return '#5a55a3'
+  if (rate >= 40) return '#cb912f'
+  return '#d44c47'
 }

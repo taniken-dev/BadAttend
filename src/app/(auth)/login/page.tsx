@@ -47,7 +47,7 @@ export default function LoginPage() {
         className="w-full max-w-sm flex flex-col gap-3"
         style={{
           background: 'var(--card-bg)',
-          borderRadius: '18px',
+          borderRadius: 'var(--radius-xl)',
           padding: '28px 24px',
           border: '1px solid var(--hairline)',
         }}
@@ -67,7 +67,7 @@ export default function LoginPage() {
           style={{
             background: '#06C755',
             opacity: lineLoading ? 0.65 : 1,
-            borderRadius: '12px',
+            borderRadius: 'var(--radius-md)',
             padding: '13px 0',
             fontSize: '15px',
             letterSpacing: '-0.01em',
