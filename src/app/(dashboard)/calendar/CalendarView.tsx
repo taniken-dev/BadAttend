@@ -90,7 +90,7 @@ const MEMBER_STATUS_OPTIONS: {
 const MEMBER_REASON_OPTIONS: {
   value: AbsenceReason; label: string; icon: React.ElementType; description: string; color: string
 }[] = [
-  { value: 'practice', label: '別練習・大会', icon: Dumbbell,   description: '他チームとの練習、大会参加など',    color: '#4338ca' },
+  { value: 'practice', label: '別練習・大会', icon: Dumbbell,   description: '他チームとの練習、大会参加など',    color: '#5a55a3' },
   { value: 'class',    label: '授業',         icon: BookOpen,   description: '講義、補講、試験など',              color: '#38869e' },
   { value: 'sick',     label: '体調不良',     icon: HeartPulse, description: '翌日の練習が自動でロックされます',  color: '#d44c47' },
   { value: 'personal', label: '私用',         icon: User,       description: '家族の事情、冠婚葬祭など',          color: '#cb912f' },
