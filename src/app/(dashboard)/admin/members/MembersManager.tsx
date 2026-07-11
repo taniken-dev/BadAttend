@@ -225,12 +225,12 @@ export default function MembersManager({
 
       {/* 孤立ユーザー警告（プロフィール未作成） */}
       {!effectiveReadOnly && orphanUsers.length > 0 && (
-        <div className="card animate-slide-up" style={{ border: '1.5px solid #fca5a5', animationDelay: '0.03s' }}>
+        <div className="card animate-slide-up" style={{ border: '1.5px solid #e5a49e', animationDelay: '0.03s' }}>
           <div className="flex items-center gap-2 mb-4">
-            <div className="w-5 h-5 rounded-full flex items-center justify-center text-xs font-bold text-white" style={{ background: '#dc2626' }}>
+            <div className="w-5 h-5 rounded-full flex items-center justify-center text-xs font-bold text-white" style={{ background: '#d44c47' }}>
               {orphanUsers.length}
             </div>
-            <h2 className="text-base font-bold" style={{ color: '#b91c1c', letterSpacing: '-0.02em' }}>
+            <h2 className="text-base font-bold" style={{ color: '#a8423d', letterSpacing: '-0.02em' }}>
               プロフィール未作成のユーザー
             </h2>
           </div>
@@ -240,9 +240,9 @@ export default function MembersManager({
           <div className="flex flex-col gap-3">
             {orphanUsers.map(o => (
               <div key={o.id} className="flex items-center gap-3 p-3.5 rounded-xl"
-                style={{ background: '#fef2f2', border: '1px solid #fecaca', opacity: updating === o.id ? 0.6 : 1 }}>
+                style={{ background: '#fdebec', border: '1px solid #f2c7c2', opacity: updating === o.id ? 0.6 : 1 }}>
                 <div className="w-10 h-10 rounded-xl flex items-center justify-center text-sm font-bold shrink-0"
-                  style={{ background: '#fee2e2', color: '#b91c1c' }}>
+                  style={{ background: '#ffe2dd', color: '#a8423d' }}>
                   {o.full_name.charAt(0)}
                 </div>
                 <div className="flex-1 min-w-0">
@@ -272,7 +272,7 @@ export default function MembersManager({
           <div className="flex items-center gap-2 mb-4">
             <div
               className="w-5 h-5 rounded-full flex items-center justify-center text-xs font-bold text-white"
-              style={{ background: '#dc2626' }}
+              style={{ background: '#d44c47' }}
             >
               {pending.length}
             </div>
@@ -302,7 +302,7 @@ export default function MembersManager({
                 ) : (
                   <div
                     className="w-10 h-10 rounded-xl flex items-center justify-center text-sm font-bold shrink-0"
-                    style={{ background: '#fef3c7', color: '#b45309' }}
+                    style={{ background: '#fdecc8', color: '#8a5d22' }}
                   >
                     {displayName(m).charAt(0)}
                   </div>
@@ -322,7 +322,7 @@ export default function MembersManager({
                     onClick={() => deleteMember(m.id, displayName(m))}
                     disabled={updating === m.id}
                     className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-opacity cursor-pointer active:scale-95 hover:opacity-80"
-                    style={{ background: '#fef2f2', color: '#b91c1c', border: '1px solid #fecaca' }}
+                    style={{ background: '#fdebec', color: '#a8423d', border: '1px solid #f2c7c2' }}
                   >
                     <Trash2 size={13} />
                     拒否
@@ -331,7 +331,7 @@ export default function MembersManager({
                     onClick={() => approve(m.id)}
                     disabled={updating === m.id}
                     className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-opacity cursor-pointer active:scale-95 hover:opacity-80"
-                    style={{ background: '#f0fdf4', color: '#15803d', border: '1px solid #bbf7d0' }}
+                    style={{ background: '#edf3ec', color: '#2f5f44', border: '1px solid #c6ddc8' }}
                   >
                     {updating === m.id ? (
                       <span className="inline-block w-3 h-3 border-2 border-current border-t-transparent rounded-full animate-spin" />
@@ -484,7 +484,7 @@ export default function MembersManager({
                             ) : (
                               <span
                                 className="text-sm font-bold px-1.5 py-0.5 rounded"
-                                style={{ background: '#fef3c7', color: '#b45309', fontSize: '12px' }}
+                                style={{ background: '#fdecc8', color: '#8a5d22', fontSize: '12px' }}
                               >
                                 未設定
                               </span>
@@ -537,7 +537,7 @@ export default function MembersManager({
                           onClick={() => deleteMember(m.id, displayName(m))}
                           disabled={updating === m.id}
                           className="flex items-center gap-1 px-2 py-1.5 rounded-lg text-xs font-semibold transition-opacity cursor-pointer active:scale-95 hover:opacity-80"
-                          style={{ background: '#fef2f2', color: '#b91c1c', border: '1px solid #fecaca' }}
+                          style={{ background: '#fdebec', color: '#a8423d', border: '1px solid #f2c7c2' }}
                           title="退部処理"
                         >
                           <Trash2 size={12} />
@@ -754,10 +754,10 @@ export default function MembersManager({
           className="text-xs leading-relaxed px-4 py-3 rounded-xl animate-slide-up"
           style={{
             animationDelay: '0.2s',
-            background: 'color-mix(in srgb, #f59e0b 8%, var(--card-bg))',
+            background: 'color-mix(in srgb, #cb912f 8%, var(--card-bg))',
             color: 'var(--gray-600)',
-            border: '1px solid color-mix(in srgb, #f59e0b 30%, transparent)',
-            borderLeft: '3px solid #f59e0b',
+            border: '1px solid color-mix(in srgb, #cb912f 30%, transparent)',
+            borderLeft: '3px solid #cb912f',
             boxShadow: 'var(--shadow-xs)',
           }}
         >

@@ -115,7 +115,7 @@ export default function LeaderboardSection({ scores, currentUserId, isAdmin, war
                 className="card flex flex-col items-center gap-1.5 py-4 relative"
                 style={{ background: 'var(--club-blue)', boxShadow: 'none', border: 'none' }}
               >
-                <Crown size={14} color="#fbbf24" className="absolute top-2 right-2" />
+                <Crown size={14} color="#cfa243" className="absolute top-2 right-2" />
                 <span className="text-xl">🥇</span>
                 <p className="text-xl font-bold text-white" style={{ letterSpacing: '-0.03em' }}>
                   {top3[0].attendance_rate}%
@@ -161,7 +161,7 @@ export default function LeaderboardSection({ scores, currentUserId, isAdmin, war
                     {/* 順位 */}
                     <span
                       className="text-sm font-bold w-6 text-center shrink-0"
-                      style={{ color: i < 3 ? 'var(--club-amber, #f59e0b)' : 'var(--gray-300)' }}
+                      style={{ color: i < 3 ? 'var(--club-amber, #cb912f)' : 'var(--gray-300)' }}
                     >
                       {i + 1}
                     </span>
@@ -186,7 +186,7 @@ export default function LeaderboardSection({ scores, currentUserId, isAdmin, war
                           </span>
                         )}
                         {isAdmin && warnedSet.has(s.id) && (
-                          <AlertTriangle size={11} style={{ color: '#c2410c' }} />
+                          <AlertTriangle size={11} style={{ color: '#a85a28' }} />
                         )}
                       </div>
                       <div className="flex items-center gap-2">
@@ -204,12 +204,12 @@ export default function LeaderboardSection({ scores, currentUserId, isAdmin, war
                         </span>
                       </div>
                       <div className="flex gap-3 mt-0.5 flex-wrap">
-                        <span className="text-xs" style={{ color: '#16a34a' }}>出席 {s.present_count}</span>
-                        <span className="text-xs" style={{ color: '#d97706' }}>遅刻 {s.tardy_count}</span>
-                        <span className="text-xs" style={{ color: '#dc2626' }}>
+                        <span className="text-xs" style={{ color: '#448361' }}>出席 {s.present_count}</span>
+                        <span className="text-xs" style={{ color: '#cb912f' }}>遅刻 {s.tardy_count}</span>
+                        <span className="text-xs" style={{ color: '#d44c47' }}>
                           欠席 {s.absent_count}
                           {s.emergency_count > 0 && (
-                            <span style={{ color: '#9333ea' }}>（当日{s.emergency_count}）</span>
+                            <span style={{ color: '#9065b0' }}>（当日{s.emergency_count}）</span>
                           )}
                         </span>
                         <span className="text-xs ml-auto" style={{ color: 'var(--gray-400)' }}>/ {s.total_sessions}回</span>

@@ -119,7 +119,7 @@ export default function NavBar() {
     onClick?: () => void; href?: string; danger?: boolean
   }) {
     const labelColor = danger ? color : 'var(--gray-800)'
-    const hoverBg    = danger ? '#fef2f2' : 'var(--gray-50)'
+    const hoverBg    = danger ? '#fdebec' : 'var(--gray-50)'
     const cls = "w-full flex items-center gap-3 px-4 py-3.5 cursor-pointer transition-colors text-left"
     const inner = (
       <>
@@ -158,7 +158,7 @@ export default function NavBar() {
             <MenuItem
               href="/admin/suggestions" onClick={() => setShowGear(false)}
               icon={<Inbox size={17} />} label="【管理者】届いた意見を確認"
-              color="#b45309" bg="#fef3c7"
+              color="#8a5d22" bg="#fdecc8"
             />
             <Divider />
           </>
@@ -178,7 +178,7 @@ export default function NavBar() {
         <MenuItem
           onClick={() => { handleLogout(); setShowGear(false) }}
           icon={<LogOut size={17} />} label="ログアウト"
-          color="#dc2626" bg="#fef2f2" danger
+          color="#d44c47" bg="#fdebec" danger
         />
       </>
     )
@@ -192,7 +192,7 @@ export default function NavBar() {
         <MenuItem
           href="/rules" onClick={() => setShowMore(false)}
           icon={<BookOpen size={17} />} label="出欠ガイド"
-          color="#2563eb" bg="#eff6ff"
+          color="#337ea9" bg="#e7f3f8"
         />
 
         {/* 届いた意見を確認（admin のみ） */}
@@ -200,7 +200,7 @@ export default function NavBar() {
           <MenuItem
             href="/admin/suggestions" onClick={() => setShowMore(false)}
             icon={<Inbox size={17} />} label="【管理者】届いた意見を確認"
-            color="#b45309" bg="#fef3c7"
+            color="#8a5d22" bg="#fdecc8"
           />
         )}
 
@@ -210,7 +210,7 @@ export default function NavBar() {
         <MenuItem
           onClick={() => openSuggestion()}
           icon={<MessageSquarePlus size={17} />} label="ご意見箱（匿名）"
-          color="#16a34a" bg="#dcfce7"
+          color="#448361" bg="#dbeddb"
         />
 
         <Divider />
@@ -229,7 +229,7 @@ export default function NavBar() {
         <MenuItem
           onClick={() => { handleLogout(); setShowMore(false) }}
           icon={<LogOut size={17} />} label="ログアウト"
-          color="#dc2626" bg="#fef2f2" danger
+          color="#d44c47" bg="#fdebec" danger
         />
       </>
     )
@@ -427,7 +427,7 @@ export default function NavBar() {
           onClick={() => !submitting && setShowSuggestion(false)}
         >
           <div
-            className="w-full sm:max-w-md rounded-t-3xl sm:rounded-3xl flex flex-col"
+            className="w-full sm:max-w-md rounded-t-2xl sm:rounded-2xl flex flex-col"
             style={{
               background:    'var(--card-bg)',
               boxShadow:     'var(--shadow-lg)',
@@ -442,7 +442,7 @@ export default function NavBar() {
 
             <div className="flex items-center justify-between px-5 pt-4 pb-3">
               <div className="flex items-center gap-2.5">
-                <span className="w-9 h-9 rounded-xl flex items-center justify-center" style={{ background: '#dcfce7', color: '#16a34a' }}>
+                <span className="w-9 h-9 rounded-xl flex items-center justify-center" style={{ background: '#dbeddb', color: '#448361' }}>
                   <MessageSquarePlus size={18} />
                 </span>
                 <div>
@@ -465,7 +465,7 @@ export default function NavBar() {
 
             {submitted ? (
               <div className="flex flex-col items-center gap-3 py-12 px-6">
-                <CheckCircle2 size={40} style={{ color: '#16a34a' }} />
+                <CheckCircle2 size={40} style={{ color: '#448361' }} />
                 <p className="text-base font-bold" style={{ color: 'var(--gray-900)' }}>送信しました！</p>
                 <p className="text-sm text-center" style={{ color: 'var(--gray-500)' }}>ご意見ありがとうございます</p>
               </div>
@@ -493,7 +493,7 @@ export default function NavBar() {
                 </div>
                 {submitError && (
                   <div className="px-3 py-2 rounded-xl text-xs font-semibold"
-                    style={{ background: '#fee2e2', color: '#b91c1c' }}>
+                    style={{ background: '#ffe2dd', color: '#a8423d' }}>
                     送信に失敗しました。時間をおいて再度お試しください。
                   </div>
                 )}
@@ -510,7 +510,7 @@ export default function NavBar() {
                     disabled={submitting || !sugTitle.trim() || !sugBody.trim()}
                     className="flex-1 py-3 rounded-2xl text-sm font-semibold flex items-center justify-center gap-2"
                     style={{
-                      background: (!sugTitle.trim() || !sugBody.trim()) ? 'var(--gray-200)' : '#16a34a',
+                      background: (!sugTitle.trim() || !sugBody.trim()) ? 'var(--gray-200)' : '#448361',
                       color:      (!sugTitle.trim() || !sugBody.trim()) ? 'var(--gray-400)' : 'white',
                       opacity: submitting ? 0.7 : 1,
                     }}

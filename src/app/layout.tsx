@@ -32,8 +32,8 @@ export const viewport: Viewport = {
   viewportFit: 'cover',
   // システムデフォルト値。JS で localStorage から上書きするため media 付きで2つ出力する
   themeColor: [
-    { media: '(prefers-color-scheme: light)', color: '#f5f5f7' },
-    { media: '(prefers-color-scheme: dark)',  color: '#0f0f11' },
+    { media: '(prefers-color-scheme: light)', color: '#f7f6f3' },
+    { media: '(prefers-color-scheme: dark)',  color: '#191919' },
   ],
 }
 
@@ -42,9 +42,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     <html lang="ja" className={`${notoSansJP.variable} h-full`} suppressHydrationWarning>
       <head>
         {/* フラッシュなし＆theme-color即時適用 — viewport が出力した2つの meta を querySelectorAll で全更新 */}
-        <Script id="theme-init" strategy="beforeInteractive">{`(function(){var d=localStorage.getItem('theme')==='dark';if(d)document.documentElement.classList.add('dark');document.querySelectorAll('meta[name="theme-color"]').forEach(function(m){m.setAttribute('content',d?'#0f0f11':'#f5f5f7');});})()`}</Script>
+        <Script id="theme-init" strategy="beforeInteractive">{`(function(){var d=localStorage.getItem('theme')==='dark';if(d)document.documentElement.classList.add('dark');document.querySelectorAll('meta[name="theme-color"]').forEach(function(m){m.setAttribute('content',d?'#191919':'#f7f6f3');});})()`}</Script>
       </head>
-      <body className="min-h-full" style={{ fontFamily: 'var(--font-noto), sans-serif' }}>
+      <body className="min-h-full">
         <ThemeProvider>{children}</ThemeProvider>
       </body>
     </html>

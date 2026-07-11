@@ -21,7 +21,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     setIsDark(next)
     // viewport が出力した media 付き meta を全て更新（手動トグルで上書き）
     document.querySelectorAll('meta[name="theme-color"]').forEach(m =>
-      m.setAttribute('content', next ? '#0f0f11' : '#f5f5f7')
+      m.setAttribute('content', next ? '#191919' : '#f7f6f3')
     )
   }
 
