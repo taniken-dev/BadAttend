@@ -11,18 +11,18 @@
     color-scheme: light;
     --card-bg:   #ffffff;
 
-    /* --- ブランドカラー（インディゴ × アンバー） --- */
-    --club-blue:        #4338ca;
-    --club-blue-dark:   #312e81;
-    --club-blue-light:  #e0e7ff;
-    --club-blue-muted:  rgba(67, 56, 202, 0.08);
+    /* --- ブランドカラー（くすんだインディゴ × アンバー） --- */
+    --club-blue:        #5a55a3;
+    --club-blue-dark:   #4a4689;
+    --club-blue-light:  #e5e4f2;
+    --club-blue-muted:  rgba(90, 85, 163, 0.10);
 
     --club-amber:       #cb912f;
     --club-amber-light: #fdecc8;
 
     /* ランクカラー */
     --rank-s:   #7d569c;
-    --rank-a:   #4338ca;
+    --rank-a:   #5a55a3;
     --rank-b:   #38869e;
     --rank-c:   #448361;
     --rank-d:   #cb912f;
@@ -92,10 +92,10 @@
   --shadow-md: 0 4px 12px rgba(0,0,0,0.4);
   --shadow-lg: 0 16px 48px -8px rgba(0,0,0,0.5), 0 4px 12px rgba(0,0,0,0.4);
   /* ダーク背景ではインディゴを一段明るくしてコントラストを確保 */
-  --club-blue:       #5f57d9;
-  --club-blue-dark:  #4a42c4;
-  --club-blue-light: rgba(95, 87, 217, 0.22);
-  --club-blue-muted: rgba(95, 87, 217, 0.14);
+  --club-blue:       #7b76c2;
+  --club-blue-dark:  #67629f;
+  --club-blue-light: rgba(123, 118, 194, 0.24);
+  --club-blue-muted: rgba(123, 118, 194, 0.16);
   --ink:       #d4d3d0;
   --ink-muted: #9b9993;
   --hairline:  rgba(255,255,255,0.09);
@@ -354,7 +354,7 @@
     font-size: 32px;
   }
   .rank-s { background: rgba(125,86,156,0.14); color: var(--rank-s); }
-  .rank-a { background: rgba(67,56,202,0.12);  color: var(--rank-a); }
+  .rank-a { background: rgba(90,85,163,0.14);  color: var(--rank-a); }
   .rank-b { background: rgba(56,134,158,0.14); color: var(--rank-b); }
   .rank-c { background: rgba(68,131,97,0.14);  color: var(--rank-c); }
   .rank-d { background: rgba(203,145,47,0.14); color: var(--rank-d); }
@@ -479,7 +479,7 @@
 .dark .chip--active {
   background: var(--club-blue-muted);
   border-color: var(--club-blue);
-  color: #a5b4fc;
+  color: #b4b1d9;
 }
 
 .dark .glass-white {
