@@ -427,7 +427,7 @@ export default function NavBar() {
           onClick={() => !submitting && setShowSuggestion(false)}
         >
           <div
-            className="w-full sm:max-w-md rounded-t-3xl sm:rounded-3xl flex flex-col"
+            className="w-full sm:max-w-md rounded-t-2xl sm:rounded-2xl flex flex-col"
             style={{
               background:    'var(--card-bg)',
               boxShadow:     'var(--shadow-lg)',
