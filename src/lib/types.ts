@@ -125,6 +125,39 @@ export interface SelectionScore {
   selection_rank: SelectionRank
 }
 
+/**
+ * 月次KPI（v_monthly_kpi）
+ *
+ * era によって意味が変わる:
+ *   excel      … Excel運用期。attendance_rate 以外はすべて null（項目自体が存在しない）
+ *   transition … 2026-04。管理者が実績を手入力しただけで部員は自己登録していない
+ *   app        … 2026-05〜。部員の自己登録が始まった期間。ここが効果測定のベースライン
+ *
+ * has_data = false の月は実績が1件も確定していない（＝データなし）。
+ * 各 rate は「該当なし」を null で表す。0 と混同しないこと。
+ */
+export interface MonthlyKpi {
+  month: string
+  era: 'excel' | 'transition' | 'app'
+  sessions_total: number
+  sessions_confirmed: number
+  confirmed_ratio: number | null
+  has_data: boolean
+  records: number
+  present_count: number
+  tardy_count: number
+  emergency_count: number
+  unreported_count: number
+  reports_total: number
+  late_reports: number
+  excluded_records: number
+  attendance_rate: number | null
+  submission_rate: number | null
+  unreported_rate: number | null
+  emergency_rate: number | null
+  late_report_rate: number | null
+}
+
 export const ATTENDANCE_STATUS_LABELS: Record<AttendanceStatus, string> = {
   present: '出席',
   tardy: '遅刻',

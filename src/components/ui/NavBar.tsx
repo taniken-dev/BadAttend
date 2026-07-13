@@ -22,6 +22,7 @@ import {
   CheckCircle2,
   Settings,
   BookOpen,
+  TrendingUp,
 } from 'lucide-react'
 
 // モバイル ボトムタブ定義
@@ -152,9 +153,14 @@ export default function NavBar() {
   function GearMenuContent() {
     return (
       <>
-        {/* 届いた意見を確認（admin のみ） */}
+        {/* 運用KPI・届いた意見を確認（admin のみ） */}
         {isAdmin && (
           <>
+            <MenuItem
+              href="/analytics" onClick={() => setShowGear(false)}
+              icon={<TrendingUp size={17} />} label="【管理者】運用KPI"
+              color="#5a55a3" bg="#e5e4f2"
+            />
             <MenuItem
               href="/admin/suggestions" onClick={() => setShowGear(false)}
               icon={<Inbox size={17} />} label="【管理者】届いた意見を確認"
@@ -195,13 +201,20 @@ export default function NavBar() {
           color="#337ea9" bg="#e7f3f8"
         />
 
-        {/* 届いた意見を確認（admin のみ） */}
+        {/* 運用KPI・届いた意見を確認（admin のみ） */}
         {isAdmin && (
-          <MenuItem
-            href="/admin/suggestions" onClick={() => setShowMore(false)}
-            icon={<Inbox size={17} />} label="【管理者】届いた意見を確認"
-            color="#8a5d22" bg="#fdecc8"
-          />
+          <>
+            <MenuItem
+              href="/analytics" onClick={() => setShowMore(false)}
+              icon={<TrendingUp size={17} />} label="【管理者】運用KPI"
+              color="#5a55a3" bg="#e5e4f2"
+            />
+            <MenuItem
+              href="/admin/suggestions" onClick={() => setShowMore(false)}
+              icon={<Inbox size={17} />} label="【管理者】届いた意見を確認"
+              color="#8a5d22" bg="#fdecc8"
+            />
+          </>
         )}
 
         <Divider />
