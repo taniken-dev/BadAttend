@@ -20,6 +20,11 @@
     --club-amber:       #cb912f;
     --club-amber-light: #fdecc8;
 
+    /* KPI の増減表示。ライト(#ffffff)・ダーク(#202020) 両方の面で
+       コントラスト 3:1 以上・CVD 分離 ΔE 12.4 を満たすため両モード共通 */
+    --kpi-good:     #0ca30c;
+    --kpi-critical: #d03b3b;
+
     /* ランクカラー */
     --rank-s:   #7d569c;
     --rank-a:   #5a55a3;
