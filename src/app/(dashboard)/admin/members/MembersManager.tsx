@@ -182,6 +182,15 @@ export default function MembersManager({
     router.refresh()
   }
 
+  async function updateExecutive(id: string, isExecutive: boolean) {
+    setUpdating(id)
+    const { error } = await supabase.from('profiles').update({ is_executive: isExecutive }).eq('id', id)
+    setUpdating(null)
+    if (error) { showToast('更新失敗', false); return }
+    showToast(isExecutive ? '幹部に設定しました' : '幹部を解除しました', true)
+    router.refresh()
+  }
+
   async function updateJoinedAt(id: string, date: string) {
     setUpdating(id)
     const { error } = await supabase
@@ -510,6 +519,14 @@ export default function MembersManager({
                             自分
                           </span>
                         )}
+                        {m.is_executive && (
+                          <span
+                            className="text-xs px-1.5 py-0.5 rounded-full font-semibold"
+                            style={{ background: 'var(--club-blue-muted)', color: 'var(--club-blue)' }}
+                          >
+                            幹部
+                          </span>
+                        )}
                         <RoleIcon size={13} style={{ color: 'var(--gray-400)' }} />
                       </div>
                       <div className="flex items-center gap-1 text-xs mt-0.5" style={{ color: 'var(--gray-500)' }}>
@@ -665,6 +682,28 @@ export default function MembersManager({
                         className="input-field"
                         style={{ padding: '7px 10px', fontSize: '13px', maxWidth: '160px' }}
                       />
+                    </div>
+                  )}
+
+                  {/* 幹部フラグ（管理者のみ操作可・顧問以外） */}
+                  {m.role !== 'coach' && (
+                    <div className="mt-3">
+                      <label className="flex items-center gap-2 cursor-pointer select-none">
+                        <input
+                          type="checkbox"
+                          checked={m.is_executive ?? false}
+                          disabled={updating === m.id}
+                          onChange={e => updateExecutive(m.id, e.target.checked)}
+                          className="w-4 h-4 rounded cursor-pointer"
+                          style={{ accentColor: 'var(--club-blue)' }}
+                        />
+                        <span className="text-xs font-semibold" style={{ color: 'var(--gray-700)' }}>
+                          幹部
+                          <span className="ml-1 font-normal" style={{ color: 'var(--gray-400)' }}>
+                            （体育会の提出書類締切が表示されます）
+                          </span>
+                        </span>
+                      </label>
                     </div>
                   )}
                   </>

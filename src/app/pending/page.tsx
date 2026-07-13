@@ -22,7 +22,7 @@ export default function PendingPage() {
           <p className="text-sm mt-2 leading-relaxed" style={{ color: 'var(--gray-500)' }}>
             アカウントの承認を待っています。
             <br />
-            主将または幹部にお問い合わせください。
+            主将または管理者にお問い合わせください。
           </p>
         </div>
 

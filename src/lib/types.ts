@@ -24,6 +24,7 @@ export interface Profile {
   grade: number
   gender: string | null
   role: Role
+  is_executive: boolean
   skill_rank: SkillRank
   lockout_until: string | null
   avatar_url: string | null
@@ -79,6 +80,19 @@ export interface AttendanceRecord {
   arrival_time: string | null
   reported_at: string | null
   is_emergency: boolean
+  created_at: string
+}
+
+export interface DocumentDeadline {
+  id: string
+  source_key: string
+  deadline_at: string
+  document_name: string
+  is_active: boolean
+  submitted_at: string | null
+  submitted_by: string | null
+  first_seen_at: string
+  last_seen_at: string
   created_at: string
 }
 
