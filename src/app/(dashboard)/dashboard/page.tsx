@@ -19,8 +19,10 @@ import {
   type WarningFlag,
 } from '@/lib/types'
 import LeaderboardSection from './LeaderboardSection'
+import DeadlineSection, { type DeadlineWithSubmitter } from './DeadlineSection'
 import { HideFor } from '@/components/ui/RoleGate'
 import { getSessionUser, getMyProfile } from '@/lib/supabase/session'
+import { getTaiikukaiUrl } from '@/lib/taiikukai'
 
 export default async function DashboardPage() {
   const supabase = await createClient()
@@ -31,8 +33,12 @@ export default async function DashboardPage() {
 
   const isCoach = profile?.role === 'coach'
   const isAdmin = profile?.role === 'admin'
+  // 体育会 提出書類締切は管理者・幹部のみ閲覧可
+  const canSeeDeadlines = isAdmin || !!profile?.is_executive
 
   const today = new Intl.DateTimeFormat('sv-SE', { timeZone: 'Asia/Tokyo' }).format(new Date())
+  // 締切カードの表示下限（2週間前より古い締切は出さない）
+  const deadlineFloor = new Date(new Date(today + 'T00:00:00+09:00').getTime() - 14 * 86400000).toISOString()
 
   // 互いに依存しない初期クエリをまとめて並列実行（従来は直列 await だった）
   const [
@@ -40,6 +46,8 @@ export default async function DashboardPage() {
     { data: warningData },
     { data: todaySession },
     { data: recentRecords },
+    { data: deadlineData },
+    { data: scrapeStatus },
   ] = await Promise.all([
     // 全部員ランキング
     supabase.from('v_selection_scores').select('*').order('attendance_rate', { ascending: false }),
@@ -61,6 +69,18 @@ export default async function DashboardPage() {
           .lte('practice_sessions.session_date', today)
           .order('created_at', { ascending: false })
           .limit(10),
+    // 体育会 提出書類締切（管理者・幹部のみ。直近2週間より前のものは表示しない）
+    canSeeDeadlines
+      ? supabase
+          .from('document_deadlines')
+          .select('*, submitter:profiles!document_deadlines_submitted_by_fkey(full_name, display_name)')
+          .eq('is_active', true)
+          .gte('deadline_at', deadlineFloor)
+          .order('deadline_at')
+      : Promise.resolve({ data: null }),
+    canSeeDeadlines
+      ? supabase.from('deadline_scrape_status').select('last_success_at').eq('id', 1).maybeSingle()
+      : Promise.resolve({ data: null }),
   ])
 
   const warnedUserIds = ((warningData ?? []) as WarningFlag[]).map(w => w.user_id)
@@ -167,6 +187,16 @@ export default async function DashboardPage() {
           </div>
         )}
       </HideFor>
+
+      {/* 体育会 提出書類締切（管理者・幹部のみ） */}
+      {canSeeDeadlines && (
+        <DeadlineSection
+          deadlines={(deadlineData ?? []) as unknown as DeadlineWithSubmitter[]}
+          lastFetchedAt={(scrapeStatus as { last_success_at: string | null } | null)?.last_success_at ?? null}
+          currentUserId={user.id}
+          siteUrl={getTaiikukaiUrl()}
+        />
+      )}
 
       {/* 今日の練習セクション */}
       {todaySession ? (
