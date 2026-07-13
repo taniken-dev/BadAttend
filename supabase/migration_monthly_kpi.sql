@@ -17,7 +17,15 @@
 -- Supabase SQL Editor にて実行してください。
 -- ============================================================
 
-CREATE OR REPLACE VIEW public.v_monthly_kpi AS
+-- security_invoker = on:
+--   ビューを「呼び出したユーザーの権限」で実行する（既定は作成者権限＝SECURITY DEFINER相当で、
+--   Supabase の Security Advisor に "Security Definer View" として検出される）。
+--   本来 definer が必要になるのは RLS で行が絞られて集計が壊れる場合だが、
+--   このアプリでは承認済みメンバーが全 attendance_records / practice_sessions を
+--   SELECT できる（fix_member_attendance_visibility.sql）ため、管理者は invoker でも
+--   全行を読めて集計は正しく出る。よって definer にする必要がない。
+CREATE OR REPLACE VIEW public.v_monthly_kpi
+WITH (security_invoker = on) AS
 WITH target_sessions AS (
   SELECT
     ps.id,
@@ -158,9 +166,9 @@ SELECT
 
 FROM base
 -- 閲覧は管理者のみ。
--- ビューは既定でオーナー権限（security_invoker = off）で実行され、
--- 下位テーブルの RLS をバイパスする。これは集計を正しく出すために必要だが、
--- そのままでは全員に見えてしまうため、ここで admin 以外には 0 行返す。
+-- security_invoker = on なので下位テーブルの RLS はそのまま効くが、
+-- 承認済みメンバーなら誰でも全出欠レコードを読めてしまう（＝集計は見えてしまう）。
+-- そこでビュー自身に管理者チェックを置き、admin 以外には 0 行返す。
 --
 -- auth.uid() IS NULL は service role（cron・スクリプト）のみ。
 -- 未ログインの anon ロールは下の REVOKE でそもそもこのビューに触れず、

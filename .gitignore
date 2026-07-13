@@ -45,3 +45,6 @@ after-*.png
 
 # supabase
 supabase/.temp
+
+# 個人メモ（Git管理外）
+job-hunting-notes.md
