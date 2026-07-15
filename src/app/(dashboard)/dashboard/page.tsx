@@ -195,6 +195,7 @@ export default async function DashboardPage() {
           lastFetchedAt={(scrapeStatus as { last_success_at: string | null } | null)?.last_success_at ?? null}
           currentUserId={user.id}
           siteUrl={getTaiikukaiUrl()}
+          isAdmin={isAdmin}
         />
       )}
 
