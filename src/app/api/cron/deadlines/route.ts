@@ -112,6 +112,7 @@ export async function GET(request: NextRequest) {
       .upsert(
         scrape.deadlines.map(d => ({
           source_key: d.sourceKey,
+          source: 'scraped',
           deadline_at: d.deadlineAt,
           document_name: d.documentName,
           is_active: true,
@@ -124,12 +125,14 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'upsert failed', detail: upsertError.message }, { status: 500 })
     }
 
-    // サイトから消えた書類は非表示化（提出履歴ごと保持）
+    // サイトから消えた書類は非表示化（提出履歴ごと保持）。
+    // 手動登録（manual）はサイトに存在しないため対象外
     const currentKeys = new Set(scrape.deadlines.map(d => d.sourceKey))
     const { data: activeRows } = await admin
       .from('document_deadlines')
       .select('id, source_key')
       .eq('is_active', true)
+      .eq('source', 'scraped')
     const staleIds = (activeRows ?? [])
       .filter(r => !currentKeys.has(r.source_key))
       .map(r => r.id)

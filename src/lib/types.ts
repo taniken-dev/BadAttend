@@ -86,6 +86,7 @@ export interface AttendanceRecord {
 export interface DocumentDeadline {
   id: string
   source_key: string
+  source: 'scraped' | 'manual'
   deadline_at: string
   document_name: string
   is_active: boolean
