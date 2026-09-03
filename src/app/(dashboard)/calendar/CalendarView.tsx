@@ -663,7 +663,7 @@ export default function CalendarView() {
       <div className="animate-slide-up">
         <h1 className="text-2xl font-bold tracking-tight"
           style={{ color: 'var(--gray-900)', letterSpacing: '-0.04em' }}>
-          カレンダー
+          Calendar
         </h1>
         <p className="text-sm mt-1" style={{ color: 'var(--gray-500)' }}>
           練習日と出欠状況を確認できます
