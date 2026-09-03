@@ -43,8 +43,8 @@ next-env.d.ts
 # local screenshots
 after-*.png
 
-# supabase
-supabase/.temp
+# supabase (SQL / migrations は非公開リポジトリ BadAttend-db で管理)
+supabase/
 
 # 個人メモ（Git管理外）
 job-hunting-notes.md
