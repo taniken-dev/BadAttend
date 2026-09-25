@@ -1,6 +1,35 @@
-import { BookOpen, Clock, CalendarCheck, AlertTriangle, CheckCircle2, XCircle, Timer } from 'lucide-react'
+import { BookOpen, Clock, CalendarCheck, AlertTriangle, CheckCircle2, XCircle, Timer, UserX, Info } from 'lucide-react'
+import { createClient } from '@/lib/supabase/server'
+import {
+  LEGACY_POLICY, addDays, formatDateLabel, formatDeadlineLabel, getRegistrationWindow, toJstDateStr,
+  type RegistrationPolicy,
+} from '@/lib/registration'
 
-export default function RulesPage() {
+export default async function RulesPage() {
+  const supabase = await createClient()
+  const { data } = await supabase
+    .from('registration_policy')
+    .select('strict_start_date, biweekly_start')
+    .maybeSingle()
+  const policy = (data as RegistrationPolicy | null) ?? LEGACY_POLICY
+
+  const now = new Date()
+  const today = toJstDateStr(now)
+  const strict = !!policy.strict_start_date
+  // 2週間ごとの提出は biweekly_start の週の水曜の練習から
+  const biweeklyFirst = policy.biweekly_start ? addDays(policy.biweekly_start, 2) : null
+  const biweeklyActive = !!biweeklyFirst && today >= biweeklyFirst
+
+  // 次の締切（今後3週間の練習日のうち、締切がまだ来ていない最初のもの）
+  let nextDeadline: { closesAt: Date; firstDate: string } | null = null
+  if (strict) {
+    for (let i = 1; i <= 21 && !nextDeadline; i++) {
+      const d = addDays(today, i)
+      const w = getRegistrationWindow(d, policy)
+      if (w.mode !== 'legacy' && w.closesAt > now) nextDeadline = { closesAt: w.closesAt, firstDate: d }
+    }
+  }
+
   return (
     <div className="flex flex-col gap-6 py-2">
       {/* ヘッダー */}
@@ -23,28 +52,69 @@ export default function RulesPage() {
           <h2 className="text-base font-bold" style={{ color: 'var(--gray-900)' }}>登録できる期間</h2>
         </div>
 
+        {strict && policy.strict_start_date! > today && (
+          <Notice>{formatDateLabel(policy.strict_start_date!)}の練習から、このルールが適用されます。</Notice>
+        )}
+        {biweeklyFirst && !biweeklyActive && (
+          <Notice>{formatDateLabel(biweeklyFirst)}の練習から、2週間分をまとめて提出する方式に変わります。</Notice>
+        )}
+
         <div className="flex flex-col gap-3">
-          <PeriodRow
-            period="土〜火曜日"
-            desc="同じ週の水・木・金曜の練習を登録できます"
-            deadline="火曜 23:59 まで"
-          />
+          {!strict ? (
+            <>
+              <PeriodRow
+                period="土〜火曜日"
+                desc="同じ週の水・木・金曜の練習を登録できます"
+                deadline="火曜 23:59 まで"
+              />
+              <div style={{ height: '1px', background: 'var(--gray-100)' }} />
+              <PeriodRow
+                period="水・木・金曜日（当日）"
+                desc="当日分のみ登録できます"
+                deadline="その日の深夜 0:00 まで"
+              />
+            </>
+          ) : biweeklyActive ? (
+            <PeriodRow
+              period="2週間ごとの土〜火曜日"
+              desc="その後2週間分（水・木・金 × 2週）の練習をまとめて登録できます"
+              deadline="火曜 23:59 まで"
+            />
+          ) : (
+            <PeriodRow
+              period="土〜火曜日"
+              desc="その後の水・木・金曜（翌週火曜まで）の練習を登録できます"
+              deadline="火曜 23:59 まで"
+            />
+          )}
+          {strict && (
+            <>
+              <div style={{ height: '1px', background: 'var(--gray-100)' }} />
+              <PeriodRow
+                period="締切後〜練習当日"
+                desc="登録済みの人だけ、出席→遅刻・欠席、遅刻→欠席への変更ができます（欠席から出席・遅刻には戻せません）"
+                deadline="練習当日 23:59 まで"
+              />
+            </>
+          )}
           <div style={{ height: '1px', background: 'var(--gray-100)' }} />
           <PeriodRow
-            period="水・木・金曜日（当日）"
-            desc="当日分のみ登録できます"
-            deadline="その日の深夜 0:00 まで"
-          />
-          <div style={{ height: '1px', background: 'var(--gray-100)' }} />
-          <PeriodRow
-            period="合宿"
+            period="合宿・部会"
             desc="スケジュールが公開された後いつでも登録できます"
             deadline="制限なし"
           />
         </div>
 
+        {nextDeadline && (
+          <div className="rounded-xl px-4 py-3 text-sm font-semibold" style={{ background: '#e7f3f8', color: '#2d6d92' }}>
+            次の締切：{formatDeadlineLabel(nextDeadline.closesAt)}（{formatDateLabel(nextDeadline.firstDate)}からの練習）
+          </div>
+        )}
+
         <div className="rounded-xl px-4 py-3 text-sm" style={{ background: 'var(--gray-50)', color: 'var(--gray-600)' }}>
-          期間外は登録できません。提出忘れに注意してください。
+          {strict
+            ? '締切後・練習当日の新規登録はできません。締切までに提出しなかった人は練習に参加できず、無連絡欠席として記録されます。'
+            : '期間外は登録できません。提出忘れに注意してください。'}
         </div>
       </section>
 
@@ -87,6 +157,15 @@ export default function RulesPage() {
             label="当日欠席"
             desc="当日に欠席を報告した場合に自動で適用される。LINEグループに通知が送られる"
           />
+          {strict && (
+            <StatusRow
+              icon={<UserX size={15} />}
+              color="#64748b"
+              bg="#f1f5f9"
+              label="無連絡欠席"
+              desc="締切までに出欠を提出しなかった場合。実績の確定時に自動で記録される"
+            />
+          )}
         </div>
       </section>
 
@@ -127,6 +206,9 @@ export default function RulesPage() {
           <h2 className="text-base font-bold" style={{ color: '#d44c47' }}>当日の連絡について</h2>
         </div>
         <ul className="flex flex-col gap-2 text-sm" style={{ color: '#6d302c' }}>
+          {strict && (
+            <li className="flex gap-2"><span>・</span><span>当日は新規登録できませんが、登録済みの人は欠席・遅刻への変更ができます（急な体調不良なども必ず連絡してください）</span></li>
+          )}
           <li className="flex gap-2"><span>・</span><span>当日に欠席を登録すると「当日欠席」として記録され、LINEグループに自動通知されます</span></li>
           <li className="flex gap-2"><span>・</span><span>当日に遅刻を登録した場合も同様にLINEグループへ通知されます</span></li>
           <li className="flex gap-2"><span>・</span><span>体調不良の欠席は、次の練習への登録がロックされる場合があります</span></li>
@@ -194,6 +276,16 @@ function StatusRow({ icon, color, bg, label, desc }: {
         <span className="text-sm font-semibold" style={{ color: 'var(--gray-900)' }}>{label}</span>
         <p className="text-xs mt-0.5" style={{ color: 'var(--gray-500)' }}>{desc}</p>
       </div>
+    </div>
+  )
+}
+
+function Notice({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="flex items-start gap-2 rounded-xl px-4 py-3 text-sm font-semibold"
+      style={{ background: '#fdecc8', color: '#6e4a1a', border: '1px solid #e3c47f' }}>
+      <Info size={15} className="shrink-0 mt-0.5" />
+      <span>{children}</span>
     </div>
   )
 }

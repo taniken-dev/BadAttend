@@ -1,16 +1,20 @@
 'use client'
 
-import { useState, useEffect, useCallback, useMemo } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import {
   ChevronLeft, ChevronRight, ChevronDown, ChevronUp, MapPin, Clock, Users,
-  CheckCircle2, ClipboardCheck, AlertCircle, RotateCcw, Bell,
+  CheckCircle2, ClipboardCheck, AlertCircle, RotateCcw, Megaphone, Copy,
   Pencil, CalendarCheck, UserCheck, UserX,
   BookOpen, HeartPulse, User, HelpCircle, Dumbbell,
   ExternalLink, Search, X, LayoutGrid,
 } from 'lucide-react'
 import { useViewRole } from '@/contexts/ViewRoleContext'
-import { getWeeklyRegistrationInfo } from '@/lib/utils'
+import {
+  LEGACY_POLICY, addDays, buildDeadlineNotice, checkSelfChange, formatDeadlineLabel,
+  formatJstDateTime, getRegistrationWindow, getSessionRegistrationState, toJstDateStr,
+  type NoticeSession, type RegistrationPolicy,
+} from '@/lib/registration'
 import type { PracticeSession, AttendanceStatus, AbsenceReason, GoogleCalendarEvent } from '@/lib/types'
 
 type SessionMap = Record<string, PracticeSession[]>
@@ -42,6 +46,12 @@ type DayDetail = {
   attendance: EnrichedAttendance[]
   unsubmitted: MemberProfile[]
   totalApproved: number
+}
+
+// 締切のお知らせ文の材料（同じ締切を持つ通常練習ごとの未提出者）
+type WindowNotice = {
+  closesAt: Date
+  sessions: NoticeSession[]
 }
 
 const DOW = ['日', '月', '火', '水', '木', '金', '土']
@@ -126,6 +136,22 @@ function toDateStr(y: number, m: number, d: number) {
   return `${y}-${String(m + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`
 }
 
+// 締切・未提出者の扱いの対象になる通常練習か（合宿・部会・自主練を除く）
+function isPlainPractice(s: PracticeSession): boolean {
+  return !s.is_camp && !s.is_bukai && !s.is_voluntary
+}
+
+function displayName(p: { display_name: string | null; full_name: string }): string {
+  return p.display_name ?? p.full_name
+}
+
+// セッション日時点で出欠の対象になる部員（顧問・入部前を除く）
+function activeMembersOn(everyone: MemberProfile[], sessionDate: string): MemberProfile[] {
+  return everyone.filter(p =>
+    p.role !== 'coach' && (!p.joined_at || p.joined_at <= sessionDate)
+  )
+}
+
 // 部会・合宿・自主練などを先に、通常の部活を一番下に表示する
 function sortDaySessions(list: PracticeSession[]): PracticeSession[] {
   const rank = (s: PracticeSession) => (s.is_bukai || s.is_camp || s.is_voluntary) ? 0 : 1
@@ -135,7 +161,7 @@ function sortDaySessions(list: PracticeSession[]): PracticeSession[] {
 export default function CalendarView() {
   const supabase = createClient()
   const today    = new Date()
-  const todayStr = toDateStr(today.getFullYear(), today.getMonth(), today.getDate())
+  const todayStr = toJstDateStr(today)
 
   const { viewRole } = useViewRole()
   const [userId,       setUserId]      = useState<string | null>(null)
@@ -149,7 +175,8 @@ export default function CalendarView() {
 
   const isManagerOrAdmin  = viewRole === 'manager' || viewRole === 'admin'
   const canManageSessions = viewRole === 'manager' || viewRole === 'admin'
-  const availableDates = useMemo(() => getWeeklyRegistrationInfo().availableDates, [])
+  // 登録ルールの設定（取得できなければ旧ルール。読み込み中は null）
+  const [policy, setPolicy] = useState<RegistrationPolicy | null>(null)
 
   // details 配列内の特定セッションのみを更新する
   const updateDetail = (sessionId: string, updater: (d: DayDetail) => DayDetail) => {
@@ -170,6 +197,13 @@ export default function CalendarView() {
       if (!user) return
       setUserId(user.id)
     })
+    supabase
+      .from('registration_policy')
+      .select('strict_start_date, biweekly_start')
+      .maybeSingle()
+      .then(({ data, error }) => {
+        setPolicy(error || !data ? LEGACY_POLICY : (data as RegistrationPolicy))
+      })
   }, [])
 
   // ── 月のセッション一覧取得 + Google カレンダー自動同期 ────────
@@ -267,9 +301,7 @@ export default function CalendarView() {
         .map(r => ({ ...r, profile: profileMap[r.user_id] }))
 
       // 入部日が設定されている場合、セッション日より後に入部したメンバーを除外
-      const activeMembers = everyone.filter(p =>
-        p.role !== 'coach' && (!p.joined_at || p.joined_at <= session.session_date)
-      )
+      const activeMembers = activeMembersOn(everyone, session.session_date)
       const unsubmitted = activeMembers.filter(p => !submittedIds.has(p.id))
 
       return { session, attendance, unsubmitted, totalApproved: activeMembers.length }
@@ -347,11 +379,39 @@ export default function CalendarView() {
     }
   }, [userId, details])
 
-  // ── セッション全員の実績を一括確定 ──────────────────────
+  // ── セッション全員の実績を一括確定（通常練習の未提出者は無連絡欠席にする） ──
   const handleBulkConfirm = useCallback(async (sessionId: string) => {
     const detail = details.find(d => d.session.id === sessionId)
     if (!detail || !userId) return
     const sessionDate = detail.session.session_date
+
+    // 未提出者の行を無連絡欠席で作る。確定の直前に本人が提出していた場合に
+    // 上書きしないよう、既存の行は無視する（ignoreDuplicates）
+    let created: EnrichedAttendance[] = []
+    if (isPlainPractice(detail.session) && detail.unsubmitted.length > 0) {
+      const { data, error } = await supabase
+        .from('attendance_records')
+        .upsert(
+          detail.unsubmitted.map(p => ({
+            session_id:    sessionId,
+            user_id:       p.id,
+            status:        'absent_unreported',
+            result_status: 'absent_unreported',
+            verified_by:   userId,
+          })),
+          { onConflict: 'session_id,user_id', ignoreDuplicates: true },
+        )
+        .select('id, status, result_status, reason, reason_detail, arrival_time, user_id')
+      if (error) {
+        alert(`未提出者の登録に失敗しました：${error.message}`)
+        return
+      }
+      const profileById = new Map(detail.unsubmitted.map(p => [p.id, p]))
+      created = ((data ?? []) as AttendanceRow[])
+        .filter(r => profileById.has(r.user_id))
+        .map(r => ({ ...r, profile: profileById.get(r.user_id)! }))
+    }
+    const createdIds = new Set(created.map(r => r.user_id))
 
     // result_status が未設定の行を status で埋める
     const updates = detail.attendance
@@ -378,9 +438,13 @@ export default function CalendarView() {
     updateDetail(sessionId, prev => ({
       ...prev,
       session: { ...prev.session, is_results_confirmed: true },
-      attendance: prev.attendance.map(a =>
-        a.result_status ? a : { ...a, result_status: a.status }
-      ),
+      attendance: [
+        ...prev.attendance.map(a =>
+          a.result_status ? a : { ...a, result_status: a.status }
+        ),
+        ...created,
+      ],
+      unsubmitted: prev.unsubmitted.filter(p => !createdIds.has(p.id)),
     }))
     patchSession(sessionDate, sessionId, { is_results_confirmed: true })
   }, [details, userId])
@@ -604,10 +668,9 @@ export default function CalendarView() {
     if (dbError || !resultData) return (dbError as { message?: string })?.message ?? 'エラーが発生しました'
 
     // 当日欠席・当日遅刻・事前欠席変更はグループLINEに通知（変更時のみ・初回登録は除外）
-    const todayStr = new Date().toISOString().split('T')[0]
-    const isToday = !session.is_cancelled && !session.is_camp && session.session_date === todayStr
-    const isAdvanceAbsent = !!existingRecord && status === 'absent_normal' && !isToday &&
-      !availableDates.includes(session.session_date)
+    const regState = getSessionRegistrationState(new Date(), session.session_date, policy ?? LEGACY_POLICY)
+    const isToday = !session.is_cancelled && !session.is_camp && regState.isSameDay
+    const isAdvanceAbsent = !!existingRecord && status === 'absent_normal' && !isToday && !regState.isOpen
     if (existingRecord && (
       status === 'absent_emergency' ||
       (status === 'tardy' && isToday) ||
@@ -644,7 +707,59 @@ export default function CalendarView() {
     })
 
     return null
-  }, [details, userId, availableDates])
+  }, [details, userId, policy])
+
+  // ── 締切のお知らせ文の材料を集める（manager/admin専用） ─────────
+  // 同じ締切を持つ通常練習（休止を除く）ごとに未提出者を出す
+  const handleLoadNotice = useCallback(async (session: PracticeSession): Promise<WindowNotice | null> => {
+    const p = policy ?? LEGACY_POLICY
+    const win = getRegistrationWindow(session.session_date, p)
+    // 締切の翌日（水曜）から、週次なら1週間・隔週なら2週間分が同じ締切の対象
+    const from = toJstDateStr(win.closesAt)
+    const to   = addDays(from, win.mode === 'biweekly' ? 13 : 6)
+
+    const { data: sessionRows, error } = await supabase
+      .from('practice_sessions')
+      .select('id, session_date, start_time')
+      .gte('session_date', from)
+      .lte('session_date', to)
+      .eq('is_cancelled', false)
+      .eq('is_camp', false)
+      .eq('is_bukai', false)
+      .eq('is_voluntary', false)
+      .order('session_date')
+      .order('start_time', { nullsFirst: true })
+    if (error) return null
+    const targets = ((sessionRows ?? []) as { id: string; session_date: string }[])
+      .filter(s => getRegistrationWindow(s.session_date, p).closesAt.getTime() === win.closesAt.getTime())
+    if (targets.length === 0) return { closesAt: win.closesAt, sessions: [] }
+
+    const [{ data: atRows }, { data: allProfiles }] = await Promise.all([
+      supabase
+        .from('attendance_records')
+        .select('session_id, user_id')
+        .in('session_id', targets.map(s => s.id)),
+      supabase
+        .from('profiles')
+        .select('id, full_name, display_name, avatar_url, grade, role, joined_at')
+        .eq('is_approved', true)
+        .eq('is_active', true),
+    ])
+    const submitted = new Set(((atRows ?? []) as { session_id: string; user_id: string }[])
+      .map(r => `${r.session_id}:${r.user_id}`))
+    const everyone = ((allProfiles ?? []) as MemberProfile[])
+      .sort((a, b) => (b.grade ?? 0) - (a.grade ?? 0) || displayName(a).localeCompare(displayName(b), 'ja'))
+
+    return {
+      closesAt: win.closesAt,
+      sessions: targets.map(s => ({
+        date: s.session_date,
+        unsubmitted: activeMembersOn(everyone, s.session_date)
+          .filter(m => !submitted.has(`${s.id}:${m.id}`))
+          .map(m => ({ id: m.id, name: displayName(m) })),
+      })),
+    }
+  }, [policy])
 
   // ── カレンダーグリッド ────────────────────────────────────
   const y = current.getFullYear()
@@ -852,11 +967,11 @@ export default function CalendarView() {
             </div>
           ) : (
             details.map(d => {
-              const isPlainPractice = !d.session.is_bukai && !d.session.is_camp && !d.session.is_voluntary
-              const isCollapsed = isPlainPractice && collapsedSessionIds.has(d.session.id)
+              const isPlain = isPlainPractice(d.session)
+              const isCollapsed = isPlain && collapsedSessionIds.has(d.session.id)
               return (
                 <div key={d.session.id} className="card animate-slide-up" style={{ animationDelay: '0.04s' }}>
-                  {isPlainPractice && details.length > 1 && (
+                  {isPlain && details.length > 1 && (
                     <button
                       type="button"
                       onClick={() => setCollapsedSessionIds(prev => {
@@ -879,7 +994,7 @@ export default function CalendarView() {
                       canManageSessions={canManageSessions}
                       canSelfRegister={viewRole !== 'coach'}
                       userId={userId}
-                      availableDates={availableDates}
+                      policy={policy}
                       onSelfRegister={(status, reason, reasonDetail, arrivalTime) =>
                         handleSelfRegister(d.session.id, status, reason, reasonDetail, arrivalTime)
                       }
@@ -905,13 +1020,7 @@ export default function CalendarView() {
                       onToggleCancelled={(cancelled, reason) =>
                         handleToggleCancelled(d.session.id, cancelled, reason)
                       }
-                      onRemind={async (userIds) => {
-                        await fetch('/api/line/notify', {
-                          method: 'POST',
-                          headers: { 'Content-Type': 'application/json' },
-                          body: JSON.stringify({ userIds, sessionDate: d.session.session_date }),
-                        })
-                      }}
+                      onLoadNotice={() => handleLoadNotice(d.session)}
                     />
                   )}
                 </div>
@@ -983,7 +1092,7 @@ function DetailPanel({
   canManageSessions,
   canSelfRegister,
   userId,
-  availableDates,
+  policy,
   onSelfRegister,
   onVoluntaryToggle,
   onVoluntaryUpdateTime,
@@ -993,14 +1102,14 @@ function DetailPanel({
   onRevertAll,
   onRegisterForUnsubmitted,
   onToggleCancelled,
-  onRemind,
+  onLoadNotice,
 }: {
   detail: DayDetail
   isManagerOrAdmin: boolean
   canManageSessions: boolean
   canSelfRegister: boolean
   userId: string | null
-  availableDates: string[]
+  policy: RegistrationPolicy | null
   onSelfRegister: (status: AttendanceStatus, reason: AbsenceReason | null, detail: string, arrivalTime: string | null) => Promise<string | null>
   onVoluntaryToggle: (attending: boolean, arrivalTime?: string | null) => Promise<void>
   onVoluntaryUpdateTime: (arrivalTime: string | null) => Promise<void>
@@ -1010,7 +1119,7 @@ function DetailPanel({
   onRevertAll: () => Promise<void>
   onRegisterForUnsubmitted: (memberId: string, status: AttendanceStatus, profile: MemberProfile) => Promise<void>
   onToggleCancelled: (cancelled: boolean, reason: string | null) => Promise<void>
-  onRemind: (userIds: string[]) => Promise<void>
+  onLoadNotice: () => Promise<WindowNotice | null>
 }) {
   type SortKey = 'status' | 'grade' | 'name'
   const SORT_OPTIONS: { key: SortKey; label: string }[] = [
@@ -1050,8 +1159,12 @@ function DetailPanel({
   const [pendingStatus,           setPendingStatus]           = useState<Record<string, AttendanceStatus>>({})
   const [registeringId,           setRegisteringId]           = useState<string | null>(null)
   const [pendingUnsubmitted,      setPendingUnsubmitted]      = useState<Record<string, AttendanceStatus>>({})
-  const [reminding,               setReminding]               = useState(false)
-  const [remindResult,            setRemindResult]            = useState<{ sent: number } | 'error' | null>(null)
+  // 締切のお知らせ文（manager/admin）
+  const [noticeOpen,              setNoticeOpen]              = useState(false)
+  const [noticeLoading,           setNoticeLoading]           = useState(false)
+  const [notice,                  setNotice]                  = useState<WindowNotice | 'error' | null>(null)
+  const [noticeIncludeNames,      setNoticeIncludeNames]      = useState(false)
+  const [noticeCopied,            setNoticeCopied]            = useState(false)
   const [sortKeys,                setSortKeys]                = useState<SortKey[]>(['status'])
   // 出欠リスト（検索・出席者・未提出者）はデフォルトで折りたたんでおく
   const [attendanceExpanded,      setAttendanceExpanded]      = useState(false)
@@ -1095,40 +1208,69 @@ function DetailPanel({
     setVoluntaryIsEditing(false)
     // 出欠リスト（検索・出席者・未提出者）はデフォルトで折りたたんでおく
     setAttendanceExpanded(false)
+    setNoticeOpen(false)
+    setNotice(null)
+    setNoticeIncludeNames(false)
+    setNoticeCopied(false)
   }, [session.id])
 
   const myRecord = attendance.find(a => a.user_id === userId) ?? null
 
-  const nowForWindow = new Date()
-  const todayForWindow = `${nowForWindow.getFullYear()}-${String(nowForWindow.getMonth()+1).padStart(2,'0')}-${String(nowForWindow.getDate()).padStart(2,'0')}`
-  // 練習開始後も当日中は登録可能
-  const isSameDayWindow = !session.is_cancelled && !session.is_camp &&
-    session.session_date === todayForWindow
+  const now = new Date()
+  const todayForWindow = toJstDateStr(now)
+  const isPlain = isPlainPractice(session)
+  const regState = getSessionRegistrationState(now, session.session_date, policy ?? LEGACY_POLICY)
 
-  // 合宿・部会は公開後いつでも出欠登録可能、通常練習は登録可能期間 or 当日ウィンドウ
-  const canRegister = !session.is_cancelled &&
-    (session.is_camp || session.is_bukai || availableDates.includes(session.session_date) || isSameDayWindow)
+  // 当日（JST）。当日の欠席は absent_emergency として送る
+  const isSameDayWindow = !session.is_cancelled && !session.is_camp && regState.isSameDay
 
-  // 登録期間外でも既登録ユーザーが欠席へ変更できる（当日より前の未来セッション）
-  const canEarlyAbsent = !session.is_cancelled && !session.is_camp &&
-    !!myRecord && session.session_date > todayForWindow &&
-    !availableDates.includes(session.session_date)
+  // 合宿・部会は公開後いつでも出欠登録可能、通常練習は登録期間内（旧ルールは当日も可）
+  const canRegister = !!policy && !session.is_cancelled &&
+    (session.is_camp || session.is_bukai || regState.isOpen)
+
+  // 期間外でも、登録済みの人は欠席・遅刻へ変更できる
+  //   旧ルール: 当日より前の練習を欠席へ（事前欠席連絡）
+  //   新ルール: 練習当日まで「出席→遅刻」「出席・遅刻→欠席」（DB の registration_self_check と同じ判定）
+  const lateChangeOptions: AttendanceStatus[] =
+    !policy || canRegister || !myRecord || session.is_cancelled || !isPlain || regState.isPastSession
+      ? []
+      : regState.mode === 'legacy'
+      ? (session.session_date > todayForWindow ? ['absent_normal'] : [])
+      : (['tardy', 'absent_normal'] as AttendanceStatus[]).filter(v =>
+          checkSelfChange(
+            now, session.session_date, policy, myRecord.status,
+            v === 'absent_normal' && isSameDayWindow ? 'absent_emergency' : v,
+          ) === null
+        )
+  const isLateChange = lateChangeOptions.length > 0
+
+  // 登録も変更もできない通常練習（締切後・受付前など）の案内
+  const closedNotice: string | null =
+    !policy || canRegister || isLateChange || session.is_cancelled || !isPlain || regState.isPastSession
+      ? null
+      : regState.isBeforeOpen
+      ? `${formatJstDateTime(regState.opensAt)}から登録できます（締切 ${formatDeadlineLabel(regState.closesAt)}）`
+      : myRecord
+      ? '締切を過ぎたため変更できません'
+      : `締切（${formatDeadlineLabel(regState.closesAt)}）を過ぎたため登録できません`
 
   // 実績登録は練習開始時刻以降のみ（合宿・部会や時刻未設定セッションは常に可能）
   const sessionStartAt = session.start_time
-    ? new Date(`${session.session_date}T${session.start_time}`)
+    ? new Date(`${session.session_date}T${session.start_time}+09:00`)
     : null
   const canRegisterResult = session.is_camp || session.is_bukai ||
-    sessionStartAt === null || new Date() >= sessionStartAt
+    sessionStartAt === null || now >= sessionStartAt
   const selfIsAbsent = selfStatus === 'absent_normal'
   const selfIsTardy  = selfStatus === 'tardy'
 
   function openSelfForm(editing = false) {
     setSelfIsEditing(editing)
     setSelfError(null)
-    if (canEarlyAbsent && !canRegister) {
-      // 事前欠席モードは欠席固定でリセット
-      setSelfStatus('absent_normal')
+    if (isLateChange && myRecord && !lateChangeOptions.includes(
+      (myRecord.status === 'absent_emergency' ? 'absent_normal' : myRecord.status) as AttendanceStatus
+    )) {
+      // 締切後に元のステータスが選べない場合（出席など）は、選択肢が1つならそれを選んでおく
+      setSelfStatus(lateChangeOptions.length === 1 ? lateChangeOptions[0] : null)
       setSelfReason(null)
       setSelfDetail('')
       setSelfArrivalTime(null)
@@ -1210,6 +1352,8 @@ function DetailPanel({
 
   const allMembers = sortByKeys(sortMembers(attendance), sortKeys)
   const unconfirmedCount = attendance.filter(a => !a.result_status).length
+  // 一括確定で無連絡欠席にする未提出者（通常練習のみ）
+  const autoUnreportedCount = isPlain ? unsubmitted.length : 0
 
   function toggleSort(key: SortKey) {
     setSortKeys(prev =>
@@ -1252,18 +1396,28 @@ function DetailPanel({
     setReverting(false)
   }
 
-  async function handleRemind() {
-    const userIds = unsubmitted.map(p => p.id)
-    if (userIds.length === 0) return
-    setReminding(true)
-    setRemindResult(null)
+  async function handleOpenNotice() {
+    if (noticeOpen) { setNoticeOpen(false); return }
+    setNoticeOpen(true)
+    setNoticeCopied(false)
+    setNoticeLoading(true)
+    const result = await onLoadNotice()
+    setNotice(result ?? 'error')
+    setNoticeLoading(false)
+  }
+
+  const noticeKind: 'before' | 'after' | null =
+    notice && notice !== 'error' ? (now < notice.closesAt ? 'before' : 'after') : null
+  const noticeText = notice && notice !== 'error' && noticeKind
+    ? buildDeadlineNotice({ kind: noticeKind, sessions: notice.sessions, closesAt: notice.closesAt, includeNames: noticeIncludeNames })
+    : ''
+
+  async function handleCopyNotice() {
     try {
-      await onRemind(userIds)
-      setRemindResult({ sent: userIds.length })
+      await navigator.clipboard.writeText(noticeText)
+      setNoticeCopied(true)
     } catch {
-      setRemindResult('error')
-    } finally {
-      setReminding(false)
+      alert('コピーできませんでした。文章を長押しして選択・コピーしてください。')
     }
   }
 
@@ -1637,8 +1791,36 @@ function DetailPanel({
         </div>
       )}
 
-      {/* 自分の出欠連絡（顧問以外・登録可能期間 or 事前欠席変更）- 自主練以外・折りたたみ対象外で常時表示 */}
-      {!session.is_voluntary && canSelfRegister && userId && (canRegister || canEarlyAbsent) && (
+      {/* 登録も変更もできない通常練習の案内（締切後・受付前） */}
+      {!session.is_voluntary && canSelfRegister && userId && closedNotice && (
+        <div className="rounded-xl px-4 py-3.5 flex flex-col gap-3"
+          style={{ background: 'var(--gray-50)', border: '1.5px solid var(--gray-200)' }}>
+          <h3 className="text-sm font-bold" style={{ color: 'var(--gray-900)' }}>
+            あなたの出欠連絡
+          </h3>
+          {myRecord && (
+            <span className="self-start flex items-center gap-1 text-sm font-semibold px-2.5 py-1 rounded-full"
+              style={{ background: 'var(--gray-100)', color: 'var(--gray-600)' }}>
+              <CheckCircle2 size={13} />
+              {SELF_STATUS_LABELS[myRecord.status as AttendanceStatus] ?? myRecord.status}
+            </span>
+          )}
+          {!myRecord && (
+            <button type="button" disabled
+              className="flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-semibold"
+              style={{ background: 'var(--gray-200)', color: 'var(--gray-500)', cursor: 'not-allowed' }}>
+              <CalendarCheck size={15} /> 出欠を連絡する
+            </button>
+          )}
+          <div className="flex items-center gap-2 text-xs font-semibold" style={{ color: 'var(--gray-500)' }}>
+            <AlertCircle size={13} className="shrink-0" />
+            {closedNotice}
+          </div>
+        </div>
+      )}
+
+      {/* 自分の出欠連絡（顧問以外・登録可能期間 or 締切後の欠席・遅刻連絡）- 自主練以外・折りたたみ対象外で常時表示 */}
+      {!session.is_voluntary && canSelfRegister && userId && (canRegister || isLateChange) && (
         <div className="rounded-xl px-4 py-3.5 flex flex-col gap-3"
           style={{ background: 'color-mix(in srgb, var(--club-blue) 6%, var(--card-bg))', border: '1.5px solid color-mix(in srgb, var(--club-blue) 25%, white)' }}>
           <div className="flex items-center justify-between">
@@ -1691,17 +1873,19 @@ function DetailPanel({
                 </span>
               )}
 
-              {/* 事前欠席変更バナー（登録期間外・当日前） */}
-              {canEarlyAbsent && !canRegister && (
+              {/* 締切後の変更バナー（登録期間外） */}
+              {isLateChange && (
                 <div className="flex items-center gap-2 px-3 py-2.5 rounded-xl text-xs font-semibold"
                   style={{ background: '#fdecc8', color: '#6e4a1a', border: '1px solid #e3c47f' }}>
                   <AlertCircle size={13} className="shrink-0" />
-                  事前欠席連絡です。LINEグループに通知されます。
+                  {regState.mode === 'legacy'
+                    ? '事前欠席連絡です。LINEグループに通知されます。'
+                    : '締切後のため、欠席・遅刻の連絡のみ可能です。'}
                 </div>
               )}
 
-              {/* 登録期間外の当日登録リマインダー */}
-              {isSameDayWindow && !availableDates.includes(session.session_date) && (
+              {/* 旧ルールの当日登録リマインダー */}
+              {isSameDayWindow && regState.mode === 'legacy' && regState.isAfterDeadline && (
                 <div className="flex items-center gap-2 px-3 py-2.5 rounded-xl text-xs font-semibold"
                   style={{ background: '#e7f3f8', color: '#2d6d92', border: '1px solid #c4dced' }}>
                   <AlertCircle size={13} className="shrink-0" />
@@ -1728,9 +1912,9 @@ function DetailPanel({
               )}
 
               {/* ステータス選択 */}
-              <div className={`grid gap-2 ${canEarlyAbsent && !canRegister ? 'grid-cols-1' : 'grid-cols-3'}`}>
-                {(canEarlyAbsent && !canRegister
-                  ? MEMBER_STATUS_OPTIONS.filter(o => o.value === 'absent_normal')
+              <div className={`grid gap-2 ${isLateChange ? (lateChangeOptions.length === 1 ? 'grid-cols-1' : 'grid-cols-2') : 'grid-cols-3'}`}>
+                {(isLateChange
+                  ? MEMBER_STATUS_OPTIONS.filter(o => lateChangeOptions.includes(o.value))
                   : MEMBER_STATUS_OPTIONS
                 ).map(({ value, label, description, color, icon: Icon }) => {
                   const active = selfStatus === value
@@ -1865,7 +2049,7 @@ function DetailPanel({
       {attendanceExpanded && <>
 
       {/* マネージャー/管理者向け：一括確定ボタン（練習開始時刻以降のみ・自主練除く） */}
-      {!session.is_voluntary && isManagerOrAdmin && attendance.length > 0 && !session.is_cancelled && canRegisterResult && (
+      {!session.is_voluntary && isManagerOrAdmin && (attendance.length > 0 || autoUnreportedCount > 0) && !session.is_cancelled && canRegisterResult && (
         <div className="flex flex-col gap-2 px-3 py-3 rounded-xl"
           style={{ background: '#edf3ec', border: '1px solid #c6ddc8' }}>
           <div className="flex items-center gap-2">
@@ -1882,8 +2066,9 @@ function DetailPanel({
           </div>
           <p className="text-xs" style={{ color: '#2b5240' }}>
             各メンバーの実績ステータスを個別に変更するか、「一括確定」で予定をそのまま実績として保存できます。
+            {autoUnreportedCount > 0 && '未提出者は無連絡欠席として登録されます（後から個別に変更できます）。'}
           </p>
-          {unconfirmedCount > 0 && (
+          {(unconfirmedCount > 0 || autoUnreportedCount > 0) && (
             <button
               onClick={handleBulk}
               disabled={confirming}
@@ -1895,8 +2080,65 @@ function DetailPanel({
               ) : (
                 <CheckCircle2 size={14} />
               )}
-              {confirming ? '確定中...' : `予定をそのまま実績として一括確定（${unconfirmedCount}名）`}
+              {confirming
+                ? '確定中...'
+                : autoUnreportedCount > 0
+                ? `一括確定（予定${unconfirmedCount}名／未提出${autoUnreportedCount}名は無連絡欠席）`
+                : `予定をそのまま実績として一括確定（${unconfirmedCount}名）`}
             </button>
+          )}
+        </div>
+      )}
+
+      {/* マネージャー/管理者向け：締切のお知らせ文（LINEグループに手で貼る。個人へのLINE送信はしない） */}
+      {isManagerOrAdmin && isPlain && !session.is_cancelled && !regState.isPastSession && (
+        <div className="flex flex-col gap-2 px-3 py-3 rounded-xl"
+          style={{ background: '#e7f3f8', border: '1px solid #c4dced' }}>
+          <button type="button" onClick={handleOpenNotice}
+            className="flex items-center gap-2 w-full text-left cursor-pointer">
+            <Megaphone size={15} className="shrink-0" style={{ color: '#2d6d92' }} />
+            <span className="text-sm font-semibold" style={{ color: '#2d6d92' }}>締切のお知らせ文</span>
+            <span className="ml-auto text-xs" style={{ color: '#2d6d92' }}>LINEグループ貼り付け用</span>
+            {noticeOpen
+              ? <ChevronUp size={15} className="shrink-0" style={{ color: '#2d6d92' }} />
+              : <ChevronDown size={15} className="shrink-0" style={{ color: '#2d6d92' }} />}
+          </button>
+          {noticeOpen && (
+            noticeLoading ? (
+              <div className="flex items-center justify-center py-4">
+                <span className="w-5 h-5 border-2 rounded-full animate-spin"
+                  style={{ borderColor: 'var(--gray-200)', borderTopColor: '#2d6d92' }} />
+              </div>
+            ) : notice === 'error' || !notice ? (
+              <p className="text-xs font-semibold" style={{ color: '#a8423d' }}>
+                未提出者を取得できませんでした。時間を置いて再試行してください。
+              </p>
+            ) : (
+              <>
+                <p className="text-xs" style={{ color: '#2d6d92' }}>
+                  {noticeKind === 'before' ? '締切前のリマインド' : '締切後の告知'}
+                  （締切 {formatDeadlineLabel(notice.closesAt)}）
+                </p>
+                {noticeKind === 'before' && (
+                  <label className="flex items-center gap-2 text-xs cursor-pointer" style={{ color: 'var(--gray-700)' }}>
+                    <input type="checkbox" checked={noticeIncludeNames}
+                      onChange={e => { setNoticeIncludeNames(e.target.checked); setNoticeCopied(false) }} />
+                    未提出者の名前を入れる
+                  </label>
+                )}
+                <textarea readOnly value={noticeText}
+                  rows={Math.min(12, noticeText.split('\n').length + 1)}
+                  className="input-field resize-none"
+                  style={{ fontSize: '12px' }}
+                  onFocus={e => e.currentTarget.select()} />
+                <button type="button" onClick={handleCopyNotice}
+                  className="flex items-center justify-center gap-1.5 py-2 rounded-xl text-sm font-semibold transition-all cursor-pointer active:scale-95 hover:opacity-80"
+                  style={{ background: '#2d6d92', color: 'white' }}>
+                  {noticeCopied ? <CheckCircle2 size={14} /> : <Copy size={14} />}
+                  {noticeCopied ? 'コピーしました' : '文章をコピー'}
+                </button>
+              </>
+            )
           )}
         </div>
       )}
@@ -2142,32 +2384,7 @@ function DetailPanel({
               style={{ background: '#fdecc8', color: '#8a5d22' }}>
               未提出 {memberSearchLower ? `${filteredUnsubmitted.length} / ` : ''}{unsubmitted.length}名
             </span>
-            {isManagerOrAdmin && !session.is_cancelled && (
-              <button
-                onClick={handleRemind}
-                disabled={reminding}
-                className="ml-auto flex items-center gap-1.5 text-xs px-3 py-1 rounded-full font-semibold cursor-pointer transition-opacity hover:opacity-80 active:scale-95"
-                style={{ background: '#06c755', color: 'white', opacity: reminding ? 0.7 : 1 }}
-              >
-                {reminding
-                  ? <span className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                  : <Bell size={12} />}
-                {reminding ? '送信中...' : 'LINEでリマインド'}
-              </button>
-            )}
           </div>
-          {remindResult !== null && (
-            <div className="mb-2 px-3 py-2 rounded-xl text-xs font-semibold"
-              style={
-                remindResult === 'error'
-                  ? { background: '#ffe2dd', color: '#a8423d' }
-                  : { background: '#dbeddb', color: '#2f5f44' }
-              }>
-              {remindResult === 'error'
-                ? 'LINE送信に失敗しました'
-                : `${(remindResult as { sent: number }).sent}名にLINEを送信しました`}
-            </div>
-          )}
           <div className="flex flex-col gap-1.5">
             {[...filteredUnsubmitted]
               .sort((a, b) => {
