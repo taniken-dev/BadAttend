@@ -3,6 +3,7 @@ import { redirect } from 'next/navigation'
 import { Inbox, MessageSquarePlus } from 'lucide-react'
 import { getSessionUser, getMyProfile } from '@/lib/supabase/session'
 import { formatJst } from '@/lib/utils'
+import DeleteSuggestionButton from './DeleteSuggestionButton'
 
 interface Suggestion {
   id: string
@@ -65,9 +66,12 @@ export default async function AdminSuggestionsPage() {
                   <MessageSquarePlus size={16} />
                 </span>
                 <div className="flex-1 min-w-0">
-                  <p className="font-bold text-sm" style={{ color: 'var(--gray-900)' }}>
-                    {s.title}
-                  </p>
+                  <div className="flex items-start justify-between gap-2">
+                    <p className="font-bold text-sm" style={{ color: 'var(--gray-900)' }}>
+                      {s.title}
+                    </p>
+                    <DeleteSuggestionButton id={s.id} title={s.title} />
+                  </div>
                   <p
                     className="text-xs mt-0.5"
                     style={{ color: 'var(--gray-500)' }}
