@@ -2,6 +2,7 @@ import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import { Inbox, MessageSquarePlus } from 'lucide-react'
 import { getSessionUser, getMyProfile } from '@/lib/supabase/session'
+import { formatJst } from '@/lib/utils'
 
 interface Suggestion {
   id: string
@@ -71,7 +72,7 @@ export default async function AdminSuggestionsPage() {
                     className="text-xs mt-0.5"
                     style={{ color: 'var(--gray-500)' }}
                   >
-                    {new Date(s.created_at).toLocaleString('ja-JP', {
+                    {formatJst(s.created_at, {
                       year: 'numeric', month: 'short', day: 'numeric',
                       hour: '2-digit', minute: '2-digit',
                     })}

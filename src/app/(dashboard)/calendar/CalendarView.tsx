@@ -10,6 +10,7 @@ import {
   ExternalLink, Search, X, LayoutGrid,
 } from 'lucide-react'
 import { useViewRole } from '@/contexts/ViewRoleContext'
+import { formatJst } from '@/lib/utils'
 import {
   LEGACY_POLICY, addDays, buildDeadlineNotice, checkSelfChange, formatDeadlineLabel,
   formatJstDateTime, getRegistrationWindow, getSessionRegistrationState, toJstDateStr,
@@ -1597,15 +1598,15 @@ function DetailPanel({
       {/* 自主練習：参加意思表示UI（キャンセル時は折りたたみ外に置いて常時表示） */}
       {session.is_voluntary && !session.is_cancelled && canSelfRegister && userId && (() => {
         // 自主練習は必ず実時刻を持つ（時刻指定イベントのため）
-        const sessionStartAt  = new Date(`${session.session_date}T${session.start_time ?? '17:00:00'}`)
+        const sessionStartAt  = new Date(`${session.session_date}T${session.start_time ?? '17:00:00'}+09:00`)
         const cutoffAt        = new Date(sessionStartAt.getTime() - 60 * 60 * 1000)
         const isLocked        = new Date() >= cutoffAt
         const isAttending     = !!myRecord
-        const cutoffHHMM      = `${String(cutoffAt.getHours()).padStart(2, '0')}:${String(cutoffAt.getMinutes()).padStart(2, '0')}`
+        const cutoffHHMM      = formatJst(cutoffAt, { hour: '2-digit', minute: '2-digit' })
         const isToday         = session.session_date === todayForWindow
         const cutoffDateLabel = isToday
           ? `当日${cutoffHHMM}`
-          : `${cutoffAt.getMonth() + 1}/${cutoffAt.getDate()} ${cutoffHHMM}`
+          : `${formatJst(cutoffAt, { month: 'numeric', day: 'numeric' })} ${cutoffHHMM}`
 
         return (
           <div className="rounded-xl px-4 py-3.5 flex flex-col gap-3"
