@@ -4,16 +4,16 @@ import { useState, useEffect, useCallback } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import {
   ChevronLeft, ChevronRight, ChevronDown, ChevronUp, MapPin, Clock, Users,
-  CheckCircle2, ClipboardCheck, AlertCircle, RotateCcw, Bell,
+  CheckCircle2, ClipboardCheck, AlertCircle, RotateCcw, Megaphone, Copy,
   Pencil, CalendarCheck, UserCheck, UserX,
   BookOpen, HeartPulse, User, HelpCircle, Dumbbell,
   ExternalLink, Search, X, LayoutGrid,
 } from 'lucide-react'
 import { useViewRole } from '@/contexts/ViewRoleContext'
 import {
-  LEGACY_POLICY, checkSelfChange, formatDeadlineLabel,
-  formatJstDateTime, getSessionRegistrationState, toJstDateStr,
-  type RegistrationPolicy,
+  LEGACY_POLICY, addDays, buildDeadlineNotice, checkSelfChange, formatDeadlineLabel,
+  formatJstDateTime, getRegistrationWindow, getSessionRegistrationState, toJstDateStr,
+  type NoticeSession, type RegistrationPolicy,
 } from '@/lib/registration'
 import type { PracticeSession, AttendanceStatus, AbsenceReason, GoogleCalendarEvent } from '@/lib/types'
 
@@ -46,6 +46,12 @@ type DayDetail = {
   attendance: EnrichedAttendance[]
   unsubmitted: MemberProfile[]
   totalApproved: number
+}
+
+// 締切のお知らせ文の材料（同じ締切を持つ通常練習ごとの未提出者）
+type WindowNotice = {
+  closesAt: Date
+  sessions: NoticeSession[]
 }
 
 const DOW = ['日', '月', '火', '水', '木', '金', '土']
@@ -133,6 +139,17 @@ function toDateStr(y: number, m: number, d: number) {
 // 締切・未提出者の扱いの対象になる通常練習か（合宿・部会・自主練を除く）
 function isPlainPractice(s: PracticeSession): boolean {
   return !s.is_camp && !s.is_bukai && !s.is_voluntary
+}
+
+function displayName(p: { display_name: string | null; full_name: string }): string {
+  return p.display_name ?? p.full_name
+}
+
+// セッション日時点で出欠の対象になる部員（顧問・入部前を除く）
+function activeMembersOn(everyone: MemberProfile[], sessionDate: string): MemberProfile[] {
+  return everyone.filter(p =>
+    p.role !== 'coach' && (!p.joined_at || p.joined_at <= sessionDate)
+  )
 }
 
 // 部会・合宿・自主練などを先に、通常の部活を一番下に表示する
@@ -284,9 +301,7 @@ export default function CalendarView() {
         .map(r => ({ ...r, profile: profileMap[r.user_id] }))
 
       // 入部日が設定されている場合、セッション日より後に入部したメンバーを除外
-      const activeMembers = everyone.filter(p =>
-        p.role !== 'coach' && (!p.joined_at || p.joined_at <= session.session_date)
-      )
+      const activeMembers = activeMembersOn(everyone, session.session_date)
       const unsubmitted = activeMembers.filter(p => !submittedIds.has(p.id))
 
       return { session, attendance, unsubmitted, totalApproved: activeMembers.length }
@@ -694,6 +709,58 @@ export default function CalendarView() {
     return null
   }, [details, userId, policy])
 
+  // ── 締切のお知らせ文の材料を集める（manager/admin専用） ─────────
+  // 同じ締切を持つ通常練習（休止を除く）ごとに未提出者を出す
+  const handleLoadNotice = useCallback(async (session: PracticeSession): Promise<WindowNotice | null> => {
+    const p = policy ?? LEGACY_POLICY
+    const win = getRegistrationWindow(session.session_date, p)
+    // 締切の翌日（水曜）から、週次なら1週間・隔週なら2週間分が同じ締切の対象
+    const from = toJstDateStr(win.closesAt)
+    const to   = addDays(from, win.mode === 'biweekly' ? 13 : 6)
+
+    const { data: sessionRows, error } = await supabase
+      .from('practice_sessions')
+      .select('id, session_date, start_time')
+      .gte('session_date', from)
+      .lte('session_date', to)
+      .eq('is_cancelled', false)
+      .eq('is_camp', false)
+      .eq('is_bukai', false)
+      .eq('is_voluntary', false)
+      .order('session_date')
+      .order('start_time', { nullsFirst: true })
+    if (error) return null
+    const targets = ((sessionRows ?? []) as { id: string; session_date: string }[])
+      .filter(s => getRegistrationWindow(s.session_date, p).closesAt.getTime() === win.closesAt.getTime())
+    if (targets.length === 0) return { closesAt: win.closesAt, sessions: [] }
+
+    const [{ data: atRows }, { data: allProfiles }] = await Promise.all([
+      supabase
+        .from('attendance_records')
+        .select('session_id, user_id')
+        .in('session_id', targets.map(s => s.id)),
+      supabase
+        .from('profiles')
+        .select('id, full_name, display_name, avatar_url, grade, role, joined_at')
+        .eq('is_approved', true)
+        .eq('is_active', true),
+    ])
+    const submitted = new Set(((atRows ?? []) as { session_id: string; user_id: string }[])
+      .map(r => `${r.session_id}:${r.user_id}`))
+    const everyone = ((allProfiles ?? []) as MemberProfile[])
+      .sort((a, b) => (b.grade ?? 0) - (a.grade ?? 0) || displayName(a).localeCompare(displayName(b), 'ja'))
+
+    return {
+      closesAt: win.closesAt,
+      sessions: targets.map(s => ({
+        date: s.session_date,
+        unsubmitted: activeMembersOn(everyone, s.session_date)
+          .filter(m => !submitted.has(`${s.id}:${m.id}`))
+          .map(m => ({ id: m.id, name: displayName(m) })),
+      })),
+    }
+  }, [policy])
+
   // ── カレンダーグリッド ────────────────────────────────────
   const y = current.getFullYear()
   const m = current.getMonth()
@@ -953,13 +1020,7 @@ export default function CalendarView() {
                       onToggleCancelled={(cancelled, reason) =>
                         handleToggleCancelled(d.session.id, cancelled, reason)
                       }
-                      onRemind={async (userIds) => {
-                        await fetch('/api/line/notify', {
-                          method: 'POST',
-                          headers: { 'Content-Type': 'application/json' },
-                          body: JSON.stringify({ userIds, sessionDate: d.session.session_date }),
-                        })
-                      }}
+                      onLoadNotice={() => handleLoadNotice(d.session)}
                     />
                   )}
                 </div>
@@ -1041,7 +1102,7 @@ function DetailPanel({
   onRevertAll,
   onRegisterForUnsubmitted,
   onToggleCancelled,
-  onRemind,
+  onLoadNotice,
 }: {
   detail: DayDetail
   isManagerOrAdmin: boolean
@@ -1058,7 +1119,7 @@ function DetailPanel({
   onRevertAll: () => Promise<void>
   onRegisterForUnsubmitted: (memberId: string, status: AttendanceStatus, profile: MemberProfile) => Promise<void>
   onToggleCancelled: (cancelled: boolean, reason: string | null) => Promise<void>
-  onRemind: (userIds: string[]) => Promise<void>
+  onLoadNotice: () => Promise<WindowNotice | null>
 }) {
   type SortKey = 'status' | 'grade' | 'name'
   const SORT_OPTIONS: { key: SortKey; label: string }[] = [
@@ -1098,8 +1159,12 @@ function DetailPanel({
   const [pendingStatus,           setPendingStatus]           = useState<Record<string, AttendanceStatus>>({})
   const [registeringId,           setRegisteringId]           = useState<string | null>(null)
   const [pendingUnsubmitted,      setPendingUnsubmitted]      = useState<Record<string, AttendanceStatus>>({})
-  const [reminding,               setReminding]               = useState(false)
-  const [remindResult,            setRemindResult]            = useState<{ sent: number } | 'error' | null>(null)
+  // 締切のお知らせ文（manager/admin）
+  const [noticeOpen,              setNoticeOpen]              = useState(false)
+  const [noticeLoading,           setNoticeLoading]           = useState(false)
+  const [notice,                  setNotice]                  = useState<WindowNotice | 'error' | null>(null)
+  const [noticeIncludeNames,      setNoticeIncludeNames]      = useState(false)
+  const [noticeCopied,            setNoticeCopied]            = useState(false)
   const [sortKeys,                setSortKeys]                = useState<SortKey[]>(['status'])
   // 出欠リスト（検索・出席者・未提出者）はデフォルトで折りたたんでおく
   const [attendanceExpanded,      setAttendanceExpanded]      = useState(false)
@@ -1143,6 +1208,10 @@ function DetailPanel({
     setVoluntaryIsEditing(false)
     // 出欠リスト（検索・出席者・未提出者）はデフォルトで折りたたんでおく
     setAttendanceExpanded(false)
+    setNoticeOpen(false)
+    setNotice(null)
+    setNoticeIncludeNames(false)
+    setNoticeCopied(false)
   }, [session.id])
 
   const myRecord = attendance.find(a => a.user_id === userId) ?? null
@@ -1327,18 +1396,28 @@ function DetailPanel({
     setReverting(false)
   }
 
-  async function handleRemind() {
-    const userIds = unsubmitted.map(p => p.id)
-    if (userIds.length === 0) return
-    setReminding(true)
-    setRemindResult(null)
+  async function handleOpenNotice() {
+    if (noticeOpen) { setNoticeOpen(false); return }
+    setNoticeOpen(true)
+    setNoticeCopied(false)
+    setNoticeLoading(true)
+    const result = await onLoadNotice()
+    setNotice(result ?? 'error')
+    setNoticeLoading(false)
+  }
+
+  const noticeKind: 'before' | 'after' | null =
+    notice && notice !== 'error' ? (now < notice.closesAt ? 'before' : 'after') : null
+  const noticeText = notice && notice !== 'error' && noticeKind
+    ? buildDeadlineNotice({ kind: noticeKind, sessions: notice.sessions, closesAt: notice.closesAt, includeNames: noticeIncludeNames })
+    : ''
+
+  async function handleCopyNotice() {
     try {
-      await onRemind(userIds)
-      setRemindResult({ sent: userIds.length })
+      await navigator.clipboard.writeText(noticeText)
+      setNoticeCopied(true)
     } catch {
-      setRemindResult('error')
-    } finally {
-      setReminding(false)
+      alert('コピーできませんでした。文章を長押しして選択・コピーしてください。')
     }
   }
 
@@ -2011,6 +2090,59 @@ function DetailPanel({
         </div>
       )}
 
+      {/* マネージャー/管理者向け：締切のお知らせ文（LINEグループに手で貼る。個人へのLINE送信はしない） */}
+      {isManagerOrAdmin && isPlain && !session.is_cancelled && !regState.isPastSession && (
+        <div className="flex flex-col gap-2 px-3 py-3 rounded-xl"
+          style={{ background: '#e7f3f8', border: '1px solid #c4dced' }}>
+          <button type="button" onClick={handleOpenNotice}
+            className="flex items-center gap-2 w-full text-left cursor-pointer">
+            <Megaphone size={15} className="shrink-0" style={{ color: '#2d6d92' }} />
+            <span className="text-sm font-semibold" style={{ color: '#2d6d92' }}>締切のお知らせ文</span>
+            <span className="ml-auto text-xs" style={{ color: '#2d6d92' }}>LINEグループ貼り付け用</span>
+            {noticeOpen
+              ? <ChevronUp size={15} className="shrink-0" style={{ color: '#2d6d92' }} />
+              : <ChevronDown size={15} className="shrink-0" style={{ color: '#2d6d92' }} />}
+          </button>
+          {noticeOpen && (
+            noticeLoading ? (
+              <div className="flex items-center justify-center py-4">
+                <span className="w-5 h-5 border-2 rounded-full animate-spin"
+                  style={{ borderColor: 'var(--gray-200)', borderTopColor: '#2d6d92' }} />
+              </div>
+            ) : notice === 'error' || !notice ? (
+              <p className="text-xs font-semibold" style={{ color: '#a8423d' }}>
+                未提出者を取得できませんでした。時間を置いて再試行してください。
+              </p>
+            ) : (
+              <>
+                <p className="text-xs" style={{ color: '#2d6d92' }}>
+                  {noticeKind === 'before' ? '締切前のリマインド' : '締切後の告知'}
+                  （締切 {formatDeadlineLabel(notice.closesAt)}）
+                </p>
+                {noticeKind === 'before' && (
+                  <label className="flex items-center gap-2 text-xs cursor-pointer" style={{ color: 'var(--gray-700)' }}>
+                    <input type="checkbox" checked={noticeIncludeNames}
+                      onChange={e => { setNoticeIncludeNames(e.target.checked); setNoticeCopied(false) }} />
+                    未提出者の名前を入れる
+                  </label>
+                )}
+                <textarea readOnly value={noticeText}
+                  rows={Math.min(12, noticeText.split('\n').length + 1)}
+                  className="input-field resize-none"
+                  style={{ fontSize: '12px' }}
+                  onFocus={e => e.currentTarget.select()} />
+                <button type="button" onClick={handleCopyNotice}
+                  className="flex items-center justify-center gap-1.5 py-2 rounded-xl text-sm font-semibold transition-all cursor-pointer active:scale-95 hover:opacity-80"
+                  style={{ background: '#2d6d92', color: 'white' }}>
+                  {noticeCopied ? <CheckCircle2 size={14} /> : <Copy size={14} />}
+                  {noticeCopied ? 'コピーしました' : '文章をコピー'}
+                </button>
+              </>
+            )
+          )}
+        </div>
+      )}
+
       {/* 出欠リスト検索バー（自主練以外） */}
       {!session.is_voluntary && (attendance.length > 0 || unsubmitted.length > 0) && (
         <div className="relative">
@@ -2252,32 +2384,7 @@ function DetailPanel({
               style={{ background: '#fdecc8', color: '#8a5d22' }}>
               未提出 {memberSearchLower ? `${filteredUnsubmitted.length} / ` : ''}{unsubmitted.length}名
             </span>
-            {isManagerOrAdmin && !session.is_cancelled && (
-              <button
-                onClick={handleRemind}
-                disabled={reminding}
-                className="ml-auto flex items-center gap-1.5 text-xs px-3 py-1 rounded-full font-semibold cursor-pointer transition-opacity hover:opacity-80 active:scale-95"
-                style={{ background: '#06c755', color: 'white', opacity: reminding ? 0.7 : 1 }}
-              >
-                {reminding
-                  ? <span className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                  : <Bell size={12} />}
-                {reminding ? '送信中...' : 'LINEでリマインド'}
-              </button>
-            )}
           </div>
-          {remindResult !== null && (
-            <div className="mb-2 px-3 py-2 rounded-xl text-xs font-semibold"
-              style={
-                remindResult === 'error'
-                  ? { background: '#ffe2dd', color: '#a8423d' }
-                  : { background: '#dbeddb', color: '#2f5f44' }
-              }>
-              {remindResult === 'error'
-                ? 'LINE送信に失敗しました'
-                : `${(remindResult as { sent: number }).sent}名にLINEを送信しました`}
-            </div>
-          )}
           <div className="flex flex-col gap-1.5">
             {[...filteredUnsubmitted]
               .sort((a, b) => {
