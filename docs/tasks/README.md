@@ -42,6 +42,7 @@ BadAttend（バドミントン部の出欠管理アプリ）の改修を、機�
 - **Next.js は学習データと異なる破壊的変更がある。** コードを書く前に `node_modules/next/dist/docs/` の該当ガイドを読むこと（`AGENTS.md` 参照）。
 - **SQL・マイグレーションはこのリポジトリに置かない。** 別リポジトリ `c:\Users\kenta\project\BadAttend-db` のルート直下に `migration_xxx.sql` / `fix_xxx.sql` として作成する。既存のスキーマは同リポジトリの `schema.sql` と各 migration を読んで把握する。本番DBへの適用はユーザーが Supabase SQL Editor で行うので、ファイルの先頭に目的と実行手順をコメントで書く。
 - **作業は main から作業ブランチを切って行う**（main へのプッシュは Vercel の本番デプロイになる）。本番への反映は PR → main へのマージ（Create a merge commit）で行う。
+  - 例外：ドキュメントだけの変更（Markdown と `docs/` 配下のみ）は、PR を使わず main に直接入れてよい。
 - コミットは `/commit`（目的ごとに分けて複数コミット。プッシュしない）、プッシュは `/push`（テスト・ビルド・lint を確認してから作業ブランチをプッシュ）で行う。両方を続けて行う `/commitpush` もある。ユーザーの指示があるまでコミットしない。
 - DB の変更には、動作を確かめる SQL（`check_xxx.sql`）も用意する。部員として振る舞う確認は、JWT claims を偽装して `SET LOCAL ROLE authenticated` し、最後にエラーかROLLBACKで必ず取り消す（例：`check_registration_enforcement.sql`、`check_suggestions_delete.sql`）。
 - **時刻の扱い：保存は UTC のまま（`timestamptz`）。** JST に変換するのは次の2つだけにする。
