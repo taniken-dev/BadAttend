@@ -364,11 +364,39 @@ export default function CalendarView() {
     }
   }, [userId, details])
 
-  // ── セッション全員の実績を一括確定 ──────────────────────
+  // ── セッション全員の実績を一括確定（通常練習の未提出者は無連絡欠席にする） ──
   const handleBulkConfirm = useCallback(async (sessionId: string) => {
     const detail = details.find(d => d.session.id === sessionId)
     if (!detail || !userId) return
     const sessionDate = detail.session.session_date
+
+    // 未提出者の行を無連絡欠席で作る。確定の直前に本人が提出していた場合に
+    // 上書きしないよう、既存の行は無視する（ignoreDuplicates）
+    let created: EnrichedAttendance[] = []
+    if (isPlainPractice(detail.session) && detail.unsubmitted.length > 0) {
+      const { data, error } = await supabase
+        .from('attendance_records')
+        .upsert(
+          detail.unsubmitted.map(p => ({
+            session_id:    sessionId,
+            user_id:       p.id,
+            status:        'absent_unreported',
+            result_status: 'absent_unreported',
+            verified_by:   userId,
+          })),
+          { onConflict: 'session_id,user_id', ignoreDuplicates: true },
+        )
+        .select('id, status, result_status, reason, reason_detail, arrival_time, user_id')
+      if (error) {
+        alert(`未提出者の登録に失敗しました：${error.message}`)
+        return
+      }
+      const profileById = new Map(detail.unsubmitted.map(p => [p.id, p]))
+      created = ((data ?? []) as AttendanceRow[])
+        .filter(r => profileById.has(r.user_id))
+        .map(r => ({ ...r, profile: profileById.get(r.user_id)! }))
+    }
+    const createdIds = new Set(created.map(r => r.user_id))
 
     // result_status が未設定の行を status で埋める
     const updates = detail.attendance
@@ -395,9 +423,13 @@ export default function CalendarView() {
     updateDetail(sessionId, prev => ({
       ...prev,
       session: { ...prev.session, is_results_confirmed: true },
-      attendance: prev.attendance.map(a =>
-        a.result_status ? a : { ...a, result_status: a.status }
-      ),
+      attendance: [
+        ...prev.attendance.map(a =>
+          a.result_status ? a : { ...a, result_status: a.status }
+        ),
+        ...created,
+      ],
+      unsubmitted: prev.unsubmitted.filter(p => !createdIds.has(p.id)),
     }))
     patchSession(sessionDate, sessionId, { is_results_confirmed: true })
   }, [details, userId])
@@ -1251,6 +1283,8 @@ function DetailPanel({
 
   const allMembers = sortByKeys(sortMembers(attendance), sortKeys)
   const unconfirmedCount = attendance.filter(a => !a.result_status).length
+  // 一括確定で無連絡欠席にする未提出者（通常練習のみ）
+  const autoUnreportedCount = isPlain ? unsubmitted.length : 0
 
   function toggleSort(key: SortKey) {
     setSortKeys(prev =>
@@ -1936,7 +1970,7 @@ function DetailPanel({
       {attendanceExpanded && <>
 
       {/* マネージャー/管理者向け：一括確定ボタン（練習開始時刻以降のみ・自主練除く） */}
-      {!session.is_voluntary && isManagerOrAdmin && attendance.length > 0 && !session.is_cancelled && canRegisterResult && (
+      {!session.is_voluntary && isManagerOrAdmin && (attendance.length > 0 || autoUnreportedCount > 0) && !session.is_cancelled && canRegisterResult && (
         <div className="flex flex-col gap-2 px-3 py-3 rounded-xl"
           style={{ background: '#edf3ec', border: '1px solid #c6ddc8' }}>
           <div className="flex items-center gap-2">
@@ -1953,8 +1987,9 @@ function DetailPanel({
           </div>
           <p className="text-xs" style={{ color: '#2b5240' }}>
             各メンバーの実績ステータスを個別に変更するか、「一括確定」で予定をそのまま実績として保存できます。
+            {autoUnreportedCount > 0 && '未提出者は無連絡欠席として登録されます（後から個別に変更できます）。'}
           </p>
-          {unconfirmedCount > 0 && (
+          {(unconfirmedCount > 0 || autoUnreportedCount > 0) && (
             <button
               onClick={handleBulk}
               disabled={confirming}
@@ -1966,7 +2001,11 @@ function DetailPanel({
               ) : (
                 <CheckCircle2 size={14} />
               )}
-              {confirming ? '確定中...' : `予定をそのまま実績として一括確定（${unconfirmedCount}名）`}
+              {confirming
+                ? '確定中...'
+                : autoUnreportedCount > 0
+                ? `一括確定（予定${unconfirmedCount}名／未提出${autoUnreportedCount}名は無連絡欠席）`
+                : `予定をそのまま実績として一括確定（${unconfirmedCount}名）`}
             </button>
           )}
         </div>
