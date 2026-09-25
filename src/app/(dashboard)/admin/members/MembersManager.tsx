@@ -19,7 +19,7 @@ import {
   UserX,
 } from 'lucide-react'
 import type { Profile, SkillRank } from '@/lib/types'
-import { getSkillRankLabel } from '@/lib/utils'
+import { formatJst, getSkillRankLabel } from '@/lib/utils'
 import { useViewRole } from '@/contexts/ViewRoleContext'
 import type { OrphanUser } from './page'
 
@@ -257,7 +257,7 @@ export default function MembersManager({
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-bold" style={{ color: 'var(--gray-900)' }}>{o.full_name}</p>
                   <p className="text-xs" style={{ color: 'var(--gray-500)' }}>
-                    {new Date(o.created_at).toLocaleString('ja-JP', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                    {formatJst(o.created_at, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
                   </p>
                 </div>
                 <button
