@@ -10,4 +10,4 @@ SQL・マイグレーションファイルはこのリポジトリに置かな�
 
 - 新しいマイグレーション/修正SQLを作成するときは、必ず `../BadAttend-db`（`c:\Users\kenta\project\BadAttend-db`、別リポジトリ）のルート直下に作成する。このリポジトリの `supabase/` 配下には作らない（`.gitignore`で除外済み）。
 - `../BadAttend-db` が存在しない場合はユーザーに確認する。
-- コミット・プッシュは `/commitpush` スキルが両リポジトリ（BadAttend / BadAttend-db）を自動で処理する。
+- コミット・プッシュはスキルが両リポジトリ（BadAttend / BadAttend-db）を処理する。`/commit` は目的ごとに分けてコミットだけ行い、`/push` はテスト・ビルドを確認してから作業ブランチをプッシュする。`/commitpush` は両方を続けて行う。
