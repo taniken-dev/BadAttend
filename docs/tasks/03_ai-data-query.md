@@ -43,10 +43,15 @@ LLM が作る SQL は信用しない。プロンプトインジェクション�
    - `ai.members`：`id, name（display_name があればそれ、なければ full_name）, grade, gender, role, skill_rank_label（E〜S）, is_executive, is_active, is_approved, joined_at`
      - `avatar_url` や LINE 関連の情報は**出さない**。`student_id` を出すかはユーザーに確認する。
    - `ai.sessions`：`practice_sessions` の `id, session_date, start_time, end_time, location, is_cancelled, cancellation_reason, is_results_confirmed, is_camp, is_bukai, is_voluntary, courts`、および種別を1列にまとめた `session_type`（`'通常' | '部会' | '合宿' | '自主練'`）
-   - `ai.attendance`：`attendance_records` の `session_id, user_id, status, result_status, reason, reason_detail, arrival_time, reported_at, is_emergency`
+   - `ai.attendance`：`attendance_records` の `session_id, user_id, status, result_status, reason, reason_detail, arrival_time, reported_at`
+     - `is_emergency` は出さない。値を入れていたのは削除済みのポイント計算トリガーだけで、今の記録では常に false になる。当日欠席は `status = 'absent_emergency'` で判定する。
    - `ai.warning_flags`：`user_id, flag_type, severity, started_at, resolved_at`（`note` は出さない）
    - 既存の集計ビュー `v_selection_scores` と `v_monthly_kpi` の「ai 版」を用意するかどうかは、自分で判断する。すでに業務ルールが組み込まれているので、使えれば LLM の間違いが減る。
    - **`suggestions`（意見箱）は出さない。**
+   - **提出締切（タスク04で追加）**：「締切後に連絡した人」「未提出だった人」のような質問に答えられるよう、各練習の受付期間を ai スキーマで引けるようにするかを判断する。
+     - 設定は `public.registration_policy`（1行。`strict_start_date`・`biweekly_start`）、受付期間は `public.registration_window_for(session_date)` → `(mode, opens_at, closes_at)`。`closes_at` は排他的（この時刻以降が締切後）。
+     - 例：`ai.sessions` に `registration_opens_at` / `registration_closes_at` 列を足す。ビューの中の関数呼び出しは、ビューを使う側（`ai_reader`）の EXECUTE 権限で判定されるので、`ai_reader` に `registration_window_for` の EXECUTE を付けるか、値を計算済みの列として出す。
+     - 既存の `v_monthly_kpi` は、締切を「水〜金の練習と同じ週の火曜 23:59」として独自に計算している。毎週提出の間は `registration_window_for` と一致するが、2週間ごとの提出に切り替えるとずれる。
 2. **読み取り専用ロール `ai_reader`（NOLOGIN）を作る。** 与える権限は `USAGE ON SCHEMA ai` と、ai のビューへの `SELECT` だけ。`public` / `auth` / `storage` などのテーブルには権限を与えない。デフォルトで PUBLIC に付いている権限（`public` スキーマの USAGE、関数の EXECUTE など）で何ができてしまうかも確認し、必要なら REVOKE する。
 3. **実行関数 `ai.run_readonly_query(query text) RETURNS jsonb`**
    - `SECURITY DEFINER` にして、**関数の所有者を `ai_reader` にする。** SECURITY DEFINER の関数内では `SET ROLE` が使えないため、この方法で ai_reader の権限で実行させる。
@@ -85,6 +90,9 @@ LLM が作る SQL は信用しない。プロンプトインジェクション�
   - 各部員の入部日（`joined_at`）より前のセッションは数えない
   - 特に指定がなければ、退部者（`is_active = false`）と未承認者は除外する
   - 顧問（`coach`）は部員の集計に含めない
+  - 提出締切は、練習日より前の直近の火曜 23:59（2026-09-30 の練習から DB で強制）。締切後に本人ができるのは欠席・遅刻への変更だけ
+  - 「無連絡欠席」（`absent_unreported`）の意味が 2026-09-30 から変わる。それまでは主に当日に来なかった人だったが、以降は一括確定で**未提出者全員**が自動的に無連絡欠席になる。未提出の無連絡欠席は `status` も `absent_unreported`、ドタキャン（出席・遅刻で出して来なかった）は `status IN ('present','tardy') AND result_status = 'absent_unreported'` で区別できる
+  - 理由（`reason`）が入るのは欠席だけ。遅刻には理由がなく、参加予定時刻（`arrival_time`）だけが入る
   - 日付は JST。「8月から9月」のように年がない場合は、今日の日付（プロンプトに毎回入れる）から判断して直近の該当期間とする
 - 出力形式：Structured Output で `{ sql: string, explanation: string }` を返させる。`explanation` には、どういう条件で抽出したかを日本語1〜2文で書かせる（例：「2026/8/1〜9/30 の通常練習で、実績が出席・遅刻の回数が0回の在籍部員」）。
 - 集計の質問に答えられない場合や、データの変更を求められた場合は、`sql` を空にし、`explanation` で理由を返させる。
@@ -96,7 +104,7 @@ LLM が作る SQL は信用しない。プロンプトインジェクション�
   - 「8月から9月に出席0回の人」
   - 「今月の無連絡欠席が多い順に10人」
   - 「学年別の今年度の出席率」
-  - 「遅刻理由が授業の割合」
+  - 「欠席理由が授業の割合」（遅刻には理由がないので、遅刻の例にはしない）
 - 実行中はローディングを表示する。結果には次のものを出す。
   - 抽出条件の説明（`explanation`）
   - 結果の表（横スクロール対応。スマホでも見られるように）
@@ -125,6 +133,7 @@ Vercel にも設定が必要なので、ユーザーに依頼する。
 - [ ] 「先週の練習で当日欠席した人」
 - [ ] 「部会に一度も出ていない人」
 - [ ] 年がない期間指定や、「今月」「先月」が JST で正しく解釈される
+- [ ] 「今月の未提出者（無連絡欠席）の多い順」と「今月のドタキャンの多い順」が、区別して集計される
 
 ### 攻撃を防げるか（すべて、データが変わらない・見えないこと）
 
@@ -140,7 +149,7 @@ Vercel にも設定が必要なので、ユーザーに依頼する。
 ### その他
 
 - [ ] `ai_query_logs` にすべての実行（失敗を含む）が記録される
-- [ ] `npm run lint` / `npm run build` が通る
+- [ ] `npm test` / `npm run build` が通る（lint は変更したファイルでエラーが増えていないこと）。SQL の検査など、純粋関数に切り出せるロジックには `tests/` にテストを足す
 - [ ] ユーザーに SQL の実行、Vercel への環境変数の設定、課金の有効化について依頼する
 
 ## 実装前にユーザーに確認すること
@@ -153,4 +162,5 @@ Vercel にも設定が必要なので、ユーザーに依頼する。
 ## 他タスクとの関係
 
 - タスク02（ドタキャン処罰）で `attendance_records` や `warning_flags` の列を追加・変更した場合は、`ai` スキーマのビューとプロンプトのスキーマ説明を更新する。
+- タスク04（登録ルールの厳格化）はマージ済み。上の「提出締切」と業務ルールに反映してある。
 - 今後スキーマを変えるときは ai ビューも追従させる必要がある。その旨を `migration_ai_query.sql` の冒頭コメントに書いておく。
