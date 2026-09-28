@@ -308,6 +308,7 @@ def create_member_manual():
     )
     doc.add_paragraph()
     add_info_box(doc, '📱 スマホでは画面下のタブ（ホーム／カレンダー／メンバー／その他）、パソコンでは画面上のメニューで移動します。', 'E8F4FD', '2196F3')
+    add_video_box(doc, 'ホーム画面の見かた', 'member-home')
     add_page_break(doc)
 
     # ---- 4. ルール ----
@@ -653,6 +654,7 @@ def create_admin_manual():
     ])
     doc.add_paragraph()
     add_info_box(doc, '⚠️ 「拒否」は退部処理と同じ扱いです（確認ダイアログが出て、退部済みメンバーに移ります）。', 'FFF3E0', 'F57C00')
+    add_video_box(doc, '新入部員の承認', 'admin-approve')
     add_page_break(doc)
 
     # ---- 4. 部員情報 ----
@@ -683,6 +685,7 @@ def create_admin_manual():
         header_color='B71C1C'
     )
     doc.add_paragraph()
+    add_video_box(doc, '部員情報の設定', 'admin-members')
     add_page_break(doc)
 
     # ---- 5. 退部 ----
@@ -696,6 +699,7 @@ def create_admin_manual():
     ])
     doc.add_paragraph()
     add_info_box(doc, '⚠️ 自分自身と、他の管理者は退部処理できません（先に権限を変更してください）。アプリには元に戻す機能がないので、戻す場合はシステム担当に依頼してください。', 'FFF3E0', 'F57C00')
+    add_video_box(doc, '退部処理', 'admin-retire')
     add_page_break(doc)
 
     # ---- 6. 技術ランク ----
@@ -720,6 +724,7 @@ def create_admin_manual():
     ])
     doc.add_paragraph()
     add_info_box(doc, '🔒 送った人は記録されていません。内容から個人を特定しようとしないでください。', 'E8F5E9', '388E3C')
+    add_video_box(doc, '届いた意見の確認', 'admin-suggestions')
     add_page_break(doc)
 
     # ---- 8. 提出書類 ----
@@ -731,6 +736,7 @@ def create_admin_manual():
         ('提出済みにする', '提出したらチェックボタン（提出しました）をタップします。'),
     ])
     doc.add_paragraph()
+    add_video_box(doc, '提出書類の締切', 'admin-deadlines')
     add_page_break(doc)
 
     # ---- 9. KPI ----
