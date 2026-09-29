@@ -10,11 +10,12 @@ export async function POST(request: NextRequest) {
 
   const { data: profile } = await supabase
     .from('profiles')
-    .select('role')
+    .select('role, is_active')
     .eq('id', user.id)
     .single()
 
-  if (!profile || !['admin', 'manager'].includes(profile.role)) {
+  // 退部済みの manager は role が残っていても取り込み不可
+  if (!profile || !profile.is_active || !['admin', 'manager'].includes(profile.role)) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
 

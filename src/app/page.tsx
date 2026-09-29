@@ -11,9 +11,13 @@ export default async function RootPage() {
 
   const { data: profile } = await supabase
     .from('profiles')
-    .select('is_approved, role')
+    .select('is_approved, is_active, role')
     .eq('id', user.id)
     .single()
+
+  if (profile?.is_active === false) {
+    redirect('/retired')
+  }
 
   if (!profile?.is_approved) {
     redirect('/pending')

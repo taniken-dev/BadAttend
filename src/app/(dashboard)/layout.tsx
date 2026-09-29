@@ -14,6 +14,8 @@ export default async function DashboardLayout({
 
   const profile = await getMyProfile()
 
+  // 退部済み（is_active = false）は承認状態に関わらず案内画面へ
+  if (profile?.is_active === false) redirect('/retired')
   if (!profile?.is_approved) redirect('/pending')
 
   return (

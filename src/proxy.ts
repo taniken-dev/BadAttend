@@ -31,7 +31,7 @@ export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl
 
   // 未認証ユーザーが保護ルートへアクセスしたらログインへ
-  if (!user && (pathname.startsWith('/dashboard') || pathname.startsWith('/pending'))) {
+  if (!user && (pathname.startsWith('/dashboard') || pathname.startsWith('/pending') || pathname.startsWith('/retired'))) {
     return NextResponse.redirect(new URL('/login', request.url))
   }
 
