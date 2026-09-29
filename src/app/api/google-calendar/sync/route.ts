@@ -44,14 +44,14 @@ export async function GET(request: NextRequest) {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  // 承認済みユーザーのみ同期可（同期は service_role で DB 書き込み・
-  // Google API 呼び出しを行うため、未承認ユーザーには許可しない）
+  // 承認済みかつ在籍中のユーザーのみ同期可（同期は service_role で DB 書き込み・
+  // Google API 呼び出しを行うため、未承認・退部済みユーザーには許可しない）
   const { data: syncProfile } = await supabase
     .from('profiles')
-    .select('is_approved')
+    .select('is_approved, is_active')
     .eq('id', user.id)
     .single()
-  if (!syncProfile?.is_approved) {
+  if (!syncProfile?.is_approved || !syncProfile.is_active) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
 

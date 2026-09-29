@@ -10,13 +10,13 @@ export async function GET(request: NextRequest) {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  // 承認済みユーザーのみ閲覧可
+  // 承認済みかつ在籍中のユーザーのみ閲覧可
   const { data: eventsProfile } = await supabase
     .from('profiles')
-    .select('is_approved')
+    .select('is_approved, is_active')
     .eq('id', user.id)
     .single()
-  if (!eventsProfile?.is_approved) {
+  if (!eventsProfile?.is_approved || !eventsProfile.is_active) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
 

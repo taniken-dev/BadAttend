@@ -41,12 +41,12 @@ export async function POST(request: NextRequest) {
 
   const { data: profile } = await supabase
     .from('profiles')
-    .select('full_name, display_name, is_approved')
+    .select('full_name, display_name, is_approved, is_active')
     .eq('id', user.id)
     .single()
 
-  // 承認済み部員のみ通知可（未承認ユーザーによるグループスパムを防止）
-  if (!profile?.is_approved) {
+  // 承認済みかつ在籍中の部員のみ通知可（未承認・退部済みユーザーによるグループスパムを防止）
+  if (!profile?.is_approved || !profile.is_active) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
 
