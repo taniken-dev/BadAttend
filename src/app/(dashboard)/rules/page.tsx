@@ -228,9 +228,10 @@ export default async function RulesPage() {
           {[
             'カレンダー画面を開く',
             '対象の練習日をタップする',
+            '「出欠を連絡する」ボタンを押す',
             'ステータス（出席・遅刻・欠席）を選ぶ',
             '欠席・遅刻の場合は理由を選択し、必要に応じて詳細を入力する',
-            '「登録する」ボタンを押して完了',
+            '「連絡する」ボタンを押して完了',
           ].map((step, i) => (
             <li key={i} className="flex gap-3 items-start">
               <span
