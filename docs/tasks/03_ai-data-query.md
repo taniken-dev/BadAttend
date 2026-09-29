@@ -44,7 +44,7 @@ LLM が作る SQL は信用しない。プロンプトインジェクション�
      - `avatar_url` や LINE 関連の情報は**出さない**。`student_id` を出すかはユーザーに確認する。
    - `ai.sessions`：`practice_sessions` の `id, session_date, start_time, end_time, location, is_cancelled, cancellation_reason, is_results_confirmed, is_camp, is_bukai, is_voluntary, courts`、および種別を1列にまとめた `session_type`（`'通常' | '部会' | '合宿' | '自主練'`）
    - `ai.attendance`：`attendance_records` の `session_id, user_id, status, result_status, reason, reason_detail, arrival_time, reported_at`
-     - `is_emergency` は出さない。値を入れていたのは削除済みのポイント計算トリガーだけで、今の記録では常に false になる。当日欠席は `status = 'absent_emergency'` で判定する。
+     - `is_emergency` は出さない。値を入れるのはポイント計算のトリガー（本番に残っている）が「開始1時間前以降の欠席」を INSERT したときだけで、true の行はほとんどない。当日欠席は `status` / `result_status` の `absent_emergency` で判定する。
    - `ai.warning_flags`：`user_id, flag_type, severity, started_at, resolved_at`（`note` は出さない）
    - 既存の集計ビュー `v_selection_scores` と `v_monthly_kpi` の「ai 版」を用意するかどうかは、自分で判断する。すでに業務ルールが組み込まれているので、使えれば LLM の間違いが減る。
    - **`suggestions`（意見箱）は出さない。**
