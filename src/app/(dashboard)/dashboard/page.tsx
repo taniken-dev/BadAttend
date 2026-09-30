@@ -164,29 +164,10 @@ export default async function DashboardPage() {
     myTodayRecord = data
   }
 
-  const isLocked = profile?.lockout_until
-    ? new Date(profile.lockout_until) >= new Date()
-    : false
-
   const attendanceRate = myScore?.attendance_rate ?? 100
 
   return (
     <div className="flex flex-col gap-5">
-
-      {/* ロックアウトバナー（顧問には非表示） */}
-      <HideFor roles={['coach']}>
-        {isLocked && (
-          <div className="alert-warning animate-slide-up">
-            <Clock size={16} className="shrink-0 mt-0.5" />
-            <div>
-              <p className="font-semibold">休養推奨モード</p>
-              <p className="text-xs mt-0.5">
-                体調不良のため、本日の練習はロックされています。
-              </p>
-            </div>
-          </div>
-        )}
-      </HideFor>
 
       {/* 体育会 提出書類締切（管理者・幹部のみ） */}
       {canSeeDeadlines && (
@@ -469,7 +450,7 @@ export default async function DashboardPage() {
 
       {/* 出欠連絡ボタン（今日セッションあり・未連絡・coach以外） */}
       <HideFor roles={['coach']}>
-        {todaySession && !myTodayRecord && !isLocked && (
+        {todaySession && !myTodayRecord && (
           <Link
             href="/attendance"
             className="btn-primary animate-slide-up"
