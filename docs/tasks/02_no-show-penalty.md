@@ -17,10 +17,9 @@
   - 未提出者の行は `status` も `absent_unreported` なので、この条件に当たらない。「未提出の無連絡欠席」と「ドタキャン」はこの条件で区別できる。
   - UI 上では実績「無連絡欠席」を選べばこの状態になるが、専用のラベルや集計はまだない。
 - 使えそうな既存の仕組み：
-  - `profiles.lockout_until`：体調不良ロック。
-    - 値を入れているのはポイント計算のトリガー `calc_points_on_attendance`（`attendance_calc_points`、BEFORE INSERT）。`migration_remove_points.sql` は本番に適用されておらず、このトリガーは今も動いている。出欠を INSERT したときに `reason = 'sick'` なら練習日の翌日を入れる。UPDATE では動かない。
-    - アプリ側で参照しているのはホーム画面のバナーだけ（`dashboard/page.tsx:167` 付近）。`CalendarView.tsx` も DB のトリガーも、ロック中の出欠登録を止めていない。
-    - 案 B（参加制限）を選ぶ場合は、ロック中の登録を止める仕組みを足すことになる（登録の制限は、04 の `enforce_registration_window` と同じく DB トリガーで行うのがよい）。README と `/rules` の「体調不良ロック」の記述が実態と合っているかも確認し、ずれていればユーザーに伝える。
+  - `profiles.lockout_until`：もとは体調不良ロック用の列。Issue #8 でロックはしない方針になり、今は使っていない。
+    - `../BadAttend-db/fix_sick_lockout.sql` で、ポイント計算のトリガー `calc_points_on_attendance` が値を入れる処理を外した。アプリも参照していない。列と、admin 以外の変更を拒否するチェック（`prevent_privilege_escalation`）は残っている。
+    - 案 B（参加制限）を選ぶ場合は、この列を流用できる。ただしロック中の登録を止める仕組みは新しく作る必要がある（登録の制限は、04 の `enforce_registration_window` と同じく DB トリガーで行うのがよい）。
   - `warning_flags` テーブル：`flag_type = 'absent_no_report'` と `severity`（`warning` / `final_warning` / `expelled`）がある。ダッシュボードで未解決のフラグを読んでいる（`dashboard/page.tsx:56`）。README には「注意勧告フラグの管理」と書かれているが、管理UIの実装状況は要確認。RLS ポリシーが古いロール `captain` を参照している（`schema.sql:234`）ので、最新の fix ファイルでどう上書きされているかも確認する。
   - `v_selection_scores`：`unreported_count` を集計している。選考スコアへの影響は最新の定義（`../BadAttend-db/migration_fix_v_selection_scores_v5.sql` など）で確認する。
 
@@ -44,7 +43,7 @@
 | 案 | 内容 | 既存の仕組み |
 |----|------|------------|
 | A. 注意勧告の自動付与 | ドタキャンが確定したら `warning_flags` に `absent_no_report` を自動で付ける。回数に応じて `warning` → `final_warning` と段階を上げる | `warning_flags` |
-| B. 参加制限 | 体調不良ロックと同じように、次回（または N 回）の練習に出欠登録できなくする | `lockout_until` |
+| B. 参加制限 | 次回（または N 回）の練習に出欠登録できなくする | `lockout_until`（今は未使用の列） |
 | C. 選考スコアの減点 | ドタキャン1回ごとに、通常の無連絡欠席より重く減点する | `v_selection_scores` |
 | D. 通知 | 本人に LINE で個別通知する。管理者にもまとめて通知する | なし（個別送信の `src/app/api/line/notify` はタスク04で削除済み）。**LINE は無料枠が月200通で、「個人への送信はやめる」方針（タスク05）なので、選ぶ場合は通数への影響も一緒に伝える** |
 | E. 可視化のみ | 実績画面と管理画面にドタキャン回数を表示し、処罰は人が判断する | — |
