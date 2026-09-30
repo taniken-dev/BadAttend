@@ -183,7 +183,7 @@ export default async function RulesPage() {
           {[
             ['別練習・大会', '他の試合や練習参加'],
             ['授業', '講義・実験など'],
-            ['体調不良', '病気・怪我など。次回練習までロックがかかる場合あり'],
+            ['体調不良', '病気・怪我など。無理せず休養しましょう'],
             ['私用', '家庭の事情など'],
             ['その他', '上記に当てはまらない場合。詳細の入力が必要'],
           ].map(([label, desc]) => (
@@ -211,7 +211,7 @@ export default async function RulesPage() {
           )}
           <li className="flex gap-2"><span>・</span><span>当日に欠席を登録すると「当日欠席」として記録され、LINEグループに自動通知されます</span></li>
           <li className="flex gap-2"><span>・</span><span>当日に遅刻を登録した場合も同様にLINEグループへ通知されます</span></li>
-          <li className="flex gap-2"><span>・</span><span>体調不良の欠席は、次の練習への登録がロックされる場合があります</span></li>
+          <li className="flex gap-2"><span>・</span><span>体調不良のときは無理をせず、欠席に変更して休養してください</span></li>
         </ul>
       </section>
 
