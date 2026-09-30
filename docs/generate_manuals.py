@@ -353,7 +353,7 @@ def create_member_manual():
         ]
     )
     doc.add_paragraph()
-    add_info_box(doc, '🤒 急な体調不良でも、当日中に必ず「欠席」に変更して連絡しましょう。体調不良を理由にした欠席のあとは、ホームに「休養推奨モード」が表示されることがあります。無理せず休みましょう。', 'E8F5E9', '388E3C')
+    add_info_box(doc, '🤒 急な体調不良でも、当日中に必ず「欠席」に変更して連絡しましょう。無理せず休みましょう。', 'E8F5E9', '388E3C')
     add_video_box(doc, '変更と当日の欠席', 'member-change')
     add_page_break(doc)
 
