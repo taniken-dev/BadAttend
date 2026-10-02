@@ -43,7 +43,8 @@ LLM が作る SQL は信用しない。プロンプトインジェクション�
    - `ai.members`：`id, name（display_name があればそれ、なければ full_name）, grade, gender, role, skill_rank_label（E〜S）, is_executive, is_active, is_approved, joined_at`
      - `avatar_url` や LINE 関連の情報は**出さない**。`student_id` を出すかはユーザーに確認する。
    - `ai.sessions`：`practice_sessions` の `id, session_date, start_time, end_time, location, is_cancelled, cancellation_reason, is_results_confirmed, is_camp, is_bukai, is_voluntary, courts`、および種別を1列にまとめた `session_type`（`'通常' | '部会' | '合宿' | '自主練'`）
-   - `ai.attendance`：`attendance_records` の `session_id, user_id, status, result_status, reason, reason_detail, arrival_time, reported_at`
+   - `ai.attendance`：`attendance_records` の `session_id, user_id, status, result_status, reason, arrival_time, reported_at`
+     - **`reason_detail`（理由の記述）は #27 で、本人と manager/admin/coach だけが読めるようにした（列の権限を外し、`get_reason_details` で読む）。** 病名などが入るので、ai ビューに出すかはユーザーに確認する
      - `is_emergency` は出さない。値を入れるのはポイント計算のトリガー（本番に残っている）が「開始1時間前以降の欠席」を INSERT したときだけで、true の行はほとんどない。当日欠席は `status` / `result_status` の `absent_emergency` で判定する。
    - `ai.warning_flags`：`user_id, flag_type, severity, started_at, resolved_at`（`note` は出さない）
    - **イエロー・レッドカード（#23 で追加）**：`ai.cards`：`cards` の `user_id, color, source, session_id, period_month, seq, created_at, resolved_at`（手動イエローの `reason` は出すか判断する）
