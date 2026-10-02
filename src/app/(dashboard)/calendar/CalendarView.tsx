@@ -18,6 +18,8 @@ import {
   type NoticeSession, type RegistrationPolicy,
 } from '@/lib/registration'
 import type { PracticeSession, AttendanceStatus, AbsenceReason, GoogleCalendarEvent } from '@/lib/types'
+import { CARD_SELECT, type Card } from '@/lib/cards'
+import SessionYellow from '@/components/cards/SessionYellow'
 
 type SessionMap = Record<string, PracticeSession[]>
 
@@ -1218,6 +1220,21 @@ function DetailPanel({
 
   const myRecord = attendance.find(a => a.user_id === userId) ?? null
 
+  // この練習のイエロー（manager/admin の実績確定画面に出す）。出欠が変わるたびに読み直す
+  // （自動のイエローは DB のトリガーが付けるため）
+  const [sessionCards, setSessionCards] = useState<Card[]>([])
+  const [cardsVersion, setCardsVersion] = useState(0)
+  const showCards = isManagerOrAdmin && !session.is_voluntary && !session.is_cancelled
+  const reloadSessionCards = useCallback(() => setCardsVersion(v => v + 1), [])
+  useEffect(() => {
+    if (!showCards) return
+    let ignore = false
+    createClient().from('cards').select(CARD_SELECT).eq('session_id', session.id)
+      .then(({ data }) => { if (!ignore) setSessionCards((data ?? []) as Card[]) })
+    return () => { ignore = true }
+  }, [showCards, session.id, attendance, cardsVersion])
+  const cardsOf = (memberId: string) => sessionCards.filter(c => c.user_id === memberId)
+
   const now = new Date()
   const todayForWindow = toJstDateStr(now)
   const isPlain = isPlainPractice(session)
@@ -2277,6 +2294,12 @@ function DetailPanel({
                   {/* 欠席理由 */}
                   {a.reason && <ReasonBadge reason={a.reason} reasonDetail={a.reason_detail} />}
 
+                  {/* イエロー（自動の表示と、手動の付与） */}
+                  {showCards && (
+                    <SessionYellow userId={a.user_id} sessionId={session.id}
+                      cards={cardsOf(a.user_id)} onChanged={reloadSessionCards} />
+                  )}
+
                   {/* 予定 + 実績 */}
                   <div className="flex items-center gap-2 flex-wrap mt-1.5">
                     {/* 未確定: 予定バッジ（＋開始時刻以降なら実績プルダウン＋確定ボタン） */}
@@ -2445,6 +2468,14 @@ function DetailPanel({
                     <span className="text-xs" style={{ color: 'var(--gray-400)' }}>
                       {p.grade}年生
                     </span>
+
+                    {/* 手動イエロー（部会の欠席など） */}
+                    {showCards && (
+                      <div className="w-full order-last">
+                        <SessionYellow userId={p.id} sessionId={session.id}
+                          cards={cardsOf(p.id)} onChanged={reloadSessionCards} />
+                      </div>
+                    )}
 
                     {isManagerOrAdmin && canRegisterResult && !session.is_cancelled && (
                       <div className="flex items-center gap-1.5 ml-auto">
