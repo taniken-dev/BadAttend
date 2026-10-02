@@ -147,7 +147,7 @@ export default async function RulesPage() {
             color="#cb912f"
             bg="#fdecc8"
             label="遅刻"
-            desc="遅れて参加する。参加予定時刻を30分刻みで選び、理由と内容を入力する"
+            desc="遅れて参加する。参加予定時刻を30分刻みで選び（練習終了の1時間前まで。理由が授業なら30分前まで）、理由と内容を入力する"
           />
           <StatusRow
             icon={<XCircle size={15} />}
