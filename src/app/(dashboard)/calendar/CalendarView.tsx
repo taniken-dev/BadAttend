@@ -14,6 +14,7 @@ import { formatJst } from '@/lib/utils'
 import {
   LEGACY_POLICY, addDays, buildDeadlineNotice, checkSelfChange, formatDeadlineLabel,
   formatJstDateTime, getRegistrationWindow, getSessionRegistrationState, toJstDateStr,
+  absenceClosedMessage, absenceDeadline, isPastDeadline, tardyClosedMessage, tardyDeadline,
   type NoticeSession, type RegistrationPolicy,
 } from '@/lib/registration'
 import type { PracticeSession, AttendanceStatus, AbsenceReason, GoogleCalendarEvent } from '@/lib/types'
@@ -1245,6 +1246,15 @@ function DetailPanel({
         )
   const isLateChange = lateChangeOptions.length > 0
 
+  // 当日の連絡締切（通常練習のみ。DB の enforce_same_day_deadline と同じ判定）
+  //   出席・遅刻 → 欠席は練習開始まで、出席 → 遅刻（参加予定時刻の変更も）は練習終了の1時間前まで。
+  //   ボタンは隠さず、選んだときに警告を出して送信させない
+  const absenceCloseAt = isPlain && !session.is_cancelled ? absenceDeadline(session.session_date, session.start_time) : null
+  const tardyCloseAt   = isPlain && !session.is_cancelled ? tardyDeadline(session.session_date, session.end_time) : null
+  const registeredToAttend = !!myRecord && (myRecord.status === 'present' || myRecord.status === 'tardy')
+  const absenceClosed = registeredToAttend && isPastDeadline(now, absenceCloseAt)
+  const tardyClosed   = registeredToAttend && isPastDeadline(now, tardyCloseAt)
+
   // 登録も変更もできない通常練習（締切後・受付前など）の案内
   const closedNotice: string | null =
     !policy || canRegister || isLateChange || session.is_cancelled || !isPlain || regState.isPastSession
@@ -1313,6 +1323,8 @@ function DetailPanel({
   async function handleSelfSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()
     if (!selfStatus) return
+    if (selfIsAbsent && absenceClosed) return
+    if (selfIsTardy && tardyClosed) return
     if (selfIsAbsent && !selfReason) return
     if (selfIsAbsent && selfReason === 'other' && !selfDetail.trim()) return
     if (selfIsTardy && !selfArrivalTime) return
@@ -1895,7 +1907,7 @@ function DetailPanel({
               )}
 
               {/* 当日欠席バナー */}
-              {isSameDayWindow && selfIsAbsent && (
+              {isSameDayWindow && selfIsAbsent && !absenceClosed && (
                 <div className="flex items-center gap-2 px-3 py-2.5 rounded-xl text-xs font-semibold"
                   style={{ background: '#fdecc8', color: '#6e4a1a', border: '1px solid #e3c47f' }}>
                   <AlertCircle size={13} className="shrink-0" />
@@ -1904,7 +1916,7 @@ function DetailPanel({
               )}
 
               {/* 当日遅刻バナー */}
-              {isSameDayWindow && selfIsTardy && (
+              {isSameDayWindow && selfIsTardy && !tardyClosed && (
                 <div className="flex items-center gap-2 px-3 py-2.5 rounded-xl text-xs font-semibold"
                   style={{ background: '#fdecc8', color: '#6e4a1a', border: '1px solid #e3c47f' }}>
                   <AlertCircle size={13} className="shrink-0" />
@@ -1940,8 +1952,17 @@ function DetailPanel({
                 })}
               </div>
 
+              {/* 締切後に欠席・遅刻を選んだときの警告（送信できない） */}
+              {((selfIsAbsent && absenceClosed) || (selfIsTardy && tardyClosed)) && (
+                <div className="flex items-start gap-2 px-3 py-3 rounded-xl text-sm font-bold"
+                  style={{ background: '#ffe2dd', color: '#a8423d', border: '1.5px solid #e5a49e' }}>
+                  <AlertCircle size={16} className="shrink-0 mt-0.5" />
+                  {selfIsAbsent ? absenceClosedMessage(absenceCloseAt!) : tardyClosedMessage(tardyCloseAt!)}
+                </div>
+              )}
+
               {/* 欠席理由 */}
-              {selfIsAbsent && (
+              {selfIsAbsent && !absenceClosed && (
                 <>
                   <div className="flex flex-col gap-1.5">
                     {MEMBER_REASON_OPTIONS.map(({ value, label, icon: Icon, description, color }) => {
@@ -1980,7 +2001,7 @@ function DetailPanel({
               )}
 
               {/* 遅刻：何時から参加するか選択 */}
-              {selfIsTardy && (
+              {selfIsTardy && !tardyClosed && (
                 <div className="flex flex-col gap-1.5">
                   <p className="text-xs font-semibold" style={{ color: 'var(--gray-500)' }}>何時から参加予定？（必須）</p>
                   <div className="grid grid-cols-3 gap-2">
@@ -2009,6 +2030,8 @@ function DetailPanel({
                   className="btn-primary flex-1"
                   disabled={
                     !selfStatus
+                    || (selfIsAbsent && absenceClosed)
+                    || (selfIsTardy && tardyClosed)
                     || (selfIsAbsent && !selfReason)
                     || (selfIsAbsent && selfReason === 'other' && !selfDetail.trim())
                     || (selfIsTardy && !selfArrivalTime)
