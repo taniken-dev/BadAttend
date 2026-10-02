@@ -8,6 +8,7 @@ import {
   CalendarCheck,
   TrendingUp,
   UserCheck,
+  AlertTriangle,
 } from 'lucide-react'
 import { getAttendanceRateColor } from '@/lib/utils'
 import {
@@ -23,6 +24,7 @@ import DeadlineSection, { type DeadlineWithSubmitter } from './DeadlineSection'
 import { HideFor } from '@/components/ui/RoleGate'
 import { getSessionUser, getMyProfile } from '@/lib/supabase/session'
 import { getTaiikukaiUrl } from '@/lib/taiikukai'
+import { summarizeCards, type Card } from '@/lib/cards'
 
 export default async function DashboardPage() {
   const supabase = await createClient()
@@ -48,6 +50,7 @@ export default async function DashboardPage() {
     { data: recentRecords },
     { data: deadlineData },
     { data: scrapeStatus },
+    { data: myCards },
   ] = await Promise.all([
     // 全部員ランキング
     supabase.from('v_selection_scores').select('*').order('attendance_rate', { ascending: false }),
@@ -81,7 +84,13 @@ export default async function DashboardPage() {
     canSeeDeadlines
       ? supabase.from('deadline_scrape_status').select('last_success_at').eq('id', 1).maybeSingle()
       : Promise.resolve({ data: null }),
+    // 自分のイエロー・レッドカード（解除されていないもの。coach は不要）
+    isCoach
+      ? Promise.resolve({ data: null })
+      : supabase.from('cards').select('color, period_month, resolved_at').eq('user_id', user.id).is('resolved_at', null),
   ])
+  // 今の枚数だけを見せる（何枚でレッドかは出さない）
+  const myCardSummary = summarizeCards((myCards ?? []) as Pick<Card, 'color' | 'period_month' | 'resolved_at'>[], today)
 
   const warnedUserIds = ((warningData ?? []) as WarningFlag[]).map(w => w.user_id)
 
@@ -178,6 +187,38 @@ export default async function DashboardPage() {
           siteUrl={getTaiikukaiUrl()}
           isAdmin={isAdmin}
         />
+      )}
+
+      {/* 自分のイエロー・レッドカード（持っているときだけ） */}
+      {(myCardSummary.redActive > 0 || myCardSummary.yellowThisMonth > 0) && (
+        <HideFor roles={['coach']}>
+          <div className="card animate-slide-up flex flex-col gap-2"
+            style={{ border: `1.5px solid ${myCardSummary.redActive > 0 ? '#e5a49e' : '#e3c47f'}` }}>
+            <div className="flex items-center gap-2">
+              <AlertTriangle size={16} style={{ color: myCardSummary.redActive > 0 ? '#d44c47' : '#cb912f' }} />
+              <h2 className="text-sm font-bold" style={{ color: 'var(--gray-900)' }}>あなたのカード</h2>
+            </div>
+            <div className="flex gap-2 flex-wrap">
+              {myCardSummary.redActive > 0 && (
+                <span className="text-sm font-bold px-3 py-1 rounded-full" style={{ background: '#ffe2dd', color: '#a8423d' }}>
+                  レッドカード {myCardSummary.redActive}枚
+                </span>
+              )}
+              {myCardSummary.yellowThisMonth > 0 && (
+                <span className="text-sm font-bold px-3 py-1 rounded-full" style={{ background: '#fdecc8', color: '#8a5d22' }}>
+                  今月のイエロー {myCardSummary.yellowThisMonth}枚
+                </span>
+              )}
+            </div>
+            <p className="text-xs" style={{ color: 'var(--gray-500)' }}>
+              {myCardSummary.redActive > 0
+                ? 'レッドカードは退部の対象になります。理由を聞くため、幹部との面談があります。'
+                : 'イエローは月が変わると消えます。出欠は必ず締切までに提出してください。'}
+              {' '}
+              <Link href="/rules" className="underline">出欠ガイド</Link>
+            </p>
+          </div>
+        </HideFor>
       )}
 
       {/* 今日の練習セクション */}
