@@ -247,6 +247,7 @@ export default async function RulesPage() {
         <ul className="flex flex-col gap-2 text-sm" style={{ color: 'var(--gray-700)' }}>
           <li className="flex gap-2"><span>・</span><span>イエローは月が変わると消えます</span></li>
           <li className="flex gap-2"><span>・</span><span>イエローがたまるとレッドカードになります。レッドカードは退部の対象で、理由を聞くために幹部と面談します</span></li>
+          <li className="flex gap-2"><span>・</span><span>欠席を連絡していても、練習を長く休み続けるとレッドカードになります</span></li>
           <li className="flex gap-2"><span>・</span><span>今持っている枚数は、ホーム画面で確認できます</span></li>
         </ul>
       </section>
