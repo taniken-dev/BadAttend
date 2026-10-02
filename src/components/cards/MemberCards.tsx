@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import { createPortal } from 'react-dom'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { AlertTriangle, X, Plus } from 'lucide-react'
@@ -67,7 +68,8 @@ export default function MemberCards({
           </button>
         )}
       </div>
-      {open && (
+      {/* 一覧の各行は contain を指定しているので、ポップアップは body 直下に出す */}
+      {open && createPortal(
         <CardDetailModal
           userId={userId}
           name={name}
@@ -77,7 +79,8 @@ export default function MemberCards({
           canAddYellow={canAddYellow}
           canResolveRed={canResolveRed}
           onClose={() => setOpen(false)}
-        />
+        />,
+        document.body,
       )}
     </>
   )
