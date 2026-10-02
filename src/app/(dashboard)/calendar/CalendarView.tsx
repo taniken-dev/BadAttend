@@ -101,6 +101,19 @@ const MEMBER_STATUS_OPTIONS: {
   { value: 'absent_normal',label: '欠席', description: '理由を選択してください',   color: '#d44c47', icon: UserX },
 ]
 
+// 出欠記録の読み取り列。理由の記述（reason_detail）は本人と manager/admin/coach だけが読めるので、
+// 列としては読まず、get_reason_details（DB の関数）で読む
+const ATTENDANCE_COLS = 'id, status, result_status, reason, arrival_time, user_id'
+
+// 理由ごとの記述の例（記述は必須）
+const REASON_DETAIL_PLACEHOLDERS: Record<AbsenceReason, string> = {
+  practice: '例：〇〇大会に出場',
+  class:    '授業名を書いてください（例：線形代数）',
+  sick:     '例：発熱のため',
+  personal: '例：家族の用事',
+  other:    '理由を具体的に書いてください',
+}
+
 const MEMBER_REASON_OPTIONS: {
   value: AbsenceReason; label: string; icon: React.ElementType; description: string; color: string
 }[] = [
@@ -281,19 +294,25 @@ export default function CalendarView() {
     setLoading(true)
 
     const sessionIds = daySessions.map(s => s.id)
-    const [{ data: atRows }, { data: allProfiles }] = await Promise.all([
+    const [{ data: atRows }, { data: allProfiles }, { data: detailRows }] = await Promise.all([
       supabase
         .from('attendance_records')
-        .select('id, status, result_status, reason, reason_detail, arrival_time, user_id, session_id')
+        .select(`${ATTENDANCE_COLS}, session_id`)
         .in('session_id', sessionIds),
       supabase
         .from('profiles')
         .select('id, full_name, display_name, avatar_url, grade, role, joined_at')
         .eq('is_approved', true)
         .eq('is_active', true),
+      // 理由の記述（部員には自分の分だけ、manager/admin/coach には全員分が返る）
+      supabase.rpc('get_reason_details', { p_session_ids: sessionIds }),
     ])
 
-    const rows     = (atRows ?? []) as (AttendanceRow & { session_id: string })[]
+    const detailMap = new Map(
+      ((detailRows ?? []) as { id: string; reason_detail: string | null }[]).map(d => [d.id, d.reason_detail])
+    )
+    const rows = ((atRows ?? []) as (AttendanceRow & { session_id: string })[])
+      .map(r => ({ ...r, reason_detail: detailMap.get(r.id) ?? null }))
     const everyone = (allProfiles ?? []) as MemberProfile[]
     const profileMap = Object.fromEntries(everyone.map(p => [p.id, p]))
 
@@ -333,7 +352,7 @@ export default function CalendarView() {
         result_status: newStatus,
         verified_by: userId,
       }, { onConflict: 'session_id,user_id' })
-      .select('id, status, result_status, reason, reason_detail, user_id')
+      .select(ATTENDANCE_COLS)
       .single()
     if (error || !data) return
     updateDetail(sessionId, prev => ({
@@ -405,7 +424,7 @@ export default function CalendarView() {
           })),
           { onConflict: 'session_id,user_id', ignoreDuplicates: true },
         )
-        .select('id, status, result_status, reason, reason_detail, arrival_time, user_id')
+        .select(ATTENDANCE_COLS)
       if (error) {
         alert(`未提出者の登録に失敗しました：${error.message}`)
         return
@@ -579,7 +598,7 @@ export default function CalendarView() {
           arrival_time: arrivalTime ?? null,
           reported_at:  new Date().toISOString(),
         })
-        .select('id, status, result_status, reason, reason_detail, arrival_time, user_id')
+        .select(ATTENDANCE_COLS)
         .single()
       if (error || !data) {
         console.error('voluntary insert error:', error)
@@ -632,7 +651,8 @@ export default function CalendarView() {
     const detail = details.find(d => d.session.id === sessionId)
     if (!detail) return 'エラー'
     const session = detail.session
-    const needsReason = status === 'absent_normal' || status === 'absent_emergency'
+    // 欠席・遅刻は理由と記述が必須（DB の require_reason_detail でも確かめる）
+    const needsReason = status === 'absent_normal' || status === 'absent_emergency' || status === 'tardy'
     const existingRecord = detail.attendance.find(a => a.user_id === userId) ?? null
 
     const payload: Record<string, unknown> = {
@@ -655,7 +675,7 @@ export default function CalendarView() {
         .from('attendance_records')
         .update(payload)
         .eq('id', existingRecord.id)
-        .select('id, status, result_status, reason, reason_detail, arrival_time, user_id')
+        .select(ATTENDANCE_COLS)
         .single()
       resultData = data as AttendanceRow | null
       dbError = error
@@ -663,13 +683,14 @@ export default function CalendarView() {
       const { data, error } = await supabase
         .from('attendance_records')
         .insert(payload)
-        .select('id, status, result_status, reason, reason_detail, arrival_time, user_id')
+        .select(ATTENDANCE_COLS)
         .single()
       resultData = data as AttendanceRow | null
       dbError = error
     }
 
     if (dbError || !resultData) return (dbError as { message?: string })?.message ?? 'エラーが発生しました'
+    resultData = { ...resultData, reason_detail: (payload.reason_detail as string | null) ?? null }
 
     // 当日欠席・当日遅刻・事前欠席変更はグループLINEに通知（変更時のみ・初回登録は除外）
     const regState = getSessionRegistrationState(new Date(), session.session_date, policy ?? LEGACY_POLICY)
@@ -688,7 +709,6 @@ export default function CalendarView() {
           sessionId: session.id,
           status,
           reason,
-          reasonDetail,
           arrivalTime,
           isAdvance: isAdvanceAbsent,
         }),
@@ -1290,6 +1310,8 @@ function DetailPanel({
     sessionStartAt === null || now >= sessionStartAt
   const selfIsAbsent = selfStatus === 'absent_normal'
   const selfIsTardy  = selfStatus === 'tardy'
+  // 欠席・遅刻は理由の区分と記述が必須
+  const selfNeedsReason = selfIsAbsent || selfIsTardy
 
   function openSelfForm(editing = false) {
     setSelfIsEditing(editing)
@@ -1309,7 +1331,7 @@ function DetailPanel({
           : myRecord.status
       ) as AttendanceStatus
       setSelfStatus(displayStatus)
-      const needsReason = myRecord.status === 'absent_normal' || myRecord.status === 'absent_emergency'
+      const needsReason = myRecord.status === 'absent_normal' || myRecord.status === 'absent_emergency' || myRecord.status === 'tardy'
       setSelfReason(needsReason ? (myRecord.reason as AbsenceReason | null) : null)
       setSelfDetail(needsReason ? (myRecord.reason_detail ?? '') : '')
       // 遅刻の場合は arrival_time を復元（"HH:MM:SS" → "HH:MM"）
@@ -1342,8 +1364,7 @@ function DetailPanel({
     if (!selfStatus) return
     if (selfIsAbsent && absenceClosed) return
     if (selfIsTardy && tardyClosed) return
-    if (selfIsAbsent && !selfReason) return
-    if (selfIsAbsent && selfReason === 'other' && !selfDetail.trim()) return
+    if (selfNeedsReason && (!selfReason || !selfDetail.trim())) return
     if (selfIsTardy && !selfArrivalTime) return
     setSelfSubmitting(true)
     setSelfError(null)
@@ -1352,8 +1373,8 @@ function DetailPanel({
       isSameDayWindow && selfStatus === 'absent_normal' ? 'absent_emergency' : selfStatus
     const err = await onSelfRegister(
       actualStatus,
-      selfIsAbsent ? selfReason : null,
-      selfIsAbsent ? selfDetail : '',
+      selfNeedsReason ? selfReason : null,
+      selfNeedsReason ? selfDetail : '',
       selfIsTardy ? selfArrivalTime : null,
     )
     setSelfSubmitting(false)
@@ -1951,7 +1972,7 @@ function DetailPanel({
                     || (value === 'absent_normal' && (selfStatus === 'absent_emergency' || selfStatus === 'absent_unreported'))
                   return (
                     <button key={value} type="button"
-                      onClick={() => { setSelfStatus(value); if (value !== 'absent_normal') setSelfReason(null) }}
+                      onClick={() => { setSelfStatus(value); if (value === 'present') { setSelfReason(null); setSelfDetail('') } }}
                       className="flex flex-col items-center gap-2 py-3 rounded-xl text-center transition-all"
                       style={{
                         border: `1.5px solid ${active ? color : 'var(--gray-200)'}`,
@@ -1978,8 +1999,8 @@ function DetailPanel({
                 </div>
               )}
 
-              {/* 欠席理由 */}
-              {selfIsAbsent && !absenceClosed && (
+              {/* 欠席・遅刻の理由（区分と記述はどちらも必須） */}
+              {((selfIsAbsent && !absenceClosed) || (selfIsTardy && !tardyClosed)) && (
                 <>
                   <div className="flex flex-col gap-1.5">
                     {MEMBER_REASON_OPTIONS.map(({ value, label, icon: Icon, description, color }) => {
@@ -2011,9 +2032,12 @@ function DetailPanel({
                     onChange={e => setSelfDetail(e.target.value)}
                     className="input-field resize-none"
                     rows={2}
-                    placeholder={selfReason === 'other' ? '欠席理由を入力してください（必須）' : '補足事項があれば入力してください'}
+                    placeholder={selfReason ? `${REASON_DETAIL_PLACEHOLDERS[selfReason]}（必須）` : '理由を選んでから、内容を書いてください（必須）'}
                     maxLength={200}
                   />
+                  <p className="text-xs -mt-1" style={{ color: 'var(--gray-500)' }}>
+                    書いた内容は、本人とマネージャー・管理者・顧問だけが見られます
+                  </p>
                 </>
               )}
 
@@ -2049,8 +2073,7 @@ function DetailPanel({
                     !selfStatus
                     || (selfIsAbsent && absenceClosed)
                     || (selfIsTardy && tardyClosed)
-                    || (selfIsAbsent && !selfReason)
-                    || (selfIsAbsent && selfReason === 'other' && !selfDetail.trim())
+                    || (selfNeedsReason && (!selfReason || !selfDetail.trim()))
                     || (selfIsTardy && !selfArrivalTime)
                     || selfSubmitting
                   }
