@@ -16,6 +16,12 @@ import {
   formatDeadlineLabel,
   registrationErrorMessage,
   toJstDateStr,
+  sessionTimeAt,
+  absenceDeadline,
+  tardyDeadline,
+  isPastDeadline,
+  absenceClosedMessage,
+  tardyClosedMessage,
 } from '../src/lib/registration.ts'
 import { LEGACY, PHASE1, J, WINDOW_CASES, SELF_CASES } from './registration-cases.mjs'
 
@@ -74,6 +80,39 @@ for (const tz of TIMEZONES) {
       it('10/1 1:00 JST には 9/30 の練習は過去', () => {
         const s = getSessionRegistrationState(new Date(J('2026-10-01T01:00:00')), '2026-09-30', PHASE1)
         assert.equal(s.isPastSession, true)
+      })
+    })
+
+    describe('当日の連絡締切', () => {
+      it('練習日の時刻は JST（秒なしも可）', () => {
+        assert.equal(sessionTimeAt('2026-09-30', '17:00:00').toISOString(), new Date(J('2026-09-30T17:00:00')).toISOString())
+        assert.equal(sessionTimeAt('2026-09-30', '09:30').toISOString(), new Date(J('2026-09-30T09:30:00')).toISOString())
+      })
+
+      const CASES = [
+        // [ラベル, 現在時刻（JST）, 練習日, 開始, 終了, 欠席の締切後か, 遅刻の締切後か]
+        ['開始1分前',                    '2026-09-30T16:59:00', '2026-09-30', '17:00:00', '20:00:00', false, false],
+        ['開始ちょうど',                 '2026-09-30T17:00:00', '2026-09-30', '17:00:00', '20:00:00', true,  false],
+        ['終了1時間前の1分前（18:59）',  '2026-09-30T18:59:00', '2026-09-30', '17:00:00', '20:00:00', true,  false],
+        ['終了1時間前ちょうど（19:00）', '2026-09-30T19:00:00', '2026-09-30', '17:00:00', '20:00:00', true,  true],
+        ['前日の夜',                     '2026-09-29T23:00:00', '2026-09-30', '17:00:00', '20:00:00', false, false],
+        ['午前の練習・JST 8:59（UTC だと前日）', '2026-09-30T08:59:00', '2026-09-30', '09:00:00', '12:00:00', false, false],
+        ['午前の練習・10:59',            '2026-09-30T10:59:00', '2026-09-30', '09:00:00', '12:00:00', true,  false],
+        ['午前の練習・11:00',            '2026-09-30T11:00:00', '2026-09-30', '09:00:00', '12:00:00', true,  true],
+        ['翌日',                         '2026-10-01T00:00:00', '2026-09-30', '17:00:00', '20:00:00', true,  true],
+        ['時刻が未設定',                 '2026-09-30T23:00:00', '2026-09-30', null,       null,       false, false],
+      ]
+      for (const [label, now, date, start, end, absenceClosed, tardyClosed] of CASES) {
+        it(label, () => {
+          const t = new Date(J(now))
+          assert.equal(isPastDeadline(t, absenceDeadline(date, start)), absenceClosed)
+          assert.equal(isPastDeadline(t, tardyDeadline(date, end)), tardyClosed)
+        })
+      }
+
+      it('表示文の前半は DB のエラーメッセージと同じ', () => {
+        assert.ok(absenceClosedMessage(absenceDeadline('2026-09-30', '17:00:00')).startsWith('練習開始（17:00）を過ぎたため、欠席の連絡はできません'))
+        assert.ok(tardyClosedMessage(tardyDeadline('2026-09-30', '20:00:00')).startsWith('練習終了の1時間前（19:00）を過ぎたため、遅刻の連絡はできません'))
       })
     })
 

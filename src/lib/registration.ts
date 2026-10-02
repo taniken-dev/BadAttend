@@ -165,6 +165,53 @@ export function checkSelfChange(
   return 'status_not_allowed'
 }
 
+// ── 当日の連絡締切（通常練習で、開始・終了時刻があるときだけ） ─────────
+//
+// DB の public.enforce_same_day_deadline（BadAttend-db/migration_same_day_deadline.sql）と同じ判定。
+//   - 出席・遅刻 → 欠席: 練習開始まで
+//   - 出席 → 遅刻、遅刻の参加予定時刻の変更: 練習終了の1時間前まで
+// 時刻が未設定なら締切はない（今までどおり練習日の 23:59 まで）。
+
+const HOUR_MS = 60 * 60 * 1000
+
+/** 練習日の 'HH:MM[:SS]'（JST）の時刻 */
+export function sessionTimeAt(sessionDate: string, time: string): Date {
+  const [h, m, s = 0] = time.split(':').map(Number)
+  return new Date(jstMidnight(toDayNumber(sessionDate)).getTime() + ((h * 60 + m) * 60 + s) * 1000)
+}
+
+/** 欠席の連絡の締切（= 練習開始）。開始時刻が未設定なら null */
+export function absenceDeadline(sessionDate: string, startTime: string | null): Date | null {
+  return startTime ? sessionTimeAt(sessionDate, startTime) : null
+}
+
+/** 遅刻の連絡の締切（= 練習終了の1時間前）。終了時刻が未設定なら null */
+export function tardyDeadline(sessionDate: string, endTime: string | null): Date | null {
+  return endTime ? new Date(sessionTimeAt(sessionDate, endTime).getTime() - HOUR_MS) : null
+}
+
+/** 締切を過ぎたか（締切ちょうど以降は過ぎた扱い。締切がなければ false） */
+export function isPastDeadline(now: Date, deadline: Date | null): boolean {
+  return !!deadline && now.getTime() >= deadline.getTime()
+}
+
+function hhmmJst(date: Date): string {
+  const jst = new Date(date.getTime() + JST_OFFSET_MS)
+  return `${String(jst.getUTCHours()).padStart(2, '0')}:${String(jst.getUTCMinutes()).padStart(2, '0')}`
+}
+
+const NO_SHOW_WARNING = 'このまま来なかった場合は「無断キャンセル」として記録されます。'
+
+/** 練習開始後に欠席を選んだときの表示文（前半は DB のエラーメッセージと同じ文面） */
+export function absenceClosedMessage(deadline: Date): string {
+  return `練習開始（${hhmmJst(deadline)}）を過ぎたため、欠席の連絡はできません。${NO_SHOW_WARNING}`
+}
+
+/** 遅刻の締切後に遅刻を選んだときの表示文（前半は DB のエラーメッセージと同じ文面） */
+export function tardyClosedMessage(deadline: Date): string {
+  return `練習終了の1時間前（${hhmmJst(deadline)}）を過ぎたため、遅刻の連絡はできません。${NO_SHOW_WARNING}`
+}
+
 /** 拒否理由の表示文（DB のエラーメッセージと同じ文面） */
 export function registrationErrorMessage(code: SelfCheckCode, w: RegistrationWindow): string {
   switch (code) {
