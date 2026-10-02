@@ -1,4 +1,4 @@
-import { BookOpen, Clock, CalendarCheck, AlertTriangle, CheckCircle2, XCircle, Timer, UserX, Info } from 'lucide-react'
+import { BookOpen, Clock, CalendarCheck, AlertTriangle, CheckCircle2, XCircle, Timer, UserX, Info, ShieldAlert } from 'lucide-react'
 import { createClient } from '@/lib/supabase/server'
 import {
   LEGACY_POLICY, addDays, formatDateLabel, formatDeadlineLabel, getRegistrationWindow, toJstDateStr,
@@ -221,6 +221,33 @@ export default async function RulesPage() {
           <li className="flex gap-2"><span>・</span><span>当日に欠席を登録すると「当日欠席」として記録され、LINEグループに自動通知されます</span></li>
           <li className="flex gap-2"><span>・</span><span>当日に遅刻を登録した場合も同様にLINEグループへ通知されます</span></li>
           <li className="flex gap-2"><span>・</span><span>体調不良のときは無理をせず、欠席に変更して休養してください</span></li>
+        </ul>
+      </section>
+
+      {/* イエロー・レッドカード（何枚でレッドかは書かない） */}
+      <section className="card p-5 flex flex-col gap-3">
+        <div className="flex items-center gap-2.5">
+          <span className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0"
+            style={{ background: '#fdecc8', color: '#cb912f' }}>
+            <ShieldAlert size={18} />
+          </span>
+          <h2 className="text-base font-bold" style={{ color: 'var(--gray-900)' }}>イエロー・レッドカード</h2>
+        </div>
+        <p className="text-sm" style={{ color: 'var(--gray-700)' }}>
+          次のときにイエローカードが1枚付きます。
+        </p>
+        <ul className="flex flex-col gap-2 text-sm" style={{ color: 'var(--gray-700)' }}>
+          <li className="flex gap-2"><span>・</span><span><strong>出欠を提出しないまま休んだ</strong>（無連絡欠席）</span></li>
+          <li className="flex gap-2"><span>・</span><span><strong>出席・遅刻で登録したのに、連絡なく来なかった</strong>（無断キャンセル）</span></li>
+          <li className="flex gap-2"><span>・</span><span>部会の欠席など、幹部が判断したもの</span></li>
+        </ul>
+        <div className="rounded-xl px-4 py-3 text-sm font-semibold" style={{ background: '#edf3ec', color: '#2f5f44' }}>
+          提出して欠席を連絡すれば、イエローにはなりません。
+        </div>
+        <ul className="flex flex-col gap-2 text-sm" style={{ color: 'var(--gray-700)' }}>
+          <li className="flex gap-2"><span>・</span><span>イエローは月が変わると消えます</span></li>
+          <li className="flex gap-2"><span>・</span><span>イエローがたまるとレッドカードになります。レッドカードは退部の対象で、理由を聞くために幹部と面談します</span></li>
+          <li className="flex gap-2"><span>・</span><span>今持っている枚数は、ホーム画面で確認できます</span></li>
         </ul>
       </section>
 
