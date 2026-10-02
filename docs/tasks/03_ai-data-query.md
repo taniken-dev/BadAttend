@@ -46,6 +46,10 @@ LLM が作る SQL は信用しない。プロンプトインジェクション�
    - `ai.attendance`：`attendance_records` の `session_id, user_id, status, result_status, reason, reason_detail, arrival_time, reported_at`
      - `is_emergency` は出さない。値を入れるのはポイント計算のトリガー（本番に残っている）が「開始1時間前以降の欠席」を INSERT したときだけで、true の行はほとんどない。当日欠席は `status` / `result_status` の `absent_emergency` で判定する。
    - `ai.warning_flags`：`user_id, flag_type, severity, started_at, resolved_at`（`note` は出さない）
+   - **イエロー・レッドカード（#23 で追加）**：`ai.cards`：`cards` の `user_id, color, source, session_id, period_month, seq, created_at, resolved_at`（手動イエローの `reason` は出すか判断する）
+     - `color`：`yellow` / `red`。`source`：`no_show`（無断キャンセル）・`unsubmitted`（未提出のまま欠席）・`manual`（幹部の判断）・`yellow_limit`（同じ月のイエローの累積でレッド）・`streak`（連続欠席でレッド、#24）
+     - `resolved_at` が入っている行は、解除・取り消し済み（数えない）。イエローは `period_month`（月初日）ごとに数える
+     - **`card_policy`（しきい値と適用開始日）は出さない。** 部員に基準を知られないため。LLM のスキーマ説明にもしきい値の数字を書かない
    - 既存の集計ビュー `v_selection_scores` と `v_monthly_kpi` の「ai 版」を用意するかどうかは、自分で判断する。すでに業務ルールが組み込まれているので、使えれば LLM の間違いが減る。
    - **`suggestions`（意見箱）は出さない。**
    - **提出締切（タスク04で追加）**：「締切後に連絡した人」「未提出だった人」のような質問に答えられるよう、各練習の受付期間を ai スキーマで引けるようにするかを判断する。
@@ -161,6 +165,6 @@ Vercel にも設定が必要なので、ユーザーに依頼する。
 
 ## 他タスクとの関係
 
-- タスク02（ドタキャン処罰）で `attendance_records` や `warning_flags` の列を追加・変更した場合は、`ai` スキーマのビューとプロンプトのスキーマ説明を更新する。
+- タスク02（ドタキャン処罰）は #23（イエロー・レッドカード）に作り直した。`cards` テーブルを上の ai ビューに反映する。
 - タスク04（登録ルールの厳格化）はマージ済み。上の「提出締切」と業務ルールに反映してある。
 - 今後スキーマを変えるときは ai ビューも追従させる必要がある。その旨を `migration_ai_query.sql` の冒頭コメントに書いておく。
