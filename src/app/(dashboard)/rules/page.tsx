@@ -147,14 +147,14 @@ export default async function RulesPage() {
             color="#cb912f"
             bg="#fdecc8"
             label="遅刻"
-            desc="遅れて参加する。参加予定時刻を30分刻みで選択"
+            desc="遅れて参加する。参加予定時刻を30分刻みで選び、理由と内容を入力する"
           />
           <StatusRow
             icon={<XCircle size={15} />}
             color="#d44c47"
             bg="#ffe2dd"
             label="欠席"
-            desc="練習を休む。理由の入力が必要"
+            desc="練習を休む。理由と内容の入力が必要"
           />
           <StatusRow
             icon={<AlertTriangle size={15} />}
@@ -188,16 +188,19 @@ export default async function RulesPage() {
         <div className="flex flex-col gap-2 text-sm" style={{ color: 'var(--gray-700)' }}>
           {[
             ['別練習・大会', '他の試合や練習参加'],
-            ['授業', '講義・実験など'],
+            ['授業', '講義・実験など。授業名を書く'],
             ['体調不良', '病気・怪我など。無理せず休養しましょう'],
             ['私用', '家庭の事情など'],
-            ['その他', '上記に当てはまらない場合。詳細の入力が必要'],
+            ['その他', '上記に当てはまらない場合'],
           ].map(([label, desc]) => (
             <div key={label} className="flex gap-2">
               <span className="shrink-0 font-semibold w-28" style={{ color: 'var(--gray-900)' }}>{label}</span>
               <span style={{ color: 'var(--gray-500)' }}>{desc}</span>
             </div>
           ))}
+        </div>
+        <div className="rounded-xl px-4 py-3 text-sm" style={{ background: 'var(--gray-50)', color: 'var(--gray-600)' }}>
+          欠席・遅刻のときは、理由を選んで内容も必ず書いてください。書いた内容は、本人とマネージャー・管理者・顧問だけが見られます（LINEグループやほかの部員には、理由の区分だけが表示されます）。
         </div>
       </section>
 
@@ -267,7 +270,7 @@ export default async function RulesPage() {
             '対象の練習日をタップする',
             '「出欠を連絡する」ボタンを押す',
             'ステータス（出席・遅刻・欠席）を選ぶ',
-            '欠席・遅刻の場合は理由を選択し、必要に応じて詳細を入力する',
+            '欠席・遅刻の場合は理由を選び、内容を書く（必須）',
             '「連絡する」ボタンを押して完了',
           ].map((step, i) => (
             <li key={i} className="flex gap-3 items-start">
