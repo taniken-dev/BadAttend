@@ -15,6 +15,7 @@ import {
   LEGACY_POLICY, addDays, buildDeadlineNotice, checkSelfChange, formatDeadlineLabel,
   formatJstDateTime, getRegistrationWindow, getSessionRegistrationState, toJstDateStr,
   absenceClosedMessage, absenceDeadline, isPastDeadline, tardyClosedMessage, tardyDeadline,
+  arrivalTimeLimit, arrivalTimeOptions,
   type NoticeSession, type RegistrationPolicy,
 } from '@/lib/registration'
 import type { PracticeSession, AttendanceStatus, AbsenceReason, GoogleCalendarEvent } from '@/lib/types'
@@ -123,15 +124,6 @@ const MEMBER_REASON_OPTIONS: {
   { value: 'personal', label: '私用',         icon: User,       description: '家族の事情、冠婚葬祭など',          color: '#cb912f' },
   { value: 'other',    label: 'その他',       icon: HelpCircle, description: '詳細を自由記述で入力してください',  color: '#6b7280' },
 ]
-
-const ARRIVAL_TIMES: string[] = (() => {
-  const times: string[] = []
-  for (let h = 15; h <= 22; h++) {
-    times.push(`${String(h).padStart(2, '0')}:00`)
-    if (h < 22) times.push(`${String(h).padStart(2, '0')}:30`)
-  }
-  return times
-})()
 
 const SELF_STATUS_LABELS: Partial<Record<AttendanceStatus, string>> = {
   present:           '出席',
@@ -1312,6 +1304,11 @@ function DetailPanel({
   const selfIsTardy  = selfStatus === 'tardy'
   // 欠席・遅刻は理由の区分と記述が必須
   const selfNeedsReason = selfIsAbsent || selfIsTardy
+  // 遅刻の参加予定時刻は、練習開始の30分後から練習終了の1時間前（授業なら30分前）まで
+  //（DB の arrival_time_limit と同じ上限。理由を変えて上限を超えた時刻は選び直してもらう）
+  const arrivalOptions = arrivalTimeOptions(session.start_time, session.end_time, selfReason)
+  const arrivalLimit   = arrivalTimeLimit(session.end_time, selfReason)
+  const selfArrivalOk  = !!selfArrivalTime && arrivalOptions.includes(selfArrivalTime)
 
   function openSelfForm(editing = false) {
     setSelfIsEditing(editing)
@@ -1365,7 +1362,7 @@ function DetailPanel({
     if (selfIsAbsent && absenceClosed) return
     if (selfIsTardy && tardyClosed) return
     if (selfNeedsReason && (!selfReason || !selfDetail.trim())) return
-    if (selfIsTardy && !selfArrivalTime) return
+    if (selfIsTardy && !selfArrivalOk) return
     setSelfSubmitting(true)
     setSelfError(null)
     // 当日欠席ウィンドウ中は absent_normal → absent_emergency に変換
@@ -2044,9 +2041,16 @@ function DetailPanel({
               {/* 遅刻：何時から参加するか選択 */}
               {selfIsTardy && !tardyClosed && (
                 <div className="flex flex-col gap-1.5">
-                  <p className="text-xs font-semibold" style={{ color: 'var(--gray-500)' }}>何時から参加予定？（必須）</p>
+                  <p className="text-xs font-semibold" style={{ color: 'var(--gray-500)' }}>
+                    何時から参加予定？（必須）
+                    {arrivalLimit && (
+                      <span className="font-normal ml-1">
+                        {arrivalLimit}まで{selfReason === 'class' ? '（授業のため）' : selfReason ? '' : '・授業なら30分遅くまで選べます'}
+                      </span>
+                    )}
+                  </p>
                   <div className="grid grid-cols-3 gap-2">
-                    {ARRIVAL_TIMES.map(time => {
+                    {arrivalOptions.map(time => {
                       const active = selfArrivalTime === time
                       return (
                         <button key={time} type="button"
@@ -2074,7 +2078,7 @@ function DetailPanel({
                     || (selfIsAbsent && absenceClosed)
                     || (selfIsTardy && tardyClosed)
                     || (selfNeedsReason && (!selfReason || !selfDetail.trim()))
-                    || (selfIsTardy && !selfArrivalTime)
+                    || (selfIsTardy && !selfArrivalOk)
                     || selfSubmitting
                   }
                 >
