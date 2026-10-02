@@ -91,9 +91,15 @@ export default async function RulesPage() {
             <>
               <div style={{ height: '1px', background: 'var(--gray-100)' }} />
               <PeriodRow
-                period="締切後〜練習当日"
-                desc="登録済みの人だけ、出席→遅刻・欠席、遅刻→欠席への変更ができます（欠席から出席・遅刻には戻せません）"
-                deadline="練習当日 23:59 まで"
+                period="締切後〜練習開始"
+                desc="登録済みの人だけ、出席・遅刻→欠席への変更ができます（欠席から出席・遅刻には戻せません）"
+                deadline="練習開始時刻まで"
+              />
+              <div style={{ height: '1px', background: 'var(--gray-100)' }} />
+              <PeriodRow
+                period="締切後〜練習終了の1時間前"
+                desc="登録済みの人だけ、出席→遅刻への変更（参加予定時刻の変更も）ができます"
+                deadline="練習終了の1時間前まで（20時終了なら 19:00）"
               />
             </>
           )}
@@ -208,6 +214,9 @@ export default async function RulesPage() {
         <ul className="flex flex-col gap-2 text-sm" style={{ color: '#6d302c' }}>
           {strict && (
             <li className="flex gap-2"><span>・</span><span>当日は新規登録できませんが、登録済みの人は欠席・遅刻への変更ができます（急な体調不良なども必ず連絡してください）</span></li>
+          )}
+          {strict && (
+            <li className="flex gap-2"><span>・</span><span><strong>欠席の連絡は練習開始まで、遅刻の連絡は練習終了の1時間前までです。</strong>過ぎると変更できず、来なかった場合は「無断キャンセル」として記録されます</span></li>
           )}
           <li className="flex gap-2"><span>・</span><span>当日に欠席を登録すると「当日欠席」として記録され、LINEグループに自動通知されます</span></li>
           <li className="flex gap-2"><span>・</span><span>当日に遅刻を登録した場合も同様にLINEグループへ通知されます</span></li>
