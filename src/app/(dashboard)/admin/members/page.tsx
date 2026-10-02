@@ -3,12 +3,21 @@ import { redirect } from 'next/navigation'
 import MembersManager from './MembersManager'
 import type { Profile } from '@/lib/types'
 import { getSessionUser, getMyProfile } from '@/lib/supabase/session'
+import { CARD_SELECT, type Card } from '@/lib/cards'
+import { toJstDateStr } from '@/lib/registration'
 
 export interface OrphanUser {
   id: string
   email: string
   created_at: string
   full_name: string
+}
+
+// カードの設定（admin だけが読める。しきい値はコードに書かず、DB の値をそのまま表示する）
+export interface CardPolicy {
+  start_date:     string | null
+  yellow_per_red: number | null
+  streak_per_red: number | null
 }
 
 export default async function AdminMembersPage() {
@@ -36,11 +45,33 @@ export default async function AdminMembersPage() {
     ? await supabase.rpc('get_orphan_users')
     : { data: [] }
 
+  // イエロー・レッドカード（RLS で、部員は自分の分だけ・manager/admin/coach は全員分が返る）
+  const [{ data: cardData }, { data: policyData }] = await Promise.all([
+    supabase.from('cards').select(CARD_SELECT),
+    isAdmin
+      ? supabase.from('card_policy').select('start_date, yellow_per_red, streak_per_red').maybeSingle<CardPolicy>()
+      : Promise.resolve({ data: null }),
+  ])
+  const cards = (cardData ?? []) as Card[]
+
+  // 内訳に出す練習日
+  const sessionIds = [...new Set(cards.map(c => c.session_id).filter((id): id is string => !!id))]
+  const { data: sessionData } = sessionIds.length > 0
+    ? await supabase.from('practice_sessions').select('id, session_date').in('id', sessionIds)
+    : { data: [] }
+  const sessionDates = Object.fromEntries(
+    ((sessionData ?? []) as { id: string; session_date: string }[]).map(s => [s.id, s.session_date])
+  )
+
   return (
     <MembersManager
       members={(members ?? []) as Profile[]}
       currentUserId={user.id}
       orphanUsers={(orphanData ?? []) as OrphanUser[]}
+      cards={cards}
+      sessionDates={sessionDates}
+      today={toJstDateStr(new Date())}
+      cardPolicy={policyData}
     />
   )
 }

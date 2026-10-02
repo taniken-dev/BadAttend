@@ -21,7 +21,10 @@ import {
 import type { Profile, SkillRank } from '@/lib/types'
 import { formatJst, getSkillRankLabel } from '@/lib/utils'
 import { useViewRole } from '@/contexts/ViewRoleContext'
-import type { OrphanUser } from './page'
+import type { OrphanUser, CardPolicy } from './page'
+import MemberCards from '@/components/cards/MemberCards'
+import { groupCardsByUser, isActive, sortRedFirst, type Card } from '@/lib/cards'
+import { formatDateLabel } from '@/lib/registration'
 
 const SKILL_RANK_OPTIONS: { value: SkillRank; label: string }[] = [
   { value: 1, label: '1 — E級' },
@@ -49,16 +52,26 @@ export default function MembersManager({
   members,
   currentUserId,
   orphanUsers = [],
+  cards = [],
+  sessionDates = {},
+  today,
+  cardPolicy = null,
 }: {
   members: Profile[]
   currentUserId: string
   orphanUsers?: OrphanUser[]
+  cards?: Card[]
+  sessionDates?: Record<string, string>
+  today: string
+  cardPolicy?: CardPolicy | null
 }) {
   const supabase = createClient()
   const router = useRouter()
   const { viewRole } = useViewRole()
   const effectiveReadOnly  = viewRole !== 'admin'
   const canSeeSkillRank   = viewRole === 'admin' || viewRole === 'coach'
+  const canAddYellow      = viewRole === 'admin' || viewRole === 'manager'
+  const canResolveRed     = viewRole === 'admin'
   const [updating, setUpdating]       = useState<string | null>(null)
   const [toast, setToast]             = useState<{ msg: string; ok: boolean } | null>(null)
   const [editTarget, setEditTarget]   = useState<string | null>(null)
@@ -78,7 +91,12 @@ export default function MembersManager({
     return nameA.localeCompare(nameB, 'ja')
   }
   const pending  = useMemo(() => members.filter(m => !m.is_approved && m.is_active !== false), [members])
-  const approved = useMemo(() => [...members.filter(m => m.is_approved && m.is_active !== false)].sort(sortByRoleGradeName), [members])
+  const cardsByUser = useMemo(() => groupCardsByUser(cards), [cards])
+  // レッドのある部員を自動で一番上にする（消すと元の順に戻る）
+  const approved = useMemo(() => sortRedFirst(
+    [...members.filter(m => m.is_approved && m.is_active !== false)].sort(sortByRoleGradeName),
+    id => (cardsByUser.get(id) ?? []).some(c => c.color === 'red' && isActive(c)),
+  ), [members, cardsByUser])
   const retired  = useMemo(() => [...members.filter(m => m.is_active === false)].sort(sortByRoleGradeName), [members])
   const filteredApproved = useMemo(() => {
     const q = searchQuery.trim().toLowerCase()
@@ -356,6 +374,26 @@ export default function MembersManager({
         </div>
       )}
 
+      {/* カードの設定（管理者のみ。値は DB の card_policy をそのまま表示する） */}
+      {viewRole === 'admin' && cardPolicy && (
+        <div className="card animate-slide-up flex flex-col gap-2" style={{ animationDelay: '0.08s' }}>
+          <h2 className="text-base font-bold" style={{ color: 'var(--gray-900)', letterSpacing: '-0.02em' }}>
+            カードの設定
+          </h2>
+          <div className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 text-sm" style={{ color: 'var(--gray-700)' }}>
+            <span style={{ color: 'var(--gray-500)' }}>適用開始</span>
+            <span>{cardPolicy.start_date ? `${formatDateLabel(cardPolicy.start_date)}の練習から` : '未設定（カードは付きません）'}</span>
+            <span style={{ color: 'var(--gray-500)' }}>レッド（イエロー）</span>
+            <span>{cardPolicy.yellow_per_red ? `同じ月にイエロー ${cardPolicy.yellow_per_red} 枚ごと` : '未設定'}</span>
+            <span style={{ color: 'var(--gray-500)' }}>レッド（連続欠席）</span>
+            <span>{cardPolicy.streak_per_red ? `通常練習を ${cardPolicy.streak_per_red} 回連続で休んだら` : '未設定'}</span>
+          </div>
+          <p className="text-xs" style={{ color: 'var(--gray-500)' }}>
+            この値は管理者にだけ表示されます。部員には伝えないでください。変更はシステム担当がデータベース（card_policy）で行います。
+          </p>
+        </div>
+      )}
+
       {/* 承認済み部員 */}
       <div className="card animate-slide-up" style={{ animationDelay: '0.1s' }}>
         <div className="flex items-center justify-between mb-3">
@@ -545,6 +583,20 @@ export default function MembersManager({
                           </>
                         )}
                       </div>
+                      {/* イエロー・レッドカード */}
+                      {m.role !== 'coach' && (
+                        <div className="mt-1.5">
+                          <MemberCards
+                            userId={m.id}
+                            name={displayName(m)}
+                            cards={cardsByUser.get(m.id) ?? []}
+                            sessionDates={sessionDates}
+                            today={today}
+                            canAddYellow={canAddYellow}
+                            canResolveRed={canResolveRed}
+                          />
+                        </div>
+                      )}
                     </div>
 
                     {/* 退部ボタン（effectiveReadOnly では非表示） */}
