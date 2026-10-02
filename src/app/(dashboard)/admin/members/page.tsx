@@ -32,6 +32,7 @@ export default async function AdminMembersPage() {
   }
 
   const isAdmin = myProfile.role === 'admin'
+  const isManagerOrAdmin = isAdmin || myProfile.role === 'manager'
 
   const { data: members } = await supabase
     .from('profiles')
@@ -46,12 +47,19 @@ export default async function AdminMembersPage() {
     : { data: [] }
 
   // イエロー・レッドカード（RLS で、部員は自分の分だけ・manager/admin/coach は全員分が返る）
-  const [{ data: cardData }, { data: policyData }] = await Promise.all([
+  const [{ data: cardData }, { data: policyData }, { data: streakData }] = await Promise.all([
     supabase.from('cards').select(CARD_SELECT),
     isAdmin
       ? supabase.from('card_policy').select('start_date, yellow_per_red, streak_per_red').maybeSingle<CardPolicy>()
       : Promise.resolve({ data: null }),
+    // 今いくつ続けて通常練習を休んでいるか（manager/admin だけ。部員・顧問には出さない）
+    isManagerOrAdmin
+      ? supabase.rpc('get_absence_streaks')
+      : Promise.resolve({ data: null }),
   ])
+  const absenceStreaks = Object.fromEntries(
+    ((streakData ?? []) as { user_id: string; streak: number }[]).map(s => [s.user_id, s.streak])
+  )
   const cards = (cardData ?? []) as Card[]
 
   // 内訳に出す練習日
@@ -72,6 +80,7 @@ export default async function AdminMembersPage() {
       sessionDates={sessionDates}
       today={toJstDateStr(new Date())}
       cardPolicy={policyData}
+      absenceStreaks={absenceStreaks}
     />
   )
 }

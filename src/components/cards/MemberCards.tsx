@@ -28,6 +28,7 @@ export default function MemberCards({
   today,
   canAddYellow,
   canResolveRed,
+  absenceStreak = 0,
 }: {
   userId:        string
   name:          string
@@ -36,11 +37,12 @@ export default function MemberCards({
   today:         string                  // JST の今日（YYYY-MM-DD）
   canAddYellow:  boolean                 // manager / admin
   canResolveRed: boolean                 // admin
+  absenceStreak?: number                 // 今いくつ続けて通常練習を休んでいるか（manager/admin にだけ渡す）
 }) {
   const [open, setOpen] = useState(false)
   const { yellowThisMonth, redActive } = summarizeCards(cards, today)
 
-  if (yellowThisMonth === 0 && redActive === 0 && !canAddYellow && cards.length === 0) return null
+  if (yellowThisMonth === 0 && redActive === 0 && !canAddYellow && cards.length === 0 && absenceStreak === 0) return null
 
   return (
     <>
@@ -59,6 +61,13 @@ export default function MemberCards({
             style={YELLOW_STYLE}>
             イエロー {yellowThisMonth}枚（今月）
           </button>
+        )}
+        {absenceStreak > 0 && (
+          <span className="text-xs px-2 py-0.5 rounded-full"
+            style={{ background: 'var(--gray-100)', color: 'var(--gray-600)', border: '1px solid var(--gray-200)' }}
+            title="今いくつ続けて通常練習を休んでいるか（部員には見えません）">
+            連続欠席 {absenceStreak}回
+          </span>
         )}
         {(canAddYellow || (cards.length > 0 && redActive === 0 && yellowThisMonth === 0)) && (
           <button type="button" onClick={() => setOpen(true)}

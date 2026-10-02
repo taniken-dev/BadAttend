@@ -56,6 +56,7 @@ export default function MembersManager({
   sessionDates = {},
   today,
   cardPolicy = null,
+  absenceStreaks = {},
 }: {
   members: Profile[]
   currentUserId: string
@@ -64,6 +65,7 @@ export default function MembersManager({
   sessionDates?: Record<string, string>
   today: string
   cardPolicy?: CardPolicy | null
+  absenceStreaks?: Record<string, number>  // manager/admin だけに渡る
 }) {
   const supabase = createClient()
   const router = useRouter()
@@ -594,6 +596,7 @@ export default function MembersManager({
                             today={today}
                             canAddYellow={canAddYellow}
                             canResolveRed={canResolveRed}
+                            absenceStreak={canAddYellow ? absenceStreaks[m.id] ?? 0 : 0}
                           />
                         </div>
                       )}
