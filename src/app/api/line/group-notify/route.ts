@@ -15,7 +15,8 @@ const ALLOWED_REASON = new Set(Object.keys(REASON_LABELS))
 const TIME_RE = /^([01]?\d|2[0-3]):[0-5]\d$/
 
 export async function POST(request: NextRequest) {
-  const { sessionId, status, reason, reasonDetail, arrivalTime, isAdvance } = await request.json()
+  // 理由の記述（reasonDetail）はグループに流さない（本人と manager/admin/coach だけが見られる）
+  const { sessionId, status, reason, arrivalTime, isAdvance } = await request.json()
 
   // 入力バリデーション（グループ全体に配信されるため厳格にチェック）
   if (typeof sessionId !== 'string' || !sessionId) {
@@ -27,9 +28,6 @@ export async function POST(request: NextRequest) {
   if (reason != null && (typeof reason !== 'string' || !ALLOWED_REASON.has(reason))) {
     return NextResponse.json({ error: 'invalid reason' }, { status: 400 })
   }
-  // 自由記述は 100 文字までに制限（スパム・悪用防止）
-  const safeReasonDetail =
-    typeof reasonDetail === 'string' ? reasonDetail.trim().slice(0, 100) : ''
   // 参加予定時刻は HH:MM 形式のみ許可（不正値は無視）
   const safeArrivalTime =
     typeof arrivalTime === 'string' && TIME_RE.test(arrivalTime.trim()) ? arrivalTime.trim() : null
@@ -78,10 +76,7 @@ export async function POST(request: NextRequest) {
   const date = new Date(session.session_date + 'T00:00:00')
   const dateLabel = date.toLocaleDateString('ja-JP', { month: 'long', day: 'numeric', weekday: 'short' })
 
-  const reasonLabel = reason ? REASON_LABELS[reason] ?? reason : null
-  const reasonStr = reasonLabel
-    ? safeReasonDetail ? `${reasonLabel}（${safeReasonDetail}）` : reasonLabel
-    : null
+  const reasonStr = reason ? REASON_LABELS[reason] ?? reason : null
 
   // 部会かどうかは DB のセッション情報から判定（クライアント入力を信用しない）
   const sessionLabel = session.is_bukai ? '部会' : '練習'

@@ -110,17 +110,22 @@ export default async function DashboardPage() {
 
   if (todaySession) {
     // profiles!inner の RLS 問題を避けるため別クエリで取得してコード結合
-    const [{ data: records }, { data: profileList }] = await Promise.all([
+    const [{ data: records }, { data: profileList }, { data: detailRows }] = await Promise.all([
       supabase
         .from('attendance_records')
-        .select('user_id, status, reason, reason_detail, arrival_time')
+        .select('id, user_id, status, reason, arrival_time')
         .eq('session_id', todaySession.id),
       supabase
         .from('profiles')
         .select('id, full_name, display_name, grade')
         .eq('is_approved', true)
         .eq('is_active', true),
+      // 理由の記述は本人と manager/admin/coach だけが読める（部員には自分の分だけ返る）
+      supabase.rpc('get_reason_details', { p_session_ids: [todaySession.id] }),
     ])
+    const detailMap = new Map(
+      ((detailRows ?? []) as { id: string; reason_detail: string | null }[]).map(d => [d.id, d.reason_detail])
+    )
 
     const profileMap = Object.fromEntries(
       ((profileList ?? []) as { id: string; full_name: string; display_name: string | null; grade: number }[])
@@ -135,9 +140,9 @@ export default async function DashboardPage() {
       return nameA.localeCompare(nameB, 'ja')
     }
 
-    const all: AttendeeRow[] = ((records ?? []) as RawRecord[])
+    const all: AttendeeRow[] = ((records ?? []) as (Omit<RawRecord, 'reason_detail'> & { id: string })[])
       .filter(r => profileMap[r.user_id])
-      .map(r => ({ ...r, profiles: profileMap[r.user_id] }))
+      .map(({ id, ...r }) => ({ ...r, reason_detail: detailMap.get(id) ?? null, profiles: profileMap[r.user_id] }))
 
     attendees = all.filter(r => r.status === 'present' || r.status === 'tardy').sort(sortByGradeName)
     absentees = all.filter(r => r.status !== 'present' && r.status !== 'tardy').sort(sortByGradeName)
