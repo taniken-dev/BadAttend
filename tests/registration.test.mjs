@@ -25,6 +25,7 @@ import {
   arrivalTimeLimit,
   arrivalTimeOptions,
   LEGACY_ARRIVAL_TIMES,
+  suggestClassNames,
 } from '../src/lib/registration.ts'
 import { LEGACY, PHASE1, J, WINDOW_CASES, SELF_CASES } from './registration-cases.mjs'
 
@@ -142,6 +143,37 @@ for (const tz of TIMEZONES) {
         assert.equal(LEGACY_ARRIVAL_TIMES[0], '15:00')
         assert.equal(LEGACY_ARRIVAL_TIMES.at(-1), '22:00')
         assert.equal(LEGACY_ARRIVAL_TIMES.length, 15)
+      })
+    })
+
+    describe('授業名の候補', () => {
+      // 2026-10-07 は水曜
+      const history = [
+        { detail: '線形代数', sessionDate: '2026-09-30' },   // 水
+        { detail: '線形代数 ', sessionDate: '2026-09-23' },  // 水（前後の空白はまとめる）
+        { detail: '英語', sessionDate: '2026-10-01' },       // 木
+        { detail: '英語', sessionDate: '2026-09-24' },       // 木
+        { detail: '英語', sessionDate: '2026-09-17' },       // 木
+        { detail: '物理実験', sessionDate: '2026-09-16' },   // 水
+        { detail: '', sessionDate: '2026-09-09' },
+      ]
+      it('同じ曜日のものを先に、回数の多い順', () => {
+        assert.deepEqual(suggestClassNames(history, '2026-10-07'), ['線形代数', '物理実験', '英語'])
+      })
+      it('別の曜日なら、その曜日のものが先', () => {
+        assert.deepEqual(suggestClassNames(history, '2026-10-08'), ['英語', '線形代数', '物理実験'])
+      })
+      it('同じ回数なら新しい順', () => {
+        assert.deepEqual(
+          suggestClassNames([{ detail: 'A', sessionDate: '2026-09-01' }, { detail: 'B', sessionDate: '2026-09-02' }], '2026-10-10'),
+          ['B', 'A'],
+        )
+      })
+      it('件数の上限', () => {
+        assert.equal(suggestClassNames(history, '2026-10-07', 2).length, 2)
+      })
+      it('履歴がなければ空', () => {
+        assert.deepEqual(suggestClassNames([], '2026-10-07'), [])
       })
     })
 

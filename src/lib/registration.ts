@@ -324,3 +324,37 @@ export function buildDeadlineNotice({ kind, sessions, closesAt, includeNames }: 
   }
   return lines.join('\n')
 }
+
+// ── 授業名の候補（理由が授業のときの記述欄） ─────────────────────
+
+export type ClassHistoryItem = {
+  detail:      string  // 過去に書いた記述（授業名）
+  sessionDate: string  // その練習日（YYYY-MM-DD）
+}
+
+/** 自分の過去の記述から授業名の候補を作る
+ *
+ * - 同じ曜日の練習で書いたものを先に、その中では使った回数が多い順、同じなら新しい順
+ * - 前後の空白を除いて同じものはまとめる。最大 limit 件
+ */
+export function suggestClassNames(history: ClassHistoryItem[], targetDate: string, limit = 5): string[] {
+  const targetDow = dowOf(toDayNumber(targetDate))
+  const stats = new Map<string, { sameDow: number; total: number; last: string }>()
+  for (const h of history) {
+    const name = h.detail.trim()
+    if (!name) continue
+    const s = stats.get(name) ?? { sameDow: 0, total: 0, last: '' }
+    s.total++
+    if (dowOf(toDayNumber(h.sessionDate)) === targetDow) s.sameDow++
+    if (h.sessionDate > s.last) s.last = h.sessionDate
+    stats.set(name, s)
+  }
+  return [...stats.entries()]
+    .sort(([, a], [, b]) =>
+      Number(b.sameDow > 0) - Number(a.sameDow > 0) ||
+      b.sameDow - a.sameDow ||
+      b.total - a.total ||
+      b.last.localeCompare(a.last))
+    .slice(0, limit)
+    .map(([name]) => name)
+}
