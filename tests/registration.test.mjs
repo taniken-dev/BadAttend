@@ -22,6 +22,9 @@ import {
   isPastDeadline,
   absenceClosedMessage,
   tardyClosedMessage,
+  arrivalTimeLimit,
+  arrivalTimeOptions,
+  LEGACY_ARRIVAL_TIMES,
 } from '../src/lib/registration.ts'
 import { LEGACY, PHASE1, J, WINDOW_CASES, SELF_CASES } from './registration-cases.mjs'
 
@@ -113,6 +116,32 @@ for (const tz of TIMEZONES) {
       it('表示文の前半は DB のエラーメッセージと同じ', () => {
         assert.ok(absenceClosedMessage(absenceDeadline('2026-09-30', '17:00:00')).startsWith('練習開始（17:00）を過ぎたため、欠席の連絡はできません'))
         assert.ok(tardyClosedMessage(tardyDeadline('2026-09-30', '20:00:00')).startsWith('練習終了の1時間前（19:00）を過ぎたため、遅刻の連絡はできません'))
+      })
+    })
+
+    describe('遅刻の参加予定時刻', () => {
+      it('上限は練習終了の1時間前、授業なら30分前', () => {
+        assert.equal(arrivalTimeLimit('20:00:00', 'sick'), '19:00')
+        assert.equal(arrivalTimeLimit('20:00:00', null), '19:00')
+        assert.equal(arrivalTimeLimit('20:00:00', 'class'), '19:30')
+        assert.equal(arrivalTimeLimit('12:00', 'class'), '11:30')
+        assert.equal(arrivalTimeLimit(null, 'class'), null)
+      })
+      it('17〜20時の練習：17:30 から 19:00 まで（授業なら 19:30 まで）', () => {
+        assert.deepEqual(arrivalTimeOptions('17:00:00', '20:00:00', 'personal'), ['17:30', '18:00', '18:30', '19:00'])
+        assert.deepEqual(arrivalTimeOptions('17:00:00', '20:00:00', 'class'), ['17:30', '18:00', '18:30', '19:00', '19:30'])
+      })
+      it('午前の練習（9〜12時）でも選択肢がある', () => {
+        assert.deepEqual(arrivalTimeOptions('09:00:00', '12:00:00', 'other'), ['09:30', '10:00', '10:30', '11:00'])
+      })
+      it('短い練習（17〜19時）', () => {
+        assert.deepEqual(arrivalTimeOptions('17:00', '19:00', 'sick'), ['17:30', '18:00'])
+      })
+      it('時刻が空の練習は今までの 15:00〜22:00', () => {
+        assert.deepEqual(arrivalTimeOptions(null, null, 'class'), LEGACY_ARRIVAL_TIMES)
+        assert.equal(LEGACY_ARRIVAL_TIMES[0], '15:00')
+        assert.equal(LEGACY_ARRIVAL_TIMES.at(-1), '22:00')
+        assert.equal(LEGACY_ARRIVAL_TIMES.length, 15)
       })
     })
 

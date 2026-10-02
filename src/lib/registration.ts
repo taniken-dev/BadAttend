@@ -212,6 +212,45 @@ export function tardyClosedMessage(deadline: Date): string {
   return `練習終了の1時間前（${hhmmJst(deadline)}）を過ぎたため、遅刻の連絡はできません。${NO_SHOW_WARNING}`
 }
 
+// ── 遅刻の参加予定時刻の選択肢 ─────────────────────────────
+//
+// DB の public.arrival_time_limit（BadAttend-db/migration_arrival_time_limit.sql）と同じ上限。
+//   - 理由が授業: 練習終了の30分前まで（授業期間か長期休暇かは見分けない。20時終了なら 19:30）
+//   - それ以外:   練習終了の1時間前まで（20時終了なら 19:00）
+//   - 選択肢は練習開始の30分後から30分刻み（開始ちょうどに来るなら出席）
+//   - 開始・終了時刻が空の練習は、今までどおり 15:00〜22:00
+
+/** 時刻が空の練習で使う、今までの選択肢（15:00〜22:00 を30分刻み） */
+export const LEGACY_ARRIVAL_TIMES: string[] = (() => {
+  const times: string[] = []
+  for (let m = 15 * 60; m <= 22 * 60; m += 30) times.push(minutesToHhmm(m))
+  return times
+})()
+
+function hhmmToMinutes(time: string): number {
+  const [h, m] = time.split(':').map(Number)
+  return h * 60 + m
+}
+
+function minutesToHhmm(min: number): string {
+  return `${String(Math.floor(min / 60)).padStart(2, '0')}:${String(min % 60).padStart(2, '0')}`
+}
+
+/** 参加予定時刻の上限（'HH:MM'）。終了時刻が空なら null */
+export function arrivalTimeLimit(endTime: string | null, reason: string | null): string | null {
+  if (!endTime) return null
+  return minutesToHhmm(hhmmToMinutes(endTime) - (reason === 'class' ? 30 : 60))
+}
+
+/** 参加予定時刻の選択肢（'HH:MM' の配列） */
+export function arrivalTimeOptions(startTime: string | null, endTime: string | null, reason: string | null): string[] {
+  const limit = arrivalTimeLimit(endTime, reason)
+  if (!startTime || !limit) return LEGACY_ARRIVAL_TIMES
+  const times: string[] = []
+  for (let m = hhmmToMinutes(startTime) + 30; m <= hhmmToMinutes(limit); m += 30) times.push(minutesToHhmm(m))
+  return times
+}
+
 /** 拒否理由の表示文（DB のエラーメッセージと同じ文面） */
 export function registrationErrorMessage(code: SelfCheckCode, w: RegistrationWindow): string {
   switch (code) {
