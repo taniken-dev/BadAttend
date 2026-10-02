@@ -15,7 +15,7 @@ import {
   LEGACY_POLICY, addDays, buildDeadlineNotice, checkSelfChange, formatDeadlineLabel,
   formatJstDateTime, getRegistrationWindow, getSessionRegistrationState, toJstDateStr,
   absenceClosedMessage, absenceDeadline, isPastDeadline, tardyClosedMessage, tardyDeadline,
-  arrivalTimeLimit, arrivalTimeOptions,
+  arrivalTimeLimit, arrivalTimeOptions, suggestClassNames, type ClassHistoryItem,
   type NoticeSession, type RegistrationPolicy,
 } from '@/lib/registration'
 import type { PracticeSession, AttendanceStatus, AbsenceReason, GoogleCalendarEvent } from '@/lib/types'
@@ -1310,6 +1310,36 @@ function DetailPanel({
   const arrivalLimit   = arrivalTimeLimit(session.end_time, selfReason)
   const selfArrivalOk  = !!selfArrivalTime && arrivalOptions.includes(selfArrivalTime)
 
+  // 授業名の候補（自分の過去の記述のうち、理由が授業のもの）。理由で授業を選んだときに初めて読む
+  const [classHistory, setClassHistory] = useState<ClassHistoryItem[] | null>(null)
+  const needClassHistory = selfFormOpen && selfReason === 'class' && classHistory === null && !!userId
+  useEffect(() => {
+    if (!needClassHistory || !userId) return
+    let ignore = false
+    const client = createClient()
+    client.from('attendance_records')
+      .select('id, session_id, practice_sessions!inner(session_date)')
+      .eq('user_id', userId)
+      .eq('reason', 'class')
+      .order('created_at', { ascending: false })
+      .limit(100)
+      .then(async ({ data }) => {
+        const rows = (data ?? []) as unknown as { id: string; session_id: string; practice_sessions: { session_date: string } }[]
+        // 記述は get_reason_details で読む（manager/admin は全員分が返るので、自分の記録の id で絞る）
+        const { data: details } = rows.length > 0
+          ? await client.rpc('get_reason_details', { p_session_ids: [...new Set(rows.map(r => r.session_id))] })
+          : { data: [] }
+        const detailById = new Map(((details ?? []) as { id: string; reason_detail: string | null }[]).map(d => [d.id, d.reason_detail]))
+        if (ignore) return
+        setClassHistory(rows.flatMap(r => {
+          const detail = detailById.get(r.id)
+          return detail ? [{ detail, sessionDate: r.practice_sessions.session_date }] : []
+        }))
+      })
+    return () => { ignore = true }
+  }, [needClassHistory, userId])
+  const classSuggestions = classHistory ? suggestClassNames(classHistory, session.session_date) : []
+
   function openSelfForm(editing = false) {
     setSelfIsEditing(editing)
     setSelfError(null)
@@ -2032,6 +2062,23 @@ function DetailPanel({
                     placeholder={selfReason ? `${REASON_DETAIL_PLACEHOLDERS[selfReason]}（必須）` : '理由を選んでから、内容を書いてください（必須）'}
                     maxLength={200}
                   />
+                  {/* 授業名の候補（押すと記述欄に入る。入った後で直せる） */}
+                  {selfReason === 'class' && classSuggestions.length > 0 && (
+                    <div className="flex items-center gap-1.5 flex-wrap -mt-1">
+                      <span className="text-xs" style={{ color: 'var(--gray-500)' }}>前に書いた授業：</span>
+                      {classSuggestions.map(name => (
+                        <button key={name} type="button" onClick={() => setSelfDetail(name)}
+                          className="text-xs px-2 py-1 rounded-full cursor-pointer hover:opacity-80"
+                          style={{
+                            background: selfDetail.trim() === name ? 'color-mix(in srgb, #38869e 15%, var(--gray-100))' : 'var(--gray-100)',
+                            color: '#38869e',
+                            border: '1px solid #9cc7d3',
+                          }}>
+                          {name}
+                        </button>
+                      ))}
+                    </div>
+                  )}
                   <p className="text-xs -mt-1" style={{ color: 'var(--gray-500)' }}>
                     書いた内容は、本人とマネージャー・管理者・顧問だけが見られます
                   </p>
