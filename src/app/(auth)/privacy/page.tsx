@@ -81,7 +81,7 @@ export default function PrivacyPage() {
               <p>
                 メール：{' '}
                 <a
-                  href="mailto:kentaro0626a@gmail.com"
+                  href="mailto:s24g2079za@chibatech.ac.jp"
                   style={{ color: 'var(--ink)' }}
                 >
                   s24g2079za@chibatech.ac.jp
