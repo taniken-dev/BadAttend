@@ -34,6 +34,9 @@ export default function PrivacyPage() {
               <li>
                 <strong>出欠情報</strong>：部活動への出席・欠席の記録（日時・理由を含む）
               </li>
+              <li>
+                <strong>アクセス情報</strong>：閲覧したページ、参照元、国・地域、端末・ブラウザ・OSの種類（個人を特定しない匿名の統計情報）
+              </li>
             </ul>
           </Section>
 
@@ -43,6 +46,7 @@ export default function PrivacyPage() {
               <li>ユーザーの本人確認・ログイン処理</li>
               <li>出欠状況の記録・集計・表示</li>
               <li>部活動の運営管理（管理者向け機能）</li>
+              <li>アクセス状況の分析による本サービスの改善</li>
             </ul>
           </Section>
 
@@ -58,15 +62,19 @@ export default function PrivacyPage() {
             本サービスは、ログイン状態の維持のためにブラウザのCookieおよびローカルストレージを使用することがあります。これらはサービスの機能提供のみを目的としています。
           </Section>
 
-          <Section title="6. 情報の削除">
+          <Section title="6. アクセス解析ツールの使用">
+            本サービスは、利用状況を把握するために Vercel Inc. が提供するアクセス解析ツール「Vercel Web Analytics」を使用しています。このツールはCookieを使用せず、収集する情報は個人を特定しない匿名の統計情報です。訪問者を識別する値は1日ごとにリセットされ、日をまたいで同じ利用者を追跡することはありません。
+          </Section>
+
+          <Section title="7. 情報の削除">
             利用者は、退部・卒業等により本サービスの利用を終了する際、運営者に連絡することで個人情報の削除を依頼できます。
           </Section>
 
-          <Section title="7. プライバシーポリシーの変更">
+          <Section title="8. プライバシーポリシーの変更">
             本ポリシーは必要に応じて変更することがあります。変更後もサービスを利用した場合は、変更後のポリシーに同意したものとみなします。
           </Section>
 
-          <Section title="8. お問い合わせ">
+          <Section title="9. お問い合わせ">
             個人情報の取り扱いに関するご質問・ご要望は以下までご連絡ください。
             <div className="mt-2 p-4 rounded-xl" style={{ background: 'var(--card-bg)', border: '1px solid var(--hairline)' }}>
               <p>運営者：谷 謙太郎</p>
@@ -84,6 +92,8 @@ export default function PrivacyPage() {
 
           <p className="text-sm" style={{ color: 'var(--ink-muted)' }}>
             制定日：2026年6月4日
+            <br />
+            改定日：2026年10月8日
           </p>
         </div>
 
