@@ -4,6 +4,7 @@ import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 import type { EmailOtpType } from '@supabase/supabase-js'
 import { createAdminClient } from '@/lib/supabase/admin'
+import { notifyAdminError } from '@/lib/alert'
 
 export async function GET(request: NextRequest) {
   const { searchParams, origin } = new URL(request.url)
@@ -91,6 +92,7 @@ async function handleLineCallback(code: string, origin: string, next: string) {
 
   if (createErr && !createErr.message.includes('already been registered')) {
     console.error('createUser error:', createErr)
+    await notifyAdminError('ログイン（ユーザー作成）', createErr)
     return NextResponse.redirect(new URL('/login?error=user_create', origin))
   }
 
@@ -147,6 +149,7 @@ async function handleLineCallback(code: string, origin: string, next: string) {
 
   if (linkErr || !linkData?.properties?.hashed_token) {
     console.error('generateLink error:', linkErr)
+    await notifyAdminError('ログイン（リンク生成）', linkErr ?? 'hashed_token がありません')
     return NextResponse.redirect(new URL('/login?error=link_gen', origin))
   }
 

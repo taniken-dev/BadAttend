@@ -3,6 +3,7 @@ import type { NextRequest } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { fetchTaiikukaiDeadlines, getTaiikukaiUrl } from '@/lib/taiikukai'
 import type { DocumentDeadline } from '@/lib/types'
+import { notifyAdminError } from '@/lib/alert'
 
 // 体育会HPから締切一覧を毎日取得して document_deadlines に同期し、
 // 未提出の書類が締切に近づいたら管理者・幹部へLINEリマインドを送る。
@@ -44,7 +45,10 @@ async function sendLineMulticast(lineUserIds: string[], text: string): Promise<b
     body: JSON.stringify({ to: lineUserIds, messages: [{ type: 'text', text }] }),
   })
   if (!res.ok) {
-    console.error('LINE multicast error:', await res.json().catch(() => null))
+    const err = await res.json().catch(() => null)
+    console.error('LINE multicast error:', err)
+    // 月の送信枠切れなどで LINE が止まると、締切リマインドも異常通知も誰にも届かない
+    await notifyAdminError('LINE送信（書類締切）', err ?? `HTTP ${res.status}`)
     return false
   }
   return true
@@ -122,6 +126,7 @@ export async function GET(request: NextRequest) {
       )
     if (upsertError) {
       console.error('deadline upsert error:', upsertError)
+      await notifyAdminError('Cron 書類締切の保存', upsertError)
       return NextResponse.json({ error: 'upsert failed', detail: upsertError.message }, { status: 500 })
     }
 

@@ -4,6 +4,7 @@ import type { NextRequest } from 'next/server'
 import type { GoogleCalendarEvent } from '@/lib/types'
 import { createClient } from '@/lib/supabase/server'
 import { buildOAuthClient, parseCalendarIds } from '@/lib/google'
+import { notifyAdminError } from '@/lib/alert'
 
 export async function GET(request: NextRequest) {
   const supabase = await createClient()
@@ -58,8 +59,9 @@ export async function GET(request: NextRequest) {
             maxResults: 100,
           })
             .then(res => ({ calendarId, items: res.data.items ?? [] }))
-            .catch((err: unknown) => {
+            .catch(async (err: unknown) => {
               console.error(`Google Calendar fetch failed for ${calendarId}:`, err)
+              await notifyAdminError('Googleカレンダー取得', err)
               return { calendarId, items: [] as calendar_v3.Schema$Event[] }
             })
         )
@@ -134,6 +136,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ events })
   } catch (err) {
     console.error('Google Calendar API error:', err)
+    await notifyAdminError('Googleカレンダー取得', err)
     return NextResponse.json({ error: 'Google Calendar API error' }, { status: 500 })
   }
 }
