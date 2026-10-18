@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
+import { notifyAdminError } from '@/lib/alert'
 
 const REASON_LABELS: Record<string, string> = {
   practice: '別練習・大会',
@@ -119,6 +120,8 @@ export async function POST(request: NextRequest) {
   if (!res.ok) {
     const err = await res.json()
     console.error('LINE group push error:', err)
+    // 部員の画面では欠席登録が成功して見えるため、通知が届いていないことに誰も気づけない
+    await notifyAdminError('LINE送信（出欠のグループ通知）', err)
     return NextResponse.json({ error: 'LINE API error', detail: err }, { status: 500 })
   }
 

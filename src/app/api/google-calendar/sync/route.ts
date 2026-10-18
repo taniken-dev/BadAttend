@@ -4,6 +4,7 @@ import type { NextRequest } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { buildOAuthClient, parseCalendarIds } from '@/lib/google'
+import { notifyAdminError } from '@/lib/alert'
 
 // Googleカレンダーイベントの説明文から時間・面数・補足時間をパースする
 // 対応フォーマット例: 時間：17:00〜22:00 / 面数：4面
@@ -307,6 +308,8 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ sessions: sessions ?? [] })
   } catch (err) {
     console.error('Google Calendar sync error:', err)
+    // 画面は壊れないので部員は気づかない（リフレッシュトークン切れ等）。管理者にだけ知らせる
+    await notifyAdminError('Googleカレンダー同期', err)
     // 同期失敗時はSupabaseのデータをそのまま返してUIを壊さない
     const { data } = await supabase
       .from('practice_sessions')
