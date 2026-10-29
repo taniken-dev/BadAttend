@@ -101,7 +101,7 @@
 - **Backend:** Supabase (Auth, Database, RLS)
 - **Auth:** LINE Login (OAuth) のみ
 - **外部連携:** Google Calendar API / LINE Messaging API
-- **デプロイ:** Vercel（Cron Jobs 使用）
+- **デプロイ:** Vercel（Cron Jobs 使用）。関数のリージョンは `vercel.json` の `regions` で東京（`hnd1`）に固定している。Supabase と同じ東京に置き、DB への往復を短くするため。Vercel のプロジェクト設定（Functions → Region）では変えない
 
 ## 環境変数
 
