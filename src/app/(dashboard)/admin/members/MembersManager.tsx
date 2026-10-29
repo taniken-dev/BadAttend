@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useOptimistic, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import {
@@ -66,6 +66,15 @@ export default function MembersManager({
   const [saving, setSaving]           = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
   const [showRetired, setShowRetired] = useState(false)
+  // 押した値を先に画面へ出し、router.refresh() が終わるまで行を処理中にする
+  const [isPending, startTransition]  = useTransition()
+  const [pendingIds, setPendingIds]   = useState<Set<string>>(new Set())
+  const [optimisticMembers, applyOptimistic] = useOptimistic(
+    members,
+    (state, { id, patch }: { id: string; patch: Partial<Profile> }) =>
+      state.map(m => (m.id === id ? { ...m, ...patch } : m)),
+  )
+  const isBusy = (id: string) => updating === id || (isPending && pendingIds.has(id))
 
   const roleOrder: Record<string, number> = { admin: 0, manager: 1, member: 2, coach: 3 }
   const sortByRoleGradeName = (a: Profile, b: Profile) => {
@@ -77,9 +86,9 @@ export default function MembersManager({
     const nameB = b.display_name ?? b.full_name
     return nameA.localeCompare(nameB, 'ja')
   }
-  const pending  = useMemo(() => members.filter(m => !m.is_approved && m.is_active !== false), [members])
-  const approved = useMemo(() => [...members.filter(m => m.is_approved && m.is_active !== false)].sort(sortByRoleGradeName), [members])
-  const retired  = useMemo(() => [...members.filter(m => m.is_active === false)].sort(sortByRoleGradeName), [members])
+  const pending  = useMemo(() => optimisticMembers.filter(m => !m.is_approved && m.is_active !== false), [optimisticMembers])
+  const approved = useMemo(() => [...optimisticMembers.filter(m => m.is_approved && m.is_active !== false)].sort(sortByRoleGradeName), [optimisticMembers])
+  const retired  = useMemo(() => [...optimisticMembers.filter(m => m.is_active === false)].sort(sortByRoleGradeName), [optimisticMembers])
   const filteredApproved = useMemo(() => {
     const q = searchQuery.trim().toLowerCase()
     if (!q) return approved
@@ -155,52 +164,37 @@ export default function MembersManager({
     router.refresh()
   }
 
-  async function updateSkillRank(id: string, rank: number) {
-    setUpdating(id)
-    const { error } = await supabase.from('profiles').update({ skill_rank: rank }).eq('id', id)
-    setUpdating(null)
-    if (error) { showToast('更新失敗', false); return }
-    showToast('技術ランクを更新しました', true)
-    router.refresh()
+  // 押した値をすぐ表示し、DB 更新と router.refresh() が終わるまで行を処理中にする。
+  // 失敗したら transition の終了で useOptimistic が元の値に戻る。
+  function updateProfile(id: string, patch: Partial<Profile>, okMsg: string) {
+    setPendingIds(prev => new Set(isPending ? prev : []).add(id))
+    startTransition(async () => {
+      applyOptimistic({ id, patch })
+      const { error } = await supabase.from('profiles').update(patch).eq('id', id)
+      if (error) { showToast('更新失敗', false); return }
+      showToast(okMsg, true)
+      startTransition(() => router.refresh())
+    })
   }
 
-  async function updateGrade(id: string, grade: number) {
-    setUpdating(id)
-    const { error } = await supabase.from('profiles').update({ grade }).eq('id', id)
-    setUpdating(null)
-    if (error) { showToast('更新失敗', false); return }
-    showToast('学年を更新しました', true)
-    router.refresh()
+  function updateSkillRank(id: string, rank: SkillRank) {
+    updateProfile(id, { skill_rank: rank }, '技術ランクを更新しました')
   }
 
-  async function updateRole(id: string, role: string) {
-    setUpdating(id)
-    const { error } = await supabase.from('profiles').update({ role }).eq('id', id)
-    setUpdating(null)
-    if (error) { showToast('更新失敗', false); return }
-    showToast('権限を更新しました', true)
-    router.refresh()
+  function updateGrade(id: string, grade: number) {
+    updateProfile(id, { grade }, '学年を更新しました')
   }
 
-  async function updateExecutive(id: string, isExecutive: boolean) {
-    setUpdating(id)
-    const { error } = await supabase.from('profiles').update({ is_executive: isExecutive }).eq('id', id)
-    setUpdating(null)
-    if (error) { showToast('更新失敗', false); return }
-    showToast(isExecutive ? '幹部に設定しました' : '幹部を解除しました', true)
-    router.refresh()
+  function updateRole(id: string, role: Profile['role']) {
+    updateProfile(id, { role }, '権限を更新しました')
   }
 
-  async function updateJoinedAt(id: string, date: string) {
-    setUpdating(id)
-    const { error } = await supabase
-      .from('profiles')
-      .update({ joined_at: date || null })
-      .eq('id', id)
-    setUpdating(null)
-    if (error) { showToast('更新失敗', false); return }
-    showToast('入部日を更新しました', true)
-    router.refresh()
+  function updateExecutive(id: string, isExecutive: boolean) {
+    updateProfile(id, { is_executive: isExecutive }, isExecutive ? '幹部に設定しました' : '幹部を解除しました')
+  }
+
+  function updateJoinedAt(id: string, date: string) {
+    updateProfile(id, { joined_at: date || null }, '入部日を更新しました')
   }
 
   return (
@@ -415,6 +409,7 @@ export default function MembersManager({
               const RoleIcon = ROLE_OPTIONS.find(r => r.value === m.role)?.icon ?? Users
               const isMe = m.id === currentUserId
               const hasDisplayName = !!m.display_name
+              const busy = isBusy(m.id)
 
               return (
                 <div
@@ -423,7 +418,7 @@ export default function MembersManager({
                   style={{
                     border: `1.5px solid ${isMe ? 'var(--club-blue-light)' : 'var(--gray-200)'}`,
                     background: isMe ? 'var(--club-blue-muted)' : 'var(--gray-50)',
-                    opacity: updating === m.id ? 0.6 : 1,
+                    opacity: busy ? 0.6 : 1,
                     willChange: 'transform',
                     contain: 'layout style',
                   }}
@@ -501,7 +496,7 @@ export default function MembersManager({
                             {!effectiveReadOnly && (
                               <button
                                 onClick={() => openEdit(m)}
-                                disabled={updating === m.id}
+                                disabled={busy}
                                 className="w-4 h-4 flex items-center justify-center cursor-pointer transition-opacity opacity-40 hover:opacity-100"
                                 style={{ color: 'var(--gray-600)' }}
                                 title="表示名を編集"
@@ -552,7 +547,7 @@ export default function MembersManager({
                       <div className="flex items-center shrink-0">
                         <button
                           onClick={() => deleteMember(m.id, displayName(m))}
-                          disabled={updating === m.id}
+                          disabled={busy}
                           className="flex items-center gap-1 px-2 py-1.5 rounded-lg text-xs font-semibold transition-opacity cursor-pointer active:scale-95 hover:opacity-80"
                           style={{ background: '#fdebec', color: '#a8423d', border: '1px solid #f2c7c2' }}
                           title="退部処理"
@@ -595,7 +590,7 @@ export default function MembersManager({
                           <select
                             value={m.grade}
                             onChange={e => updateGrade(m.id, Number(e.target.value))}
-                            disabled={updating === m.id}
+                            disabled={busy}
                             className="input-field pr-8"
                             style={{ padding: '7px 32px 7px 10px', fontSize: '13px' }}
                           >
@@ -619,8 +614,8 @@ export default function MembersManager({
                         <div className="relative">
                           <select
                             value={m.skill_rank}
-                            onChange={e => updateSkillRank(m.id, Number(e.target.value))}
-                            disabled={updating === m.id}
+                            onChange={e => updateSkillRank(m.id, Number(e.target.value) as SkillRank)}
+                            disabled={busy}
                             className="input-field pr-8"
                             style={{ padding: '7px 32px 7px 10px', fontSize: '13px' }}
                           >
@@ -643,8 +638,8 @@ export default function MembersManager({
                       <div className="relative">
                         <select
                           value={m.role}
-                          onChange={e => updateRole(m.id, e.target.value)}
-                          disabled={updating === m.id || isMe}
+                          onChange={e => updateRole(m.id, e.target.value as Profile['role'])}
+                          disabled={busy || isMe}
                           className="input-field pr-8"
                           style={{ padding: '7px 32px 7px 10px', fontSize: '13px' }}
                         >
@@ -670,10 +665,12 @@ export default function MembersManager({
                           （未設定時は学年から自動計算）
                         </span>
                       </label>
+                      {/* key で値の変化（失敗時の戻しを含む）を非制御の入力欄に反映する */}
                       <input
+                        key={m.joined_at ?? ''}
                         type="date"
                         defaultValue={m.joined_at ?? ''}
-                        disabled={updating === m.id}
+                        disabled={busy}
                         onBlur={e => {
                           if (e.target.value !== (m.joined_at ?? '')) {
                             updateJoinedAt(m.id, e.target.value)
@@ -692,7 +689,7 @@ export default function MembersManager({
                         <input
                           type="checkbox"
                           checked={m.is_executive ?? false}
-                          disabled={updating === m.id}
+                          disabled={busy}
                           onChange={e => updateExecutive(m.id, e.target.checked)}
                           className="w-4 h-4 rounded cursor-pointer"
                           style={{ accentColor: 'var(--club-blue)' }}
