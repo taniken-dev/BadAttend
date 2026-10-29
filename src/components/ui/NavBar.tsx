@@ -73,7 +73,8 @@ export default function NavBar() {
       icon: Users,
       label: isAdmin ? 'メンバー管理' : 'メンバー一覧',
     },
-    { href: '/rules',      icon: BookOpen,        label: '出欠ガイド' },
+    // loading.tsx がなく先読みしても何も得られないので、先読みしない（#41）
+    { href: '/rules',      icon: BookOpen,        label: '出欠ガイド', prefetch: false },
   ]
 
   // ── モバイルタブ ──
@@ -114,10 +115,10 @@ export default function NavBar() {
 
   // ── メニュー行コンポーネント ──────────────────────────────────
   function MenuItem({
-    icon, label, color, bg, onClick, href, danger,
+    icon, label, color, bg, onClick, href, danger, prefetch,
   }: {
     icon: React.ReactNode; label: string; color: string; bg: string
-    onClick?: () => void; href?: string; danger?: boolean
+    onClick?: () => void; href?: string; danger?: boolean; prefetch?: false
   }) {
     const labelColor = danger ? color : 'var(--gray-800)'
     const hoverBg    = danger ? '#fdebec' : 'var(--gray-50)'
@@ -131,7 +132,7 @@ export default function NavBar() {
       </>
     )
     if (href) return (
-      <Link href={href} onClick={onClick} className={cls}
+      <Link href={href} prefetch={prefetch} onClick={onClick} className={cls}
         onMouseEnter={e => (e.currentTarget as HTMLElement).style.background = hoverBg}
         onMouseLeave={e => (e.currentTarget as HTMLElement).style.background = 'transparent'}
       >{inner}</Link>
@@ -196,7 +197,7 @@ export default function NavBar() {
       <>
         {/* 出欠ガイド（モバイルのみ：PCは左ナビに表示済み） */}
         <MenuItem
-          href="/rules" onClick={() => setShowMore(false)}
+          href="/rules" prefetch={false} onClick={() => setShowMore(false)}
           icon={<BookOpen size={17} />} label="出欠ガイド"
           color="#337ea9" bg="#e7f3f8"
         />
@@ -273,11 +274,11 @@ export default function NavBar() {
 
           {/* 左ナビリンク */}
           <nav className="flex items-center gap-0.5 flex-1 min-w-0">
-            {desktopLeftItems.map(({ href, icon: Icon, label }) => {
+            {desktopLeftItems.map(({ href, icon: Icon, label, prefetch }) => {
               const active = pathname === href || (href !== '/dashboard' && pathname.startsWith(href))
               return (
                 <Link
-                  key={href} href={href}
+                  key={href} href={href} prefetch={prefetch}
                   className="relative flex items-center gap-1.5 px-3 py-2 rounded-xl text-sm font-medium transition-all duration-150 whitespace-nowrap"
                   style={desktopLinkStyle(active)}
                   onMouseEnter={e => {
