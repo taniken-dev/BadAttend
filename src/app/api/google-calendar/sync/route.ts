@@ -5,6 +5,7 @@ import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { buildOAuthClient, parseCalendarIds } from '@/lib/google'
 import { notifyAdminError } from '@/lib/alert'
+import { isRecentlySynced, monthStartStr } from '@/lib/gcal-sync'
 
 // Googleカレンダーイベントの説明文から時間・面数・補足時間をパースする
 // 対応フォーマット例: 時間：17:00〜22:00 / 面数：4面
@@ -45,22 +46,34 @@ export async function GET(request: NextRequest) {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  // 承認済みかつ在籍中のユーザーのみ同期可（同期は service_role で DB 書き込み・
-  // Google API 呼び出しを行うため、未承認・退部済みユーザーには許可しない）
-  const { data: syncProfile } = await supabase
-    .from('profiles')
-    .select('is_approved, is_active')
-    .eq('id', user.id)
-    .single()
-  if (!syncProfile?.is_approved || !syncProfile.is_active) {
-    return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
-  }
-
   const { searchParams } = new URL(request.url)
   const year  = parseInt(searchParams.get('year')  ?? '', 10)
   const month = parseInt(searchParams.get('month') ?? '', 10) // 1-indexed
   if (isNaN(year) || isNaN(month)) {
     return NextResponse.json({ error: 'year and month required' }, { status: 400 })
+  }
+
+  // DB操作は service role で行う
+  const admin    = createAdminClient()
+  const monthKey = monthStartStr(year, month)
+
+  // 承認済みかつ在籍中のユーザーのみ同期可（同期は service_role で DB 書き込み・
+  // Google API 呼び出しを行うため、未承認・退部済みユーザーには許可しない）
+  // 最終同期時刻も同時に読む（テーブルが無いなど読めないときは同期する）
+  const [{ data: syncProfile }, { data: syncState }] = await Promise.all([
+    supabase
+      .from('profiles')
+      .select('is_approved, is_active')
+      .eq('id', user.id)
+      .single(),
+    admin
+      .from('gcal_sync_state')
+      .select('synced_at')
+      .eq('month', monthKey)
+      .maybeSingle(),
+  ])
+  if (!syncProfile?.is_approved || !syncProfile.is_active) {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
 
   const activityCalendarIds  = parseCalendarIds(process.env.GOOGLE_CALENDAR_ACTIVITY_IDS)
@@ -79,6 +92,12 @@ export async function GET(request: NextRequest) {
       .gte('session_date', startDate)
       .lte('session_date', endDate)
     return NextResponse.json({ sessions: data ?? [] })
+  }
+
+  // 最近同期した月は Google を読みに行かない。sessions は返さず、
+  // 画面はブラウザが DB から読んだ練習日をそのまま最終の表示にする
+  if (isRecentlySynced(syncState?.synced_at, Date.now())) {
+    return NextResponse.json({ skipped: true })
   }
 
   const campCalendarIdSet  = new Set(campCalendarIds)
@@ -127,9 +146,6 @@ export async function GET(request: NextRequest) {
     ])
     const gcalItems      = gcalResults.flat()
     const voluntaryItems = miscResults.flat()
-
-    // DB操作は service role で行う
-    const admin = createAdminClient()
 
     // 終日イベントを日ごとに展開するヘルパー
     function expandDates(startDate: string, endDateExclusive: string): string[] {
@@ -297,13 +313,18 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    // 月の全セッション（手動作成分も含む）を返す
-    const { data: sessions } = await admin
-      .from('practice_sessions')
-      .select('id, session_date, start_time, end_time, location, is_cancelled, cancellation_reason, is_results_confirmed, results_confirmed_at, note, google_event_id, is_camp, is_bukai, is_voluntary, courts, time_note, created_at')
-      .gte('session_date', startDate)
-      .lte('session_date', endDate)
-      .order('session_date')
+    // 月の全セッション（手動作成分も含む）を返す。同期できたので最終同期時刻も記録する
+    const [{ data: sessions }] = await Promise.all([
+      admin
+        .from('practice_sessions')
+        .select('id, session_date, start_time, end_time, location, is_cancelled, cancellation_reason, is_results_confirmed, results_confirmed_at, note, google_event_id, is_camp, is_bukai, is_voluntary, courts, time_note, created_at')
+        .gte('session_date', startDate)
+        .lte('session_date', endDate)
+        .order('session_date'),
+      admin
+        .from('gcal_sync_state')
+        .upsert({ month: monthKey, synced_at: new Date().toISOString() }),
+    ])
 
     return NextResponse.json({ sessions: sessions ?? [] })
   } catch (err) {

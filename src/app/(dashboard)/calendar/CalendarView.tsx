@@ -234,10 +234,11 @@ export default function CalendarView() {
       })
 
     // 2. GCal と自動同期（バックグラウンド）→ 終わったらセッションを上書き
+    //    最近同期した月はサーバーが同期を飛ばし sessions を返さない（1. の表示が最終）
     fetch(`/api/google-calendar/sync?year=${y}&month=${m + 1}`, { signal })
       .then(r => r.ok ? r.json() : null)
-      .then((body: { sessions: PracticeSession[] } | null) => {
-        if (!body) return
+      .then((body: { sessions?: PracticeSession[] } | null) => {
+        if (!body?.sessions) return
         const map: SessionMap = {}
         ;(body.sessions ?? []).forEach(s => { (map[s.session_date] ??= []).push(s) })
         setSessions(map)
