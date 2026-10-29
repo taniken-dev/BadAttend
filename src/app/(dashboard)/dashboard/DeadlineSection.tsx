@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useOptimistic, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { useViewRole } from '@/contexts/ViewRoleContext'
@@ -50,43 +50,72 @@ export default function DeadlineSection({
   deadlines,
   lastFetchedAt,
   currentUserId,
+  currentSubmitter,
   siteUrl,
   isAdmin,
 }: {
   deadlines: DeadlineWithSubmitter[]
   lastFetchedAt: string | null
   currentUserId: string
+  currentSubmitter: DeadlineWithSubmitter['submitter']
   siteUrl: string
   isAdmin: boolean
 }) {
   const supabase = createClient()
   const router = useRouter()
   const { realRole, viewRole } = useViewRole()
-  const [updating, setUpdating] = useState<string | null>(null)
   const [formOpen, setFormOpen] = useState(false)
   const [editId, setEditId] = useState<string | null>(null)
   const [formName, setFormName] = useState('')
   const [formDatetime, setFormDatetime] = useState('')
-  const [saving, setSaving] = useState(false)
   const [formError, setFormError] = useState<string | null>(null)
+  const [rowError, setRowError] = useState<string | null>(null)
+  // 押した結果を先に画面へ出し、router.refresh() が終わるまで行を処理中にする
+  const [isPending, startTransition] = useTransition()
+  const [saving, startSaveTransition] = useTransition()
+  const [pendingIds, setPendingIds] = useState<Set<string>>(new Set())
+  const [optimisticDeadlines, applyOptimistic] = useOptimistic(
+    deadlines,
+    (state, action: { id: string; patch: Partial<DeadlineWithSubmitter> | null }) =>
+      action.patch === null
+        ? state.filter(d => d.id !== action.id)
+        : state.map(d => (d.id === action.id ? { ...d, ...action.patch } : d)),
+  )
+  const isBusy = (id: string) => isPending && pendingIds.has(id)
 
   // Devロール切替でのプレビュー中は「幹部フラグなしのそのロール」として扱い、
   // 管理者ビュー以外では隠す（実際のロールで見ている場合はサーバー判定に従う）
   const previewing = realRole !== null && viewRole !== null && viewRole !== realRole
   if (previewing && viewRole !== 'admin') return null
 
-  async function toggleSubmitted(d: DeadlineWithSubmitter) {
-    setUpdating(d.id)
-    const { error } = await supabase
-      .from('document_deadlines')
-      .update(
-        d.submitted_at
-          ? { submitted_at: null, submitted_by: null }
-          : { submitted_at: new Date().toISOString(), submitted_by: currentUserId }
-      )
-      .eq('id', d.id)
-    setUpdating(null)
-    if (!error) router.refresh()
+  // patch が null なら行を消す。DB 更新と router.refresh() が終わるまで行を処理中にし、
+  // 失敗したら transition の終了で useOptimistic が元の状態に戻る。
+  function updateRow(
+    d: DeadlineWithSubmitter,
+    patch: Partial<DeadlineWithSubmitter> | null,
+    write: () => PromiseLike<{ error: unknown }>,
+    failMsg: string,
+  ) {
+    setRowError(null)
+    setPendingIds(prev => new Set(isPending ? prev : []).add(d.id))
+    startTransition(async () => {
+      applyOptimistic({ id: d.id, patch })
+      const { error } = await write()
+      if (error) { setRowError(failMsg); return }
+      startTransition(() => router.refresh())
+    })
+  }
+
+  function toggleSubmitted(d: DeadlineWithSubmitter) {
+    const values = d.submitted_at
+      ? { submitted_at: null, submitted_by: null }
+      : { submitted_at: new Date().toISOString(), submitted_by: currentUserId }
+    updateRow(
+      d,
+      { ...values, submitter: d.submitted_at ? null : currentSubmitter },
+      () => supabase.from('document_deadlines').update(values).eq('id', d.id),
+      `「${d.document_name}」の更新に失敗しました`,
+    )
   }
 
   function openAdd() {
@@ -105,42 +134,47 @@ export default function DeadlineSection({
     setFormOpen(true)
   }
 
-  async function saveManual() {
+  // 保存後、router.refresh() で新しい一覧が届くまで保存中の表示を続け、届いたらフォームを閉じる
+  function saveManual() {
     const name = formName.trim()
     if (!name || !formDatetime) {
       setFormError('書類名と締切日時を入力してください')
       return
     }
-    setSaving(true)
     const payload = {
       document_name: name,
       deadline_at: new Date(formDatetime).toISOString(),
     }
-    const { error } = editId
-      ? await supabase.from('document_deadlines').update(payload).eq('id', editId)
-      : await supabase.from('document_deadlines').insert({
-          ...payload,
-          source: 'manual',
-          source_key: `manual|${crypto.randomUUID()}`,
-        })
-    setSaving(false)
-    if (error) {
-      setFormError('保存に失敗しました: ' + error.message)
-      return
-    }
-    setFormOpen(false)
-    router.refresh()
+    startSaveTransition(async () => {
+      const { error } = editId
+        ? await supabase.from('document_deadlines').update(payload).eq('id', editId)
+        : await supabase.from('document_deadlines').insert({
+            ...payload,
+            source: 'manual',
+            source_key: `manual|${crypto.randomUUID()}`,
+          })
+      if (error) {
+        setFormError('保存に失敗しました: ' + error.message)
+        return
+      }
+      startSaveTransition(() => {
+        setFormOpen(false)
+        router.refresh()
+      })
+    })
   }
 
-  async function deleteManual(d: DeadlineWithSubmitter) {
+  function deleteManual(d: DeadlineWithSubmitter) {
     if (!confirm(`「${d.document_name}」を削除しますか？`)) return
-    setUpdating(d.id)
-    const { error } = await supabase.from('document_deadlines').delete().eq('id', d.id)
-    setUpdating(null)
-    if (!error) router.refresh()
+    updateRow(
+      d,
+      null,
+      () => supabase.from('document_deadlines').delete().eq('id', d.id),
+      `「${d.document_name}」の削除に失敗しました`,
+    )
   }
 
-  const hasOverdue = deadlines.some(d => !d.submitted_at && daysUntilJst(d.deadline_at) < 0)
+  const hasOverdue = optimisticDeadlines.some(d => !d.submitted_at && daysUntilJst(d.deadline_at) < 0)
 
   return (
     <div className="card animate-slide-up" style={{ animationDelay: '0.05s' }}>
@@ -229,26 +263,31 @@ export default function DeadlineSection({
         </div>
       )}
 
-      {deadlines.length === 0 ? (
+      {rowError && (
+        <p className="text-xs font-semibold mb-3" style={{ color: '#a8423d' }}>{rowError}</p>
+      )}
+
+      {optimisticDeadlines.length === 0 ? (
         <p className="text-sm py-2" style={{ color: 'var(--gray-400)' }}>
           提出期限が近い書類はありません
         </p>
       ) : (
         <div className="flex flex-col">
-          {deadlines.map(d => {
+          {optimisticDeadlines.map(d => {
             const submitted = !!d.submitted_at
             const isManual = d.source === 'manual'
             const badge = daysLeftBadge(d.deadline_at)
             const submitterName = d.submitter
               ? (d.submitter.display_name ?? d.submitter.full_name)
               : null
+            const busy = isBusy(d.id)
             return (
               <div key={d.id} className="flex items-center gap-3 py-2.5"
-                style={{ opacity: updating === d.id ? 0.5 : 1 }}>
+                style={{ opacity: busy ? 0.5 : 1 }}>
                 {/* 提出しましたチェック */}
                 <button
                   onClick={() => toggleSubmitted(d)}
-                  disabled={updating === d.id}
+                  disabled={busy}
                   className="w-6 h-6 rounded-lg flex items-center justify-center shrink-0 cursor-pointer transition-colors active:scale-95"
                   style={submitted
                     ? { background: '#448361', color: 'white' }
@@ -287,7 +326,7 @@ export default function DeadlineSection({
                   <div className="flex items-center gap-1 shrink-0">
                     <button
                       onClick={() => openEdit(d)}
-                      disabled={updating === d.id}
+                      disabled={busy}
                       className="w-6 h-6 flex items-center justify-center rounded-lg cursor-pointer transition-opacity opacity-40 hover:opacity-100"
                       style={{ color: 'var(--gray-600)' }}
                       title="編集"
@@ -296,7 +335,7 @@ export default function DeadlineSection({
                     </button>
                     <button
                       onClick={() => deleteManual(d)}
-                      disabled={updating === d.id}
+                      disabled={busy}
                       className="w-6 h-6 flex items-center justify-center rounded-lg cursor-pointer transition-opacity opacity-40 hover:opacity-100"
                       style={{ color: '#a8423d' }}
                       title="削除"
