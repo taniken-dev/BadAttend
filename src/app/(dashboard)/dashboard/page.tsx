@@ -175,6 +175,7 @@ export default async function DashboardPage() {
           deadlines={(deadlineData ?? []) as unknown as DeadlineWithSubmitter[]}
           lastFetchedAt={(scrapeStatus as { last_success_at: string | null } | null)?.last_success_at ?? null}
           currentUserId={user.id}
+          currentSubmitter={profile ? { full_name: profile.full_name, display_name: profile.display_name } : null}
           siteUrl={getTaiikukaiUrl()}
           isAdmin={isAdmin}
         />
