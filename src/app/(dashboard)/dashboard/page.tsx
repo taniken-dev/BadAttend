@@ -160,7 +160,7 @@ export default async function DashboardPage() {
       .select('status, reason')
       .eq('session_id', todaySession.id)
       .eq('user_id', user.id)
-      .single()
+      .maybeSingle()
     myTodayRecord = data
   }
 
